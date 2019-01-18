@@ -1,5 +1,6 @@
-use vitruvia::initialize;
+use vitruvia::{initialize, Renderer};
 
 pub fn main() {
-    let _gfx = initialize();
+    let gfx = initialize();
+    gfx.run()
 }
