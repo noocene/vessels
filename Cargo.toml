@@ -21,3 +21,6 @@ stdweb = "0.4.13"
 serde_derive = "1.0.84"
 stdweb-derive = "0.5.1"
 serde = "1.0.84"
+
+[build-dependencies]
+webgl_generator = "0.2.0"

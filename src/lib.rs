@@ -15,5 +15,5 @@ pub use crate::render::Renderer;
 
 #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
 pub fn initialize() -> impl Renderer {
-    targets::web::WebGL::new()
+    targets::web::WebGL2::new()
 }
