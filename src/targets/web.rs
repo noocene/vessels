@@ -1,4 +1,4 @@
-use crate::render::{Renderer, Frame, Size, Point};
+use crate::render::{Renderer, Frame, Size, Point, Rect};
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -67,7 +67,7 @@ impl Renderer for WebGL2 {
         ctx.renderbuffer_storage_multisample(gl::RENDERBUFFER, 4, gl::RGBA8, width, height); 
         ctx.framebuffer_renderbuffer(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, Some(&renderbuffer));
         let context = Rc::new(RefCell::new(ctx));
-        let root_frame = WebGL2Frame{
+        let root_frame_state = Rc::new(RefCell::new(WebGL2FrameState{
             width,
             height,
             x: 0,
@@ -78,6 +78,9 @@ impl Renderer for WebGL2 {
             clip_start: None,
             clip_end: None,
             children: vec![],
+        }));
+        let root_frame = WebGL2Frame{
+            state: root_frame_state,
         };
         let state = Rc::new(RefCell::new(WebGL2State { width, height, root_frame, context, canvas, resized: false, dpr }));
         WebGL2{state}
@@ -101,6 +104,9 @@ impl Renderer for WebGL2 {
             state.context.borrow().viewport(0, 0, state.canvas.width() as i32, state.canvas.height() as i32);
             state.draw(rc);
         });
+    }
+    fn root(&self) -> Box<dyn Frame> {
+        Box::new(self.state.borrow().root_frame.clone())
     }
 }
 
@@ -134,6 +140,10 @@ impl WebGL2State {
 }
 
 pub struct WebGL2Frame {
+    state: Rc<RefCell<WebGL2FrameState>>
+}
+
+struct WebGL2FrameState {
     width: i32,
     height: i32,
     x: i32,
@@ -148,76 +158,99 @@ pub struct WebGL2Frame {
 
 impl Drop for WebGL2Frame {
     fn drop(&mut self) {
-        let ctx = self.context.borrow();
-        ctx.delete_renderbuffer(Some(&self.renderbuffer));
-        ctx.delete_framebuffer(Some(&self.framebuffer));
+        let state = self.state.borrow();
+        let ctx = state.context.borrow();
+        ctx.delete_renderbuffer(Some(&state.renderbuffer));
+        ctx.delete_framebuffer(Some(&state.framebuffer));
     }
 }
 
 impl Frame for WebGL2Frame { 
     fn resize(&mut self, size: Size) {
-        self.width = size.w;
-        self.height = size.h;
-        let ctx = self.context.borrow();
-        ctx.delete_renderbuffer(Some(&self.renderbuffer));
-        let renderbuffer = ctx.create_renderbuffer().unwrap();
-        ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&self.framebuffer));
-        ctx.bind_renderbuffer(gl::RENDERBUFFER, Some(&renderbuffer));
-        ctx.renderbuffer_storage_multisample(gl::RENDERBUFFER, 4, gl::RGBA8, size.w, size.h); 
-        ctx.framebuffer_renderbuffer(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, Some(&renderbuffer));
-        self.renderbuffer = renderbuffer;
+        let mut state = self.state.borrow_mut();
+        state.width = size.w;
+        state.height = size.h;
+        let renderbuffer = {
+            let ctx = state.context.borrow();
+            ctx.delete_renderbuffer(Some(&state.renderbuffer));
+            let renderbuffer = ctx.create_renderbuffer().unwrap();
+            ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&state.framebuffer));
+            ctx.bind_renderbuffer(gl::RENDERBUFFER, Some(&renderbuffer));
+            ctx.renderbuffer_storage_multisample(gl::RENDERBUFFER, 4, gl::RGBA8, size.w, size.h); 
+            ctx.framebuffer_renderbuffer(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, Some(&renderbuffer));
+            renderbuffer
+        };
+        state.renderbuffer = renderbuffer;
     }
     fn clip(&mut self, start: Option<Point>, end: Option<Point>) {
-        self.clip_start = start;
-        self.clip_end = end;
+        let mut state = self.state.borrow_mut();
+        state.clip_start = start;
+        state.clip_end = end;
     }
     fn position(&mut self, position: Point) {
-        self.x = position.x;
-        self.y = position.y;
+        let mut state = self.state.borrow_mut();
+        state.x = position.x;
+        state.y = position.y;
     }
-    fn add_child(&mut self, width: i32, height: i32, x: i32, y: i32) {
-        let ctx = self.context.borrow();
-        let framebuffer = ctx.create_framebuffer().unwrap();
-        ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&framebuffer));
-        let renderbuffer = ctx.create_renderbuffer().unwrap();
-        ctx.bind_renderbuffer(gl::RENDERBUFFER, Some(&renderbuffer));
-        ctx.renderbuffer_storage_multisample(gl::RENDERBUFFER, 4, gl::RGBA8, width, height); 
-        ctx.framebuffer_renderbuffer(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, Some(&renderbuffer));
+    fn new(&mut self, bounds: Rect) -> Box<dyn Frame> {
+        let mut state = self.state.borrow_mut();
 
-        let child = WebGL2Frame {
-            width,
-            height,
-            x,
-            y,
-            framebuffer,
-            renderbuffer,
-            context: self.context.clone(),
-            clip_start: None,
-            clip_end: None,
-            children: vec![],
+        let child = {
+            let ctx = state.context.borrow();
+            let framebuffer = ctx.create_framebuffer().unwrap();
+            ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&framebuffer));
+            let renderbuffer = ctx.create_renderbuffer().unwrap();
+            ctx.bind_renderbuffer(gl::RENDERBUFFER, Some(&renderbuffer));
+            ctx.renderbuffer_storage_multisample(gl::RENDERBUFFER, 4, gl::RGBA8, bounds.w, bounds.h); 
+            ctx.framebuffer_renderbuffer(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, Some(&renderbuffer));
 
+            WebGL2Frame{
+                state: Rc::new(RefCell::new(WebGL2FrameState {
+                width: bounds.w,
+                height: bounds.h,
+                x: bounds.x,
+                y: bounds.y,
+                framebuffer,
+                renderbuffer,
+                context: state.context.clone(),
+                clip_start: None,
+                clip_end: None,
+                children: vec![],
+            }))}
         };
-        self.children.push(child);
+
+        state.children.push(child.clone());
+
+        Box::new(child)
     }
 }
 
 impl WebGL2Frame {
     fn draw(&self, target: Option<&WebGLFramebuffer>) {
-        for child in &self.children {
-            child.draw(Some(&self.framebuffer));
+        let state = self.state.borrow();
+        for child in &state.children {
+            child.draw(Some(&state.framebuffer));
         }
-        let ctx = self.context.borrow();
-        ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&self.framebuffer));
-        ctx.bind_framebuffer(gl::READ_FRAMEBUFFER, Some(&self.framebuffer));
+        let ctx = state.context.borrow();
+        ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&state.framebuffer));
+        ctx.bind_framebuffer(gl::READ_FRAMEBUFFER, Some(&state.framebuffer));
         ctx.bind_framebuffer(gl::DRAW_FRAMEBUFFER, target);
-        let (clip_x, clip_y) = match &self.clip_start {
+        let (clip_x, clip_y) = match &state.clip_start {
             None => (0, 0),
             Some(clip) => (clip.x, clip.y)
         };
-        let (clip_w, clip_h) = match &self.clip_end {
-            None => (self.width, self.height),
+        let (clip_w, clip_h) = match &state.clip_end {
+            None => (state.width, state.height),
             Some(clip) => (clip.x, clip.y)
         };
-        ctx.blit_framebuffer(clip_x, clip_y, clip_w, clip_h, self.x, self.y, clip_w - clip_x, clip_h - clip_y, gl::COLOR_BUFFER_BIT, gl::NEAREST);
+        ctx.blit_framebuffer(clip_x, clip_y, clip_w, clip_h, state.x, state.y, clip_w - clip_x, clip_h - clip_y, gl::COLOR_BUFFER_BIT, gl::NEAREST);
+    }
+}
+
+impl Clone for WebGL2Frame {
+    fn clone(&self) -> WebGL2Frame {
+        WebGL2Frame{
+            state: self.state.clone(),
+        }
     }
 }

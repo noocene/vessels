@@ -1,16 +1,14 @@
-use std::rc::Rc;
-use std::cell::RefCell;
-
 pub trait Renderer {
     fn new() -> Self;
     fn run(&self);
+    fn root(&self) -> Box<dyn Frame>;
 }
 
 pub trait Frame {
     fn resize(&mut self, size: Size);
     fn clip(&mut self, start: Option<Point>, end: Option<Point>);
     fn position(&mut self, position: Point);
-    fn add_child(&mut self, width: i32, height: i32, x: i32, y: i32);
+    fn new(&mut self, bounds: Rect) -> Box<dyn Frame>;
 }
 
 pub struct Point {
@@ -19,6 +17,13 @@ pub struct Point {
 }
 
 pub struct Size {
+    pub w: i32,
+    pub h: i32,
+}
+
+pub struct Rect {
+    pub x: i32,
+    pub y: i32,
     pub w: i32,
     pub h: i32,
 }
