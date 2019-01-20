@@ -77,6 +77,7 @@ impl Renderer for WebGL2 {
             context: context.clone(),
             clip_start: None,
             clip_end: None,
+            children: vec![],
         };
         let state = Rc::new(RefCell::new(WebGL2State { width, height, root_frame, context, canvas, resized: false, dpr }));
         WebGL2{state}
@@ -141,6 +142,7 @@ pub struct WebGL2Frame {
     clip_end: Option<Point>,
     framebuffer: WebGLFramebuffer,
     renderbuffer: WebGLRenderbuffer,
+    children: Vec<Rc<RefCell<WebGL2Frame>>>,
     context: Rc<RefCell<gl>>
 }
 
@@ -173,10 +175,16 @@ impl Frame for WebGL2Frame {
         self.x = position.x;
         self.y = position.y;
     }
+    fn add_child(&mut self, child: Rc<RefCell<Self>>) {
+        self.children.push(child);
+    }
 }
 
 impl WebGL2Frame {
     fn draw(&self, target: Option<&WebGLFramebuffer>) {
+        for child in &self.children {
+            child.borrow().draw(Some(&self.framebuffer));
+        }
         let ctx = self.context.borrow();
         ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&self.framebuffer));
         ctx.bind_framebuffer(gl::READ_FRAMEBUFFER, Some(&self.framebuffer));
