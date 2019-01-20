@@ -2,7 +2,6 @@ use crate::render::{Renderer, Frame, Size, Point, Rect};
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use stdweb::web::html_element::CanvasElement;
@@ -264,12 +263,7 @@ impl Hash for WebGL2Frame {
 
 impl PartialEq for WebGL2Frame {
     fn eq(&self, other: &Self) -> bool {
-        //Should probably put calculating hashes in a function somewhere
-        let mut h1 = DefaultHasher::new();
-        let mut h2 = DefaultHasher::new();
-        self.hash(&mut h1);
-        other.hash(&mut h2);
-        h1.finish() == h2.finish()
+        (self as *const Self) == (other as *const Self)
     }
 }
 
