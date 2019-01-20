@@ -2,6 +2,8 @@ use crate::render::{Renderer, Frame, Size, Point, Rect};
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 use stdweb::web::html_element::CanvasElement;
 use stdweb::web::{window, document, IHtmlElement, INode, IElement, IEventTarget};
@@ -253,3 +255,22 @@ impl Clone for WebGL2Frame {
         }
     }
 }
+
+impl Hash for WebGL2Frame {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (self as *const Self).hash(state);
+    }
+}
+
+impl PartialEq for WebGL2Frame {
+    fn eq(&self, other: &Self) -> bool {
+        //Should probably put calculating hashes in a function somewhere
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+        self.hash(&mut h1);
+        other.hash(&mut h2);
+        h1.finish() == h2.finish()
+    }
+}
+
+impl Eq for WebGL2Frame {}
