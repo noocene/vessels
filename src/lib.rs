@@ -11,7 +11,7 @@ extern crate stdweb_derive;
 pub(crate) mod render;
 mod targets;
 
-pub use crate::render::Renderer;
+pub use crate::render::{Frame, Point, Rect, Renderer, Size};
 
 #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
 pub fn initialize() -> impl Renderer {
