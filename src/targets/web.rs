@@ -156,12 +156,11 @@ struct WebGL2FrameState {
     context: Rc<RefCell<gl>>
 }
 
-impl Drop for WebGL2Frame {
+impl Drop for WebGL2FrameState {
     fn drop(&mut self) {
-        let state = self.state.borrow();
-        let ctx = state.context.borrow();
-        ctx.delete_renderbuffer(Some(&state.renderbuffer));
-        ctx.delete_framebuffer(Some(&state.framebuffer));
+        let ctx = self.context.borrow();
+        ctx.delete_renderbuffer(Some(&self.renderbuffer));
+        ctx.delete_framebuffer(Some(&self.framebuffer));
     }
 }
 

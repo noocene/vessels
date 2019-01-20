@@ -2,5 +2,6 @@ use vitruvia::{initialize, Renderer};
 
 pub fn main() {
     let gfx = initialize();
-    gfx.run()
+    gfx.run();
+    let root = gfx.root();
 }
