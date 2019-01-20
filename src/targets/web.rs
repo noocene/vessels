@@ -142,7 +142,7 @@ pub struct WebGL2Frame {
     clip_end: Option<Point>,
     framebuffer: WebGLFramebuffer,
     renderbuffer: WebGLRenderbuffer,
-    children: Vec<Rc<RefCell<WebGL2Frame>>>,
+    children: Vec<WebGL2Frame>,
     context: Rc<RefCell<gl>>
 }
 
@@ -175,7 +175,27 @@ impl Frame for WebGL2Frame {
         self.x = position.x;
         self.y = position.y;
     }
-    fn add_child(&mut self, child: Rc<RefCell<Self>>) {
+    fn add_child(&mut self, width: i32, height: i32, x: i32, y: i32) {
+        let framebuffer = self.context.create_framebuffer().unwrap();
+        ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&framebuffer));
+        let renderbuffer = self.context.create_renderbuffer().unwrap();
+        ctx.bind_renderbuffer(gl::RENDERBUFFER, Some(&renderbuffer));
+        ctx.renderbuffer_storage_multisample(gl::RENDERBUFFER, 4, gl::RGBA8, width, height); 
+        ctx.framebuffer_renderbuffer(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, Some(&renderbuffer));
+
+        let child = WebGL2Frame {
+            width,
+            height,
+            x,
+            y,
+            framebuffer,
+            renderbuffer,
+            context: self.context.clone(),
+            clip_start: None,
+            clip_end: None,
+            children: vec![],
+
+        };
         self.children.push(child);
     }
 }
@@ -183,7 +203,7 @@ impl Frame for WebGL2Frame {
 impl WebGL2Frame {
     fn draw(&self, target: Option<&WebGLFramebuffer>) {
         for child in &self.children {
-            child.borrow().draw(Some(&self.framebuffer));
+            child.draw(Some(&self.framebuffer));
         }
         let ctx = self.context.borrow();
         ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&self.framebuffer));
