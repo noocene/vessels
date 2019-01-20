@@ -176,9 +176,10 @@ impl Frame for WebGL2Frame {
         self.y = position.y;
     }
     fn add_child(&mut self, width: i32, height: i32, x: i32, y: i32) {
-        let framebuffer = self.context.create_framebuffer().unwrap();
+        let ctx = self.context.borrow();
+        let framebuffer = ctx.create_framebuffer().unwrap();
         ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&framebuffer));
-        let renderbuffer = self.context.create_renderbuffer().unwrap();
+        let renderbuffer = ctx.create_renderbuffer().unwrap();
         ctx.bind_renderbuffer(gl::RENDERBUFFER, Some(&renderbuffer));
         ctx.renderbuffer_storage_multisample(gl::RENDERBUFFER, 4, gl::RGBA8, width, height); 
         ctx.framebuffer_renderbuffer(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, Some(&renderbuffer));

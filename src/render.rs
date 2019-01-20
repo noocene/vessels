@@ -10,7 +10,7 @@ pub trait Frame {
     fn resize(&mut self, size: Size);
     fn clip(&mut self, start: Option<Point>, end: Option<Point>);
     fn position(&mut self, position: Point);
-    fn add_child(&mut self, child: Rc<RefCell<Self>>);
+    fn add_child(&mut self, width: i32, height: i32, x: i32, y: i32);
 }
 
 pub struct Point {
