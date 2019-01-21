@@ -2,6 +2,7 @@ use crate::render::{Renderer, Frame, Size, Point, Rect};
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::cell::Ref;
 use std::hash::{Hash, Hasher};
 
 use stdweb::web::html_element::CanvasElement;
@@ -257,13 +258,13 @@ impl Clone for WebGL2Frame {
 
 impl Hash for WebGL2Frame {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        (self as *const Self).hash(state);
+        (&(*(self.state.borrow())) as *const WebGL2FrameState).hash(state);
     }
 }
 
 impl PartialEq for WebGL2Frame {
     fn eq(&self, other: &Self) -> bool {
-        (self as *const Self) == (other as *const Self)
+        (&(*(self.state.borrow())) as *const WebGL2FrameState) == (&(*(other.state.borrow())) as *const WebGL2FrameState)
     }
 }
 
