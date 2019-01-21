@@ -1,7 +1,11 @@
 pub trait Renderer {
     fn new() -> Self;
     fn run(&self);
-    fn root(&self) -> Box<dyn Frame>;
+    fn root(&self) -> Box<dyn RootFrame>;
+}
+
+pub trait RootFrame {
+    fn new(&mut self, bounds: Rect) -> Box<dyn Frame>;
 }
 
 pub trait Frame {
