@@ -1,8 +1,10 @@
 use crate::render::{Renderer, Frame, Size, Point, Rect};
 
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
+
+use std::collections::HashSet;
 
 use stdweb::web::html_element::CanvasElement;
 use stdweb::web::{window, document, IHtmlElement, INode, IElement, IEventTarget};
@@ -78,7 +80,7 @@ impl Renderer for WebGL2 {
             context: context.clone(),
             clip_start: None,
             clip_end: None,
-            children: vec![],
+            children: HashSet::new(),
         }));
         let root_frame = WebGL2Frame{
             state: root_frame_state,
@@ -140,6 +142,21 @@ impl WebGL2State {
     }
 }
 
+pub struct WebGL2FrameWeak {
+    state: Weak<RefCell<WebGL2FrameState>>
+}
+
+impl WebGL2FrameWeak {
+    fn upgrade(&self) -> Option<WebGL2Frame> {
+        match self.state.upgrade() {
+            None => None,
+            Some(state) => Some(WebGL2Frame{
+                state
+            })
+        }
+    }
+}
+
 pub struct WebGL2Frame {
     state: Rc<RefCell<WebGL2FrameState>>
 }
@@ -153,7 +170,7 @@ struct WebGL2FrameState {
     clip_end: Option<Point>,
     framebuffer: WebGLFramebuffer,
     renderbuffer: WebGLRenderbuffer,
-    children: Vec<WebGL2Frame>,
+    children: HashSet<WebGL2FrameWeak>,
     context: Rc<RefCell<gl>>
 }
 
@@ -206,20 +223,21 @@ impl Frame for WebGL2Frame {
 
             WebGL2Frame{
                 state: Rc::new(RefCell::new(WebGL2FrameState {
-                width: bounds.w,
-                height: bounds.h,
-                x: bounds.x,
-                y: bounds.y,
-                framebuffer,
-                renderbuffer,
-                context: state.context.clone(),
-                clip_start: None,
-                clip_end: None,
-                children: vec![],
-            }))}
+                    width: bounds.w,
+                    height: bounds.h,
+                    x: bounds.x,
+                    y: bounds.y,
+                    framebuffer,
+                    renderbuffer,
+                    context: state.context.clone(),
+                    clip_start: None,
+                    clip_end: None,
+                    children: HashSet::new(),
+                }))
+            }
         };
 
-        state.children.push(child.clone());
+        state.children.insert(child.downgrade());
 
         Box::new(child)
     }
@@ -229,7 +247,7 @@ impl WebGL2Frame {
     fn draw(&self, target: Option<&WebGLFramebuffer>) {
         let state = self.state.borrow();
         for child in &state.children {
-            child.draw(Some(&state.framebuffer));
+            child.upgrade().unwrap().draw(Some(&state.framebuffer));
         }
         let ctx = state.context.borrow();
         ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&state.framebuffer));
@@ -245,6 +263,11 @@ impl WebGL2Frame {
         };
         ctx.blit_framebuffer(clip_x, clip_y, clip_w, clip_h, state.x, state.y, clip_w - clip_x, clip_h - clip_y, gl::COLOR_BUFFER_BIT, gl::NEAREST);
     }
+    fn downgrade(&self) -> WebGL2FrameWeak {
+        WebGL2FrameWeak{
+            state: Rc::downgrade(&self.state)
+        }
+    }
 }
 
 impl Clone for WebGL2Frame {
@@ -255,16 +278,17 @@ impl Clone for WebGL2Frame {
     }
 }
 
-impl Hash for WebGL2Frame {
+impl Hash for WebGL2FrameWeak {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        (&(*(self.state.borrow())) as *const WebGL2FrameState).hash(state);
+        let interior = self.state.upgrade().unwrap();
+        (&(*(interior.borrow())) as *const WebGL2FrameState).hash(state);
     }
 }
 
-impl PartialEq for WebGL2Frame {
+impl PartialEq for WebGL2FrameWeak {
     fn eq(&self, other: &Self) -> bool {
-        (&(*(self.state.borrow())) as *const WebGL2FrameState) == (&(*(other.state.borrow())) as *const WebGL2FrameState)
+        (&(*(self.state.upgrade().unwrap().borrow())) as *const WebGL2FrameState) == (&(*(other.state.upgrade().unwrap().borrow())) as *const WebGL2FrameState)
     }
 }
 
-impl Eq for WebGL2Frame {}
+impl Eq for WebGL2FrameWeak {}
