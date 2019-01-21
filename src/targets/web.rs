@@ -2,7 +2,6 @@ use crate::render::{Renderer, Frame, Size, Point, Rect};
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::cell::Ref;
 use std::hash::{Hash, Hasher};
 
 use stdweb::web::html_element::CanvasElement;
