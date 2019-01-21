@@ -205,7 +205,7 @@ impl Frame for WebGL2Frame {
             ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&state.framebuffer));
             let render_target = ctx.create_texture().unwrap();
             ctx.bind_texture(gl::TEXTURE_2D, Some(&render_target));
-            ctx.tex_image2_d(gl::TEXTURE_2D, 0, gl::RGBA8 as i32, size.w, size.h, 0, gl::RGBA8, gl::UNSIGNED_BYTE, None::<&TypedArray<u8>>);
+            ctx.tex_image2_d(gl::TEXTURE_2D, 0, gl::RGBA as i32, size.w, size.h, 0, gl::RGBA, gl::UNSIGNED_BYTE, None::<&TypedArray<u8>>);
             ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
             ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
             ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
@@ -233,7 +233,7 @@ impl Frame for WebGL2Frame {
             ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&framebuffer));
             let render_target = ctx.create_texture().unwrap();
             ctx.bind_texture(gl::TEXTURE_2D, Some(&render_target));
-            ctx.tex_image2_d(gl::TEXTURE_2D, 0, gl::RGBA8 as i32, bounds.w, bounds.h, 0, gl::RGBA8, gl::UNSIGNED_BYTE, None::<&TypedArray<u8>>);
+            ctx.tex_image2_d(gl::TEXTURE_2D, 0, gl::RGBA as i32, bounds.w, bounds.h, 0, gl::RGBA, gl::UNSIGNED_BYTE, None::<&TypedArray<u8>>);
             ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
             ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
             ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
@@ -271,7 +271,7 @@ impl RootFrame for WebGL2RootFrame {
             ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&framebuffer));
             let render_target = ctx.create_texture().unwrap();
             ctx.bind_texture(gl::TEXTURE_2D, Some(&render_target));
-            ctx.tex_image2_d(gl::TEXTURE_2D, 0, gl::RGBA8 as i32, bounds.w, bounds.h, 0, gl::RGBA8, gl::UNSIGNED_BYTE, None::<&TypedArray<u8>>);
+            ctx.tex_image2_d(gl::TEXTURE_2D, 0, gl::RGBA as i32, bounds.w, bounds.h, 0, gl::RGBA, gl::UNSIGNED_BYTE, None::<&TypedArray<u8>>);
             ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
             ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
             ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
