@@ -1,10 +1,13 @@
 use crate::render::{Renderer, RootFrame, Frame, Size, Point, Rect};
 
+use weak_table::PtrWeakHashSet;
+
+use weak_table::traits::WeakElement;
+
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
-use std::hash::{Hash, Hasher};
 
-use std::collections::HashSet;
+use std::ops::Deref;
 
 use stdweb::web::html_element::CanvasElement;
 use stdweb::web::{window, document, IHtmlElement, INode, IElement, IEventTarget, TypedArray};
@@ -76,7 +79,7 @@ impl Renderer for WebGL2 {
             framebuffer,
             renderbuffer,
             context: context.clone(),
-            children: HashSet::new(),
+            children: PtrWeakHashSet::new(),
         }));
         let root_frame = WebGL2RootFrame{
             state: root_frame_state,
@@ -166,11 +169,11 @@ struct WebGL2RootFrameState {
     height: i32,
     framebuffer: WebGLFramebuffer,
     renderbuffer: WebGLRenderbuffer,
-    children: HashSet<WebGL2FrameWeak>,
+    children: PtrWeakHashSet<WebGL2FrameWeak>,
     context: Rc<RefCell<gl>>,
 }
 
-struct WebGL2FrameState {
+pub struct WebGL2FrameState {
     width: i32,
     height: i32,
     x: i32,
@@ -179,7 +182,7 @@ struct WebGL2FrameState {
     clip_end: Option<Point>,
     framebuffer: WebGLFramebuffer,
     render_target: WebGLTexture,
-    children: HashSet<WebGL2FrameWeak>,
+    children: PtrWeakHashSet<WebGL2FrameWeak>,
     context: Rc<RefCell<gl>>
 }
 
@@ -247,12 +250,12 @@ impl Frame for WebGL2Frame {
                     context: state.context.clone(),
                     clip_start: None,
                     clip_end: None,
-                    children: HashSet::new(),
+                    children: PtrWeakHashSet::new(),
                 }))
             }
         };
 
-        state.children.insert(child.downgrade());
+        state.children.insert(child.clone());
 
         Box::new(child)
     }
@@ -285,12 +288,12 @@ impl RootFrame for WebGL2RootFrame {
                     context: state.context.clone(),
                     clip_start: None,
                     clip_end: None,
-                    children: HashSet::new(),
+                    children: PtrWeakHashSet::new(),
                 }))
             }
         };
 
-        state.children.insert(child.downgrade());
+        state.children.insert(child.clone());
 
         Box::new(child)
     }
@@ -317,7 +320,7 @@ impl WebGL2RootFrame {
         let state = self.state.borrow();
         let ctx = state.context.borrow();
         for child in &state.children {
-            child.upgrade().unwrap().draw(Some(&state.framebuffer));
+            child.draw(Some(&state.framebuffer));
         }
         ctx.bind_framebuffer(gl::READ_FRAMEBUFFER, Some(&state.framebuffer));
         ctx.bind_framebuffer(gl::DRAW_FRAMEBUFFER, None);
@@ -329,7 +332,7 @@ impl WebGL2Frame {
     fn draw(&self, target: Option<&WebGLFramebuffer>) {
         let state = self.state.borrow();
         for child in &state.children {
-            child.upgrade().unwrap().draw(Some(&state.framebuffer));
+            child.draw(Some(&state.framebuffer));
         }
         let ctx = state.context.borrow();
         ctx.bind_framebuffer(gl::READ_FRAMEBUFFER, Some(&state.framebuffer));
@@ -367,17 +370,21 @@ impl Clone for WebGL2RootFrame {
     }
 }
 
-impl Hash for WebGL2FrameWeak {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        let interior = self.state.upgrade().unwrap();
-        (&(*(interior.borrow())) as *const WebGL2FrameState).hash(state);
+impl WeakElement for WebGL2FrameWeak {
+    type Strong = WebGL2Frame;
+
+    fn new(view: &WebGL2Frame) -> WebGL2FrameWeak {
+        view.downgrade()
+    }
+    fn view(&self) -> Option<WebGL2Frame> {
+        self.upgrade()
     }
 }
 
-impl PartialEq for WebGL2FrameWeak {
-    fn eq(&self, other: &Self) -> bool {
-        (&(*(self.state.upgrade().unwrap().borrow())) as *const WebGL2FrameState) == (&(*(other.state.upgrade().unwrap().borrow())) as *const WebGL2FrameState)
+impl Deref for WebGL2Frame {
+    type Target = RefCell<WebGL2FrameState>;
+
+    fn deref(&self) -> &RefCell<WebGL2FrameState> {
+        Deref::deref(&self.state)
     }
 }
-
-impl Eq for WebGL2FrameWeak {}

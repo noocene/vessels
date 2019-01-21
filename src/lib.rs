@@ -7,6 +7,8 @@ extern crate serde_derive;
 #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
 #[macro_use]
 extern crate stdweb_derive;
+#[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
+extern crate weak_table;
 
 pub(crate) mod render;
 mod targets;
