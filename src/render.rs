@@ -5,14 +5,14 @@ pub trait Renderer {
 }
 
 pub trait RootFrame {
-    fn new(&mut self, bounds: Rect) -> Box<dyn Frame>;
+    fn child(&mut self, bounds: Rect) -> Box<dyn Frame>;
 }
 
 pub trait Frame {
     fn resize(&mut self, size: Size);
     fn clip(&mut self, start: Option<Point>, end: Option<Point>);
     fn position(&mut self, position: Point);
-    fn new(&mut self, bounds: Rect) -> Box<dyn Frame>;
+    fn child(&mut self, bounds: Rect) -> Box<dyn Frame>;
 }
 
 pub struct Point {

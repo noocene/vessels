@@ -271,7 +271,7 @@ impl Frame for WebGL2Frame {
         state.x = position.x;
         state.y = position.y;
     }
-    fn new(&mut self, bounds: Rect) -> Box<dyn Frame> {
+    fn child(&mut self, bounds: Rect) -> Box<dyn Frame> {
         let mut state = self.state.borrow_mut();
 
         let child = {
@@ -325,7 +325,7 @@ impl Frame for WebGL2Frame {
 }
 
 impl RootFrame for WebGL2RootFrame {
-    fn new(&mut self, bounds: Rect) -> Box<dyn Frame> {
+    fn child(&mut self, bounds: Rect) -> Box<dyn Frame> {
         let mut state = self.state.borrow_mut();
 
         let child = {

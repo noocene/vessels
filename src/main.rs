@@ -4,7 +4,7 @@ pub fn main() {
     let gfx = initialize();
     let mut root = gfx.root();
     {
-        let _r = root.new(Rect {
+        let _r = root.child(Rect {
             x: 0,
             y: 0,
             w: 100,
