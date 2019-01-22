@@ -27,3 +27,13 @@ weak-table = "0.2.3"
 
 [build-dependencies]
 webgl_generator = "0.2.0"
+
+[dependencies]
+stdweb = { version = "0.4.13", optional = true }
+weak-table = { version = "0.2.3", optional = true }
+serde = { version = "1.0.84", optional = true }
+serde_derive = { version = "1.0.84", optional = true }
+stdweb-derive = { version = "0.5.1", optional = true }
+
+[features]
+check = ["stdweb", "weak-table", "serde", "serde_derive", "stdweb-derive"]
