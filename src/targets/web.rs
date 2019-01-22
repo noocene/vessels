@@ -54,6 +54,7 @@ impl Renderer for WebGL2 {
         }
         body, html {
             width: 100%;
+            overflow: hidden;
             height: 100%;
         }
         </style>
