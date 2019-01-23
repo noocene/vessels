@@ -66,7 +66,8 @@ impl Renderer for WebGL2 {
         let canvas: CanvasElement = doc.create_element("canvas").unwrap().try_into().unwrap();
         let ctx: gl = js!(
             return @{&canvas}.getContext("webgl2", {
-                antialias: false
+                antialias: false,
+                alpha: false,
             });
         )
         .try_into()
@@ -83,7 +84,7 @@ impl Renderer for WebGL2 {
         ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&framebuffer));
         let renderbuffer = ctx.create_renderbuffer().unwrap();
         ctx.bind_renderbuffer(gl::RENDERBUFFER, Some(&renderbuffer));
-        ctx.renderbuffer_storage(gl::RENDERBUFFER, gl::RGBA8, width, height);
+        ctx.renderbuffer_storage(gl::RENDERBUFFER, gl::RGB8, width, height);
         ctx.framebuffer_renderbuffer(
             gl::FRAMEBUFFER,
             gl::COLOR_ATTACHMENT0,
@@ -390,7 +391,7 @@ impl WebGL2RootFrame {
             let renderbuffer = ctx.create_renderbuffer().unwrap();
             ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&state.framebuffer));
             ctx.bind_renderbuffer(gl::RENDERBUFFER, Some(&renderbuffer));
-            ctx.renderbuffer_storage_multisample(gl::RENDERBUFFER, 4, gl::RGBA8, size.w, size.h);
+            ctx.renderbuffer_storage_multisample(gl::RENDERBUFFER, 4, gl::RGB8, size.w, size.h);
             ctx.framebuffer_renderbuffer(
                 gl::FRAMEBUFFER,
                 gl::COLOR_ATTACHMENT0,
