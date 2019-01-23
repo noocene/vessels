@@ -405,12 +405,9 @@ impl WebGL2Frame {
         let vao = ctx.create_vertex_array().unwrap();
         ctx.bind_vertex_array(Some(&vao));
 
-        let vertices = TypedArray::<f32>::from(
-            &[
-                -0.5, -0.5, 0.0, -0.5, 0.5, 0.0, 0.5, -0.5, 0.0, 0.5, 0.5, 0.,
-            ][..],
-        )
-        .buffer();
+        let vertices =
+            TypedArray::<f32>::from(&[-1., -1., 0., -1., 1., 0., 1., -1., 0., 1., 1., 0.][..])
+                .buffer();
 
         let indices = TypedArray::<u16>::from(&[0, 1, 2, 1, 3, 2][..]).buffer();
 
