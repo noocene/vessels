@@ -44,22 +44,22 @@ impl Renderer for WebGL2 {
             .unwrap()
             .append_html(
                 r#"
-        <style>
-        canvas {
-            height: 100vh;
-            width: 100vw;
-            display: block;
-        }
-        body {
-            margin: 0;
-        }
-        body, html {
-            width: 100%;
-            overflow: hidden;
-            height: 100%;
-        }
-        </style>
-        "#,
+                    <style>
+                        canvas {
+                            height: 100vh;
+                            width: 100vw;
+                            display: block;
+                        }
+                        body {
+                            margin: 0;
+                        }
+                        body, html {
+                            width: 100%;
+                            overflow: hidden;
+                            height: 100%;
+                        }
+                     </style>
+                "#,
             )
             .unwrap();
         let win = window();
