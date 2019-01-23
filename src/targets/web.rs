@@ -391,7 +391,7 @@ impl WebGL2RootFrame {
             let renderbuffer = ctx.create_renderbuffer().unwrap();
             ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&state.framebuffer));
             ctx.bind_renderbuffer(gl::RENDERBUFFER, Some(&renderbuffer));
-            ctx.renderbuffer_storage_multisample(gl::RENDERBUFFER, 4, gl::RGB8, size.w, size.h);
+            ctx.renderbuffer_storage(gl::RENDERBUFFER, gl::RGB8, size.w, size.h);
             ctx.framebuffer_renderbuffer(
                 gl::FRAMEBUFFER,
                 gl::COLOR_ATTACHMENT0,
