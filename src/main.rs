@@ -1,6 +1,5 @@
 use vitruvia::{initialize, Frame, Rect, Renderer};
 
-#[macro_use]
 extern crate stdweb;
 
 use std::cell::RefCell;

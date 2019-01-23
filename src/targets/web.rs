@@ -18,7 +18,8 @@ use stdweb::unstable::TryInto;
 mod webgl_rendering_context;
 
 use crate::targets::web::webgl_rendering_context::{
-    WebGL2RenderingContext as gl, WebGLFramebuffer, WebGLRenderbuffer, WebGLTexture,
+    WebGL2RenderingContext as gl, WebGLBuffer, WebGLFramebuffer, WebGLRenderbuffer, WebGLTexture,
+    WebGLVertexArrayObject,
 };
 
 pub struct WebGL2 {
@@ -217,6 +218,8 @@ pub struct WebGL2FrameState {
     render_target: WebGLTexture,
     children: PtrWeakHashSet<WebGL2FrameWeak>,
     context: Rc<RefCell<gl>>,
+    vao: WebGLVertexArrayObject,
+    index_buffer: WebGLBuffer,
 }
 
 impl Drop for WebGL2FrameState {
@@ -276,49 +279,7 @@ impl Frame for WebGL2Frame {
     fn child(&mut self, bounds: Rect) -> Box<dyn Frame> {
         let mut state = self.state.borrow_mut();
 
-        let child = {
-            let ctx = state.context.borrow();
-            let framebuffer = ctx.create_framebuffer().unwrap();
-            ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&framebuffer));
-            let render_target = ctx.create_texture().unwrap();
-            ctx.bind_texture(gl::TEXTURE_2D, Some(&render_target));
-            ctx.tex_image2_d(
-                gl::TEXTURE_2D,
-                0,
-                gl::RGBA as i32,
-                bounds.w,
-                bounds.h,
-                0,
-                gl::RGBA,
-                gl::UNSIGNED_BYTE,
-                None::<&TypedArray<u8>>,
-            );
-            ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
-            ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
-            ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
-            ctx.framebuffer_texture2_d(
-                gl::FRAMEBUFFER,
-                gl::COLOR_ATTACHMENT0,
-                gl::TEXTURE_2D,
-                Some(&render_target),
-                0,
-            );
-
-            WebGL2Frame {
-                state: Rc::new(RefCell::new(WebGL2FrameState {
-                    width: bounds.w,
-                    height: bounds.h,
-                    x: bounds.x,
-                    y: bounds.y,
-                    framebuffer,
-                    render_target,
-                    context: state.context.clone(),
-                    clip_start: None,
-                    clip_end: None,
-                    children: PtrWeakHashSet::new(),
-                })),
-            }
-        };
+        let child = WebGL2Frame::new(bounds, state.context.clone());
 
         state.children.insert(child.clone());
 
@@ -330,49 +291,7 @@ impl RootFrame for WebGL2RootFrame {
     fn child(&mut self, bounds: Rect) -> Box<dyn Frame> {
         let mut state = self.state.borrow_mut();
 
-        let child = {
-            let ctx = state.context.borrow();
-            let framebuffer = ctx.create_framebuffer().unwrap();
-            ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&framebuffer));
-            let render_target = ctx.create_texture().unwrap();
-            ctx.bind_texture(gl::TEXTURE_2D, Some(&render_target));
-            ctx.tex_image2_d(
-                gl::TEXTURE_2D,
-                0,
-                gl::RGBA as i32,
-                bounds.w,
-                bounds.h,
-                0,
-                gl::RGBA,
-                gl::UNSIGNED_BYTE,
-                None::<&TypedArray<u8>>,
-            );
-            ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
-            ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
-            ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
-            ctx.framebuffer_texture2_d(
-                gl::FRAMEBUFFER,
-                gl::COLOR_ATTACHMENT0,
-                gl::TEXTURE_2D,
-                Some(&render_target),
-                0,
-            );
-
-            WebGL2Frame {
-                state: Rc::new(RefCell::new(WebGL2FrameState {
-                    width: bounds.w,
-                    height: bounds.h,
-                    x: bounds.x,
-                    y: bounds.y,
-                    framebuffer,
-                    render_target,
-                    context: state.context.clone(),
-                    clip_start: None,
-                    clip_end: None,
-                    children: PtrWeakHashSet::new(),
-                })),
-            }
-        };
+        let child = WebGL2Frame::new(bounds, state.context.clone());
 
         state.children.insert(child.clone());
 
@@ -426,14 +345,113 @@ impl WebGL2RootFrame {
 }
 
 impl WebGL2Frame {
+    fn new(bounds: Rect, _ctx: Rc<RefCell<gl>>) -> WebGL2Frame {
+        let ctx = _ctx.borrow();
+        let framebuffer = ctx.create_framebuffer().unwrap();
+        ctx.bind_framebuffer(gl::FRAMEBUFFER, Some(&framebuffer));
+        let render_target = ctx.create_texture().unwrap();
+        ctx.bind_texture(gl::TEXTURE_2D, Some(&render_target));
+        ctx.tex_image2_d(
+            gl::TEXTURE_2D,
+            0,
+            gl::RGBA as i32,
+            bounds.w,
+            bounds.h,
+            0,
+            gl::RGBA,
+            gl::UNSIGNED_BYTE,
+            None::<&TypedArray<u8>>,
+        );
+        ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+        ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
+        ctx.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
+        ctx.framebuffer_texture2_d(
+            gl::FRAMEBUFFER,
+            gl::COLOR_ATTACHMENT0,
+            gl::TEXTURE_2D,
+            Some(&render_target),
+            0,
+        );
+
+        let frag_shader = ctx.create_shader(gl::FRAGMENT_SHADER).unwrap();
+        ctx.shader_source(
+            &frag_shader,
+            r#"
+                    precision mediump float;
+                    void main() {
+                        gl_FragColor = vec4(1., 1., 1., 1.);
+                    }
+                "#,
+        );
+        ctx.compile_shader(&frag_shader);
+
+        let vert_shader = ctx.create_shader(gl::VERTEX_SHADER).unwrap();
+        ctx.shader_source(
+            &vert_shader,
+            r#"
+                    attribute vec3 position;
+                    void main() {
+                        gl_Position = vec4(position, 1.);
+                    }
+                "#,
+        );
+        ctx.compile_shader(&vert_shader);
+
+        let shader_program = ctx.create_program().unwrap();
+        ctx.attach_shader(&shader_program, &vert_shader);
+        ctx.attach_shader(&shader_program, &frag_shader);
+        ctx.link_program(&shader_program);
+
+        let vao = ctx.create_vertex_array().unwrap();
+        ctx.bind_vertex_array(Some(&vao));
+
+        let vertices = TypedArray::<f32>::from(
+            &[
+                -0.5, -0.5, 0.0, -0.5, 0.5, 0.0, 0.5, -0.5, 0.0, 0.5, 0.5, 0.,
+            ][..],
+        )
+        .buffer();
+
+        let indices = TypedArray::<u16>::from(&[0, 1, 2, 1, 3, 2][..]).buffer();
+
+        let index_buffer = ctx.create_buffer().unwrap();
+        ctx.bind_buffer(gl::ELEMENT_ARRAY_BUFFER, Some(&index_buffer));
+        ctx.buffer_data_1(gl::ELEMENT_ARRAY_BUFFER, Some(&indices), gl::STATIC_DRAW);
+
+        let vertex_buffer = ctx.create_buffer().unwrap();
+        ctx.bind_buffer(gl::ARRAY_BUFFER, Some(&vertex_buffer));
+        ctx.buffer_data_1(gl::ARRAY_BUFFER, Some(&vertices), gl::STATIC_DRAW);
+
+        let position = ctx.get_attrib_location(&shader_program, "position") as u32;
+        ctx.vertex_attrib_pointer(position, 3, gl::FLOAT, false, 0, 0);
+        ctx.enable_vertex_attrib_array(position);
+
+        ctx.use_program(Some(&shader_program));
+
+        WebGL2Frame {
+            state: Rc::new(RefCell::new(WebGL2FrameState {
+                width: bounds.w,
+                height: bounds.h,
+                x: bounds.x,
+                y: bounds.y,
+                framebuffer,
+                render_target,
+                context: _ctx.clone(),
+                clip_start: None,
+                clip_end: None,
+                children: PtrWeakHashSet::new(),
+                index_buffer,
+                vao,
+            })),
+        }
+    }
     fn draw(&self, target: Option<&WebGLFramebuffer>) {
         let state = self.state.borrow();
         for child in &state.children {
             child.draw(Some(&state.framebuffer));
         }
         let ctx = state.context.borrow();
-        ctx.bind_framebuffer(gl::READ_FRAMEBUFFER, Some(&state.framebuffer));
-        ctx.bind_framebuffer(gl::DRAW_FRAMEBUFFER, target);
+        ctx.bind_framebuffer(gl::FRAMEBUFFER, target);
         let (clip_x, clip_y) = match &state.clip_start {
             None => (0, 0),
             Some(clip) => (clip.x, clip.y),
@@ -442,18 +460,9 @@ impl WebGL2Frame {
             None => (state.width, state.height),
             Some(clip) => (clip.x, clip.y),
         };
-        ctx.blit_framebuffer(
-            clip_x,
-            clip_y,
-            clip_w,
-            clip_h,
-            state.x,
-            state.y,
-            clip_w - clip_x,
-            clip_h - clip_y,
-            gl::COLOR_BUFFER_BIT,
-            gl::NEAREST,
-        );
+        ctx.bind_vertex_array(Some(&state.vao));
+        ctx.bind_buffer(gl::ELEMENT_ARRAY_BUFFER, Some(&state.index_buffer));
+        ctx.draw_elements(gl::TRIANGLES, 6, gl::UNSIGNED_SHORT, 0);
     }
     fn downgrade(&self) -> WebGL2FrameWeak {
         WebGL2FrameWeak {
