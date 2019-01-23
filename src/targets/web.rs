@@ -18,8 +18,8 @@ use stdweb::unstable::TryInto;
 mod webgl_rendering_context;
 
 use crate::targets::web::webgl_rendering_context::{
-    WebGL2RenderingContext as gl, WebGLBuffer, WebGLFramebuffer, WebGLRenderbuffer, WebGLTexture,
-    WebGLVertexArrayObject,
+    WebGL2RenderingContext as gl, WebGLBuffer, WebGLFramebuffer, WebGLProgram, WebGLRenderbuffer,
+    WebGLShader, WebGLTexture, WebGLVertexArrayObject,
 };
 
 pub struct WebGL2 {
@@ -220,6 +220,9 @@ pub struct WebGL2FrameState {
     context: Rc<RefCell<gl>>,
     vao: WebGLVertexArrayObject,
     index_buffer: WebGLBuffer,
+    vertex_shader: WebGLShader,
+    fragment_shader: WebGLShader,
+    program: WebGLProgram,
 }
 
 impl Drop for WebGL2FrameState {
@@ -227,6 +230,11 @@ impl Drop for WebGL2FrameState {
         let ctx = self.context.borrow();
         ctx.delete_texture(Some(&self.render_target));
         ctx.delete_framebuffer(Some(&self.framebuffer));
+        ctx.delete_buffer(Some(&self.index_buffer));
+        ctx.delete_vertex_array(Some(&self.vao));
+        ctx.delete_shader(Some(&self.vertex_shader));
+        ctx.delete_shader(Some(&self.fragment_shader));
+        ctx.delete_program(Some(&self.program));
     }
 }
 
@@ -373,9 +381,9 @@ impl WebGL2Frame {
             0,
         );
 
-        let frag_shader = ctx.create_shader(gl::FRAGMENT_SHADER).unwrap();
+        let fragment_shader = ctx.create_shader(gl::FRAGMENT_SHADER).unwrap();
         ctx.shader_source(
-            &frag_shader,
+            &fragment_shader,
             r#"
                 precision mediump float;
                 void main() {
@@ -383,11 +391,11 @@ impl WebGL2Frame {
                 }
             "#,
         );
-        ctx.compile_shader(&frag_shader);
+        ctx.compile_shader(&fragment_shader);
 
-        let vert_shader = ctx.create_shader(gl::VERTEX_SHADER).unwrap();
+        let vertex_shader = ctx.create_shader(gl::VERTEX_SHADER).unwrap();
         ctx.shader_source(
-            &vert_shader,
+            &vertex_shader,
             r#"
                     attribute vec3 position;
                     void main() {
@@ -395,12 +403,12 @@ impl WebGL2Frame {
                     }
                 "#,
         );
-        ctx.compile_shader(&vert_shader);
+        ctx.compile_shader(&vertex_shader);
 
-        let shader_program = ctx.create_program().unwrap();
-        ctx.attach_shader(&shader_program, &vert_shader);
-        ctx.attach_shader(&shader_program, &frag_shader);
-        ctx.link_program(&shader_program);
+        let program = ctx.create_program().unwrap();
+        ctx.attach_shader(&program, &vertex_shader);
+        ctx.attach_shader(&program, &fragment_shader);
+        ctx.link_program(&program);
 
         let vao = ctx.create_vertex_array().unwrap();
         ctx.bind_vertex_array(Some(&vao));
@@ -419,11 +427,11 @@ impl WebGL2Frame {
         ctx.bind_buffer(gl::ARRAY_BUFFER, Some(&vertex_buffer));
         ctx.buffer_data_1(gl::ARRAY_BUFFER, Some(&vertices), gl::STATIC_DRAW);
 
-        let position = ctx.get_attrib_location(&shader_program, "position") as u32;
+        let position = ctx.get_attrib_location(&program, "position") as u32;
         ctx.vertex_attrib_pointer(position, 3, gl::FLOAT, false, 0, 0);
         ctx.enable_vertex_attrib_array(position);
 
-        ctx.use_program(Some(&shader_program));
+        ctx.use_program(Some(&program));
 
         WebGL2Frame {
             state: Rc::new(RefCell::new(WebGL2FrameState {
@@ -439,6 +447,9 @@ impl WebGL2Frame {
                 children: PtrWeakHashSet::new(),
                 index_buffer,
                 vao,
+                vertex_shader,
+                fragment_shader,
+                program,
             })),
         }
     }
