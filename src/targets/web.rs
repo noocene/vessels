@@ -377,11 +377,11 @@ impl WebGL2Frame {
         ctx.shader_source(
             &frag_shader,
             r#"
-                    precision mediump float;
-                    void main() {
-                        gl_FragColor = vec4(1., 1., 1., 1.);
-                    }
-                "#,
+                precision mediump float;
+                void main() {
+                    gl_FragColor = vec4(1., 1., 1., 1.);
+                }
+            "#,
         );
         ctx.compile_shader(&frag_shader);
 
