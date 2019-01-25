@@ -1,8 +1,11 @@
-use crate::render::{Frame, Point, Rect, Renderer, RootFrame, Size};
+use crate::render::{Frame, Point, Rect, Renderer, RootFrame, Size, ResourceManager, BufferHandle};
 
-use weak_table::PtrWeakHashSet;
+use weak_table::{PtrWeakHashSet, WeakHashSet};
 
-use weak_table::traits::WeakElement;
+use weak_table::traits::{WeakElement, WeakKey};
+
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
@@ -11,7 +14,7 @@ use std::ops::Deref;
 
 use stdweb::web::event::ResizeEvent;
 use stdweb::web::html_element::CanvasElement;
-use stdweb::web::{document, window, IElement, IEventTarget, IHtmlElement, INode, TypedArray};
+use stdweb::web::{document, window, IElement, IEventTarget, IHtmlElement, INode, TypedArray, ArrayBuffer};
 
 use stdweb::unstable::TryInto;
 
@@ -19,7 +22,7 @@ mod webgl_rendering_context;
 
 use crate::targets::web::webgl_rendering_context::{
     WebGL2RenderingContext as gl, WebGLBuffer, WebGLFramebuffer, WebGLProgram, WebGLRenderbuffer,
-    WebGLShader, WebGLTexture, WebGLVertexArrayObject,
+    WebGLShader, WebGLTexture, WebGLVertexArrayObject, GLenum,
 };
 
 pub struct WebGL2 {
@@ -34,6 +37,7 @@ struct WebGL2State {
     width: i32,
     height: i32,
     root_frame: WebGL2RootFrame,
+    resource_manager: Rc<RefCell<WebGL2ResourceManager>>,
 }
 
 impl Renderer for WebGL2 {
@@ -104,6 +108,10 @@ impl Renderer for WebGL2 {
         let root_frame = WebGL2RootFrame {
             state: root_frame_state,
         };
+        let resource_manager = Rc::new(RefCell::new(WebGL2ResourceManager {
+            context: context.clone(),
+            buffers: WeakHashSet::new(),
+        }));
         let state = Rc::new(RefCell::new(WebGL2State {
             width,
             height,
@@ -112,6 +120,7 @@ impl Renderer for WebGL2 {
             canvas,
             resized: false,
             dpr,
+            resource_manager,
         }));
         WebGL2 { state }
     }
@@ -511,5 +520,101 @@ impl Deref for WebGL2Frame {
 
     fn deref(&self) -> &RefCell<WebGL2FrameState> {
         Deref::deref(&self.state)
+    }
+}
+
+struct WebGL2ResourceManager {
+    context: Rc<RefCell<gl>>,
+    buffers: WeakHashSet<WebGL2BufferHandleWeak>,
+}
+
+impl ResourceManager for WebGL2ResourceManager {
+    type BufferDataType = ArrayBuffer;
+    type GLEnumType = GLenum;
+
+    fn create_buffer(&mut self, target: Self::GLEnumType, data: Self::BufferDataType, usage: Self::GLEnumType) -> Box<BufferHandle> {
+        let context = self.context.borrow();
+        let buffer = context.create_buffer().unwrap();
+
+        context.bind_buffer(target, Some(&buffer));
+        context.buffer_data_1(target, Some(&data), usage);
+
+        let mut s = DefaultHasher::new();
+        //this is sketch and should be probs changed
+        TypedArray::<u8>::from(data).to_vec().hash(&mut s);
+        let buffer_handle = WebGL2BufferHandle::new(buffer, s.finish());
+        self.buffers.insert(buffer_handle.clone());
+
+        Box::new(buffer_handle)
+    }
+}
+
+struct WebGL2BufferHandle {
+    handle: Rc<RefCell<WebGLBuffer>>,
+    hash: u64,
+}
+
+impl WebGL2BufferHandle {
+    fn new(handle: WebGLBuffer, hash: u64) -> Self {
+        WebGL2BufferHandle {
+            handle: Rc::new(RefCell::new(handle)),
+            hash: hash,
+        }
+    }
+
+    fn downgrade(&self) -> WebGL2BufferHandleWeak {
+        WebGL2BufferHandleWeak {
+            handle: Rc::downgrade(&self.handle),
+            hash: self.hash.clone(),
+        }
+    }
+}
+
+impl Clone for WebGL2BufferHandle {
+    fn clone(&self) -> WebGL2BufferHandle {
+        WebGL2BufferHandle {
+            handle: self.handle.clone(),
+            hash: self.hash.clone(),
+        }
+    }
+}
+
+impl BufferHandle for WebGL2BufferHandle {}
+
+struct WebGL2BufferHandleWeak {
+    handle: Weak<RefCell<WebGLBuffer>>,
+    hash: u64,
+}
+
+impl WebGL2BufferHandleWeak {
+    fn upgrade(&self) -> Option<WebGL2BufferHandle> {
+        match self.handle.upgrade() {
+            None => None,
+            Some(handle) => Some(WebGL2BufferHandle {
+                handle: handle,
+                hash: self.hash.clone(),
+            }),
+        }
+    }
+}
+
+impl WeakElement for WebGL2BufferHandleWeak {
+    type Strong = WebGL2BufferHandle;
+
+    fn new(view: &WebGL2BufferHandle) -> WebGL2BufferHandleWeak {
+        view.downgrade()
+    }
+    fn view(&self) -> Option<WebGL2BufferHandle> {
+        self.upgrade()
+    }
+}
+
+impl WeakKey for WebGL2BufferHandleWeak {
+    type Key = u64;
+
+    fn with_key<F, R>(view: &Self::Strong, f: F) -> R
+            where F: FnOnce(&Self::Key) -> R
+    {
+            f(&view.hash)
     }
 }

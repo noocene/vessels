@@ -4,6 +4,13 @@ pub trait Renderer {
     fn root(&self) -> Box<dyn RootFrame>;
 }
 
+pub trait ResourceManager {
+    type BufferDataType;
+    type GLEnumType;
+
+    fn create_buffer(&mut self, targt: Self::GLEnumType, data: Self::BufferDataType, usage: Self::GLEnumType) -> Box<dyn BufferHandle>;
+}
+
 pub trait RootFrame {
     fn child(&mut self, bounds: Rect) -> Box<dyn Frame>;
 }
@@ -14,6 +21,8 @@ pub trait Frame {
     fn position(&mut self, position: Point);
     fn child(&mut self, bounds: Rect) -> Box<dyn Frame>;
 }
+
+pub trait BufferHandle {}
 
 pub struct Point {
     pub x: i32,
