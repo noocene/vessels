@@ -533,16 +533,21 @@ impl ResourceManager for WebGL2ResourceManager {
     type GLEnumType = GLenum;
 
     fn create_buffer(&mut self, target: Self::GLEnumType, data: Self::BufferDataType, usage: Self::GLEnumType) -> Box<BufferHandle> {
+        let mut s = DefaultHasher::new();
+        TypedArray::<u8>::from(&data).to_vec().hash(&mut s);
+        let hash = s.finish();
+
+        if let Some(handle) = self.buffers.get(&hash) {
+            return Box::new(handle);
+        }
+
         let context = self.context.borrow();
         let buffer = context.create_buffer().unwrap();
 
         context.bind_buffer(target, Some(&buffer));
         context.buffer_data_1(target, Some(&data), usage);
 
-        let mut s = DefaultHasher::new();
-        //this is sketch and should be probs changed
-        TypedArray::<u8>::from(data).to_vec().hash(&mut s);
-        let buffer_handle = WebGL2BufferHandle::new(buffer, s.finish());
+        let buffer_handle = WebGL2BufferHandle::new(buffer, hash);
         self.buffers.insert(buffer_handle.clone());
 
         Box::new(buffer_handle)
