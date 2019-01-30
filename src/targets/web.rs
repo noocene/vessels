@@ -1,6 +1,6 @@
 use crate::render::{
     BufferHandle, ChildFrame, Frame, Frame2D, Geometry2D, GeometryBuilder, Object, Point, Rect,
-    Renderer, ResourceManager, RootFrame, Size,
+    Renderer, RootFrame, Size,
 };
 
 use weak_table::{PtrWeakHashSet, WeakHashSet};
@@ -551,15 +551,12 @@ struct WebGL2ResourceManager {
     buffers: WeakHashSet<WebGL2BufferHandleWeak>,
 }
 
-impl ResourceManager for WebGL2ResourceManager {
-    type BufferDataType = ArrayBuffer;
-    type GLEnumType = GLenum;
-
+impl WebGL2ResourceManager {
     fn create_buffer(
         &mut self,
-        target: Self::GLEnumType,
-        data: Self::BufferDataType,
-        usage: Self::GLEnumType,
+        target: GLenum,
+        data: ArrayBuffer,
+        usage: GLenum,
     ) -> Box<BufferHandle> {
         let mut s = DefaultHasher::new();
         TypedArray::<u8>::from(&data).to_vec().hash(&mut s);

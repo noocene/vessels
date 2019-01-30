@@ -4,18 +4,6 @@ pub trait Renderer {
     fn root(&self) -> Box<dyn RootFrame>;
 }
 
-pub trait ResourceManager {
-    type BufferDataType;
-    type GLEnumType;
-
-    fn create_buffer(
-        &mut self,
-        targt: Self::GLEnumType,
-        data: Self::BufferDataType,
-        usage: Self::GLEnumType,
-    ) -> Box<dyn BufferHandle>;
-}
-
 pub trait Object<T: Geometry> {}
 
 pub enum GeometryBuilder<'a, T: Geometry> {
