@@ -1,69 +1,45 @@
-pub trait Renderer {
-    fn new() -> Self;
-    fn run(&self);
-    fn root(&self) -> Box<dyn RootFrame>;
-}
-
-pub trait Object<T: Geometry> {}
-
-pub enum GeometryBuilder<'a, T: Geometry> {
-    Static(&'a T),
-    Dynamic(&'a DynamicGeometry<T>),
-}
-
-pub trait DynamicGeometry<T: Geometry> {
-    fn new() -> DynamicGeometry<T>
-    where
-        Self: Sized;
-    fn on_change(&self, callback: Fn());
-    fn render(&self) -> &T;
-}
+use std::convert::TryFrom;
+use std::error::Error;
 
 pub trait Geometry {}
 
-pub struct Geometry2D {}
+pub trait Geometry2D: Geometry {}
 
-impl Geometry for Geometry2D {}
+pub trait Geometry3D: Geometry {}
 
-pub struct Geometry3D {
-    pub indices: Vec<u16>,
-    pub vertices: Vec<f32>,
+pub trait Material {}
+
+pub trait Material2D: Material {}
+
+pub trait Material3D: Material {}
+
+pub trait TextureTarget<O>: Material2D + RenderTarget<O>
+where
+    O: ?Sized + Object<Geometry, Material>,
+{
 }
 
-impl Geometry for Geometry3D {}
-
-pub trait Frame<T: Geometry> {
-    fn child(&mut self, bounds: Rect) -> Box<Frame<T>>;
-    fn object(&mut self, geo: GeometryBuilder<T>) -> Box<Object<T>>;
+pub trait Object<G, M>
+where
+    G: ?Sized + Geometry,
+    M: ?Sized + Material,
+{
 }
 
-pub trait Frame2D: Frame<Geometry2D> {}
+pub trait RenderTarget<O: ?Sized + Object<Geometry, Material>> {}
 
-pub trait Frame3D: Frame<Geometry3D> {}
-
-pub trait RootFrame: Frame2D {}
-
-pub trait ChildFrame<T: Geometry>: Frame<T> {
-    fn resize(&mut self, size: Size);
-    fn clip(&mut self, start: Option<Point>, end: Option<Point>);
-    fn position(&mut self, position: Point);
+pub trait Frame<O>: Object<Geometry2D, TextureTarget<O>>
+where
+    O: ?Sized + Object<Geometry, Material>,
+{
+    fn add(&self, object: O);
 }
 
-pub trait BufferHandle {}
-
-pub struct Point {
-    pub x: i32,
-    pub y: i32,
+pub trait Renderer {
+    fn new() -> Box<Self>
+    where
+        Self: Sized;
+    fn run(&self, root: Box<Frame<Object<Geometry, Material>>>);
 }
 
-pub struct Size {
-    pub w: i32,
-    pub h: i32,
-}
-
-pub struct Rect {
-    pub x: i32,
-    pub y: i32,
-    pub w: i32,
-    pub h: i32,
-}
+pub trait RendererSupports2D<'a>: Renderer + TryFrom<&'a Renderer, Error = ()> {}
