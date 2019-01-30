@@ -8,7 +8,12 @@ pub trait ResourceManager {
     type BufferDataType;
     type GLEnumType;
 
-    fn create_buffer(&mut self, targt: Self::GLEnumType, data: Self::BufferDataType, usage: Self::GLEnumType) -> Box<dyn BufferHandle>;
+    fn create_buffer(
+        &mut self,
+        targt: Self::GLEnumType,
+        data: Self::BufferDataType,
+        usage: Self::GLEnumType,
+    ) -> Box<dyn BufferHandle>;
 }
 
 pub trait Object<T: Geometry> {}
@@ -41,7 +46,7 @@ impl Geometry for Geometry3D {}
 
 pub trait Frame<T: Geometry> {
     fn child(&mut self, bounds: Rect) -> Box<Frame<T>>;
-    fn object(&mut self, geo: GeometryBuilder<T>) -> &Object<T>;
+    fn object(&mut self, geo: GeometryBuilder<T>) -> Box<Object<T>>;
 }
 
 pub trait Frame2D: Frame<Geometry2D> {}

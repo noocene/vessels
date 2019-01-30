@@ -1,4 +1,7 @@
-use crate::render::{Frame, Point, Rect, Renderer, RootFrame, Size, ResourceManager, BufferHandle, ChildFrame, Geometry2D, GeometryBuilder, Frame2D, Object};
+use crate::render::{
+    BufferHandle, ChildFrame, Frame, Frame2D, Geometry2D, GeometryBuilder, Object, Point, Rect,
+    Renderer, ResourceManager, RootFrame, Size,
+};
 
 use weak_table::{PtrWeakHashSet, WeakHashSet};
 
@@ -14,15 +17,17 @@ use std::ops::Deref;
 
 use stdweb::web::event::ResizeEvent;
 use stdweb::web::html_element::CanvasElement;
-use stdweb::web::{document, window, IElement, IEventTarget, IHtmlElement, INode, TypedArray, ArrayBuffer};
+use stdweb::web::{
+    document, window, ArrayBuffer, IElement, IEventTarget, IHtmlElement, INode, TypedArray,
+};
 
 use stdweb::unstable::TryInto;
 
 mod webgl_rendering_context;
 
 use crate::targets::web::webgl_rendering_context::{
-    WebGL2RenderingContext as gl, WebGLBuffer, WebGLFramebuffer, WebGLProgram, WebGLRenderbuffer,
-    WebGLShader, WebGLTexture, WebGLVertexArrayObject, GLenum,
+    GLenum, WebGL2RenderingContext as gl, WebGLBuffer, WebGLFramebuffer, WebGLProgram,
+    WebGLRenderbuffer, WebGLShader, WebGLTexture, WebGLVertexArrayObject,
 };
 
 pub struct WebGL2Object2D {}
@@ -262,8 +267,8 @@ impl Frame<Geometry2D> for WebGL2Frame {
         Box::new(child)
     }
 
-    fn object(&mut self, geo: GeometryBuilder<Geometry2D>) -> &Object<Geometry2D> {
-        &WebGL2Object2D {}
+    fn object(&mut self, geo: GeometryBuilder<Geometry2D>) -> Box<Object<Geometry2D>> {
+        Box::new(WebGL2Object2D {})
     }
 }
 
@@ -325,8 +330,8 @@ impl Frame<Geometry2D> for WebGL2RootFrame {
 
         Box::new(child)
     }
-    fn object(&mut self, geo: GeometryBuilder<Geometry2D>) -> &Object<Geometry2D> {
-        &WebGL2Object2D {}
+    fn object(&mut self, geo: GeometryBuilder<Geometry2D>) -> Box<Object<Geometry2D>> {
+        Box::new(WebGL2Object2D {})
     }
 }
 
@@ -550,7 +555,12 @@ impl ResourceManager for WebGL2ResourceManager {
     type BufferDataType = ArrayBuffer;
     type GLEnumType = GLenum;
 
-    fn create_buffer(&mut self, target: Self::GLEnumType, data: Self::BufferDataType, usage: Self::GLEnumType) -> Box<BufferHandle> {
+    fn create_buffer(
+        &mut self,
+        target: Self::GLEnumType,
+        data: Self::BufferDataType,
+        usage: Self::GLEnumType,
+    ) -> Box<BufferHandle> {
         let mut s = DefaultHasher::new();
         TypedArray::<u8>::from(&data).to_vec().hash(&mut s);
         let hash = s.finish();
@@ -636,8 +646,9 @@ impl WeakKey for WebGL2BufferHandleWeak {
     type Key = u64;
 
     fn with_key<F, R>(view: &Self::Strong, f: F) -> R
-            where F: FnOnce(&Self::Key) -> R
+    where
+        F: FnOnce(&Self::Key) -> R,
     {
-            f(&view.hash)
+        f(&view.hash)
     }
 }

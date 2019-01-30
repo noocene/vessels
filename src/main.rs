@@ -1,4 +1,4 @@
-use vitruvia::{initialize, Frame, Rect, Renderer, Geometry};
+use vitruvia::{initialize, Frame, Geometry, Geometry2D, Rect, Renderer};
 
 extern crate stdweb;
 
@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 struct Cb {
-    frames: Vec<Box<dyn Frame<Geometry>>>,
+    frame: Box<Frame<Geometry2D>>,
 }
 
 impl Cb {
@@ -27,7 +27,7 @@ pub fn main() {
         w: 100,
         h: 100,
     });
-    let p = Rc::new(RefCell::new(Cb { frames: vec![r] }));
+    let p = Rc::new(RefCell::new(Cb { frame: r }));
     stdweb::web::window().request_animation_frame(move |_time| {
         let _p = p.clone();
         p.borrow().p(_p);
