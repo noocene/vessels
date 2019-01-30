@@ -1,4 +1,4 @@
-use vitruvia::{initialize, Frame, Rect, Renderer};
+use vitruvia::{initialize, Frame, Rect, Renderer, Geometry};
 
 extern crate stdweb;
 
@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 struct Cb {
-    frames: Vec<Box<dyn Frame>>,
+    frames: Vec<Box<dyn Frame<Geometry>>>,
 }
 
 impl Cb {

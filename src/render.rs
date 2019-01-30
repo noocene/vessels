@@ -11,15 +11,49 @@ pub trait ResourceManager {
     fn create_buffer(&mut self, targt: Self::GLEnumType, data: Self::BufferDataType, usage: Self::GLEnumType) -> Box<dyn BufferHandle>;
 }
 
-pub trait RootFrame {
-    fn child(&mut self, bounds: Rect) -> Box<dyn Frame>;
+pub trait Object<T: Geometry> {}
+
+pub enum GeometryBuilder<'a, T: Geometry> {
+    Static(&'a T),
+    Dynamic(&'a DynamicGeometry<T>),
 }
 
-pub trait Frame {
+pub trait DynamicGeometry<T: Geometry> {
+    fn new() -> DynamicGeometry<T>
+    where
+        Self: Sized;
+    fn on_change(&self, callback: Fn());
+    fn render(&self) -> &T;
+}
+
+pub trait Geometry {}
+
+pub struct Geometry2D {}
+
+impl Geometry for Geometry2D {}
+
+pub struct Geometry3D {
+    pub indices: Vec<u16>,
+    pub vertices: Vec<f32>,
+}
+
+impl Geometry for Geometry3D {}
+
+pub trait Frame<T: Geometry> {
+    fn child(&mut self, bounds: Rect) -> Box<Frame<T>>;
+    fn object(&mut self, geo: GeometryBuilder<T>) -> &Object<T>;
+}
+
+pub trait Frame2D: Frame<Geometry2D> {}
+
+pub trait Frame3D: Frame<Geometry3D> {}
+
+pub trait RootFrame: Frame2D {}
+
+pub trait ChildFrame<T: Geometry>: Frame<T> {
     fn resize(&mut self, size: Size);
     fn clip(&mut self, start: Option<Point>, end: Option<Point>);
     fn position(&mut self, position: Point);
-    fn child(&mut self, bounds: Rect) -> Box<dyn Frame>;
 }
 
 pub trait BufferHandle {}

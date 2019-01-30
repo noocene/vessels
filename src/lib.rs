@@ -13,7 +13,7 @@ extern crate weak_table;
 pub(crate) mod render;
 mod targets;
 
-pub use crate::render::{Frame, Point, Rect, Renderer, Size};
+pub use crate::render::{Frame, Point, Rect, Renderer, Size, Geometry};
 
 #[cfg(any(target_arch = "wasm32", target_arch = "asmjs", feature = "check"))]
 pub fn initialize() -> impl Renderer {

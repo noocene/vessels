@@ -1,4 +1,4 @@
-use crate::render::{Frame, Point, Rect, Renderer, RootFrame, Size, ResourceManager, BufferHandle};
+use crate::render::{Frame, Point, Rect, Renderer, RootFrame, Size, ResourceManager, BufferHandle, ChildFrame, Geometry2D, GeometryBuilder, Frame2D, Object};
 
 use weak_table::{PtrWeakHashSet, WeakHashSet};
 
@@ -24,6 +24,10 @@ use crate::targets::web::webgl_rendering_context::{
     WebGL2RenderingContext as gl, WebGLBuffer, WebGLFramebuffer, WebGLProgram, WebGLRenderbuffer,
     WebGLShader, WebGLTexture, WebGLVertexArrayObject, GLenum,
 };
+
+pub struct WebGL2Object2D {}
+
+impl<'a> Object<Geometry2D> for WebGL2Object2D {}
 
 pub struct WebGL2 {
     state: Rc<RefCell<WebGL2State>>,
@@ -247,7 +251,23 @@ impl Drop for WebGL2FrameState {
     }
 }
 
-impl Frame for WebGL2Frame {
+impl Frame<Geometry2D> for WebGL2Frame {
+    fn child(&mut self, bounds: Rect) -> Box<Frame<Geometry2D>> {
+        let mut state = self.state.borrow_mut();
+
+        let child = WebGL2Frame::new(bounds, state.context.clone());
+
+        state.children.insert(child.clone());
+
+        Box::new(child)
+    }
+
+    fn object(&mut self, geo: GeometryBuilder<Geometry2D>) -> &Object<Geometry2D> {
+        &WebGL2Object2D {}
+    }
+}
+
+impl ChildFrame<Geometry2D> for WebGL2Frame {
     fn resize(&mut self, size: Size) {
         let mut state = self.state.borrow_mut();
         state.width = size.w;
@@ -293,7 +313,10 @@ impl Frame for WebGL2Frame {
         state.x = position.x;
         state.y = position.y;
     }
-    fn child(&mut self, bounds: Rect) -> Box<dyn Frame> {
+}
+
+impl Frame<Geometry2D> for WebGL2RootFrame {
+    fn child(&mut self, bounds: Rect) -> Box<Frame<Geometry2D>> {
         let mut state = self.state.borrow_mut();
 
         let child = WebGL2Frame::new(bounds, state.context.clone());
@@ -302,19 +325,14 @@ impl Frame for WebGL2Frame {
 
         Box::new(child)
     }
-}
-
-impl RootFrame for WebGL2RootFrame {
-    fn child(&mut self, bounds: Rect) -> Box<dyn Frame> {
-        let mut state = self.state.borrow_mut();
-
-        let child = WebGL2Frame::new(bounds, state.context.clone());
-
-        state.children.insert(child.clone());
-
-        Box::new(child)
+    fn object(&mut self, geo: GeometryBuilder<Geometry2D>) -> &Object<Geometry2D> {
+        &WebGL2Object2D {}
     }
 }
+
+impl RootFrame for WebGL2RootFrame {}
+
+impl Frame2D for WebGL2RootFrame {}
 
 impl WebGL2RootFrame {
     fn resize(&mut self, size: Size) {
