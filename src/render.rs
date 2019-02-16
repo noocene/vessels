@@ -1,5 +1,7 @@
-use std::convert::TryFrom;
-use std::error::Error;
+pub trait TryInto<T>: Sized {
+    type Error;
+    fn try_into(self) -> Result<T, Self::Error>;
+}
 
 pub trait Geometry {}
 
@@ -15,7 +17,7 @@ pub trait Material3D: Material {}
 
 pub trait TextureTarget<O>: Material2D + RenderTarget<O>
 where
-    O: ?Sized + Object<Geometry, Material>,
+    O: ?Sized + Object<dyn Geometry, dyn Material>,
 {
 }
 
@@ -26,20 +28,31 @@ where
 {
 }
 
-pub trait RenderTarget<O: ?Sized + Object<Geometry, Material>> {}
+pub trait RenderTarget<O: ?Sized + Object<dyn Geometry, dyn Material>> {}
 
-pub trait Frame<O>: Object<Geometry2D, TextureTarget<O>>
+pub trait Frame<'a, O>: Object<Geometry2D, TextureTarget<O>>
 where
-    O: ?Sized + Object<Geometry, Material>,
+    O: ?Sized + Object<dyn Geometry, dyn Material>,
 {
-    fn add(&self, object: O);
+    fn add(&self, object: &'a O);
 }
 
-pub trait Renderer {
-    fn new() -> Box<Self>
-    where
-        Self: Sized;
-    fn run(&self, root: Box<Frame<Object<Geometry, Material>>>);
+pub trait GraphicsEmpty: Graphics + TryInto<Box<dyn Graphics2D>, Error = ()> {
 }
 
-pub trait RendererSupports2D<'a>: Renderer + TryFrom<&'a Renderer, Error = ()> {}
+pub trait Graphics {
+    fn new() -> Self where Self: Sized;
+    fn run(&self, root: Box<dyn Frame<Object<dyn Geometry, dyn Material>>>);
+}
+
+pub trait Graphics2D: Graphics {
+    fn frame(&mut self) -> Frame2D;
+}
+
+pub type TextureTarget2D = dyn TextureTarget<Object2D>;
+
+pub type Object2D = dyn Object<dyn Geometry2D, dyn Material2D>;
+
+pub type Object3D = dyn Object<dyn Geometry3D, dyn Material3D>;
+
+pub type Frame2D<'a> = Box<dyn Frame<'a, Object2D>>;

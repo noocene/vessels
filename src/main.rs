@@ -1,8 +1,6 @@
-#![feature(try_from)]
-
-use vitruvia::{initialize, Renderer, RendererSupports2D};
+use vitruvia::{initialize, Graphics2D, TryInto};
 
 pub fn main() {
-    let gfx = RendererSupports2D::try_from(initialize()).unwrap();
-    gfx.run();
+    let _gfx: Graphics2D = initialize().try_into().unwrap();
+    //gfx.run();
 }
