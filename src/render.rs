@@ -51,8 +51,10 @@ pub trait Graphics2D: Graphics {
 
 pub type TextureTarget2D = dyn TextureTarget<Object2D>;
 
-pub type Object2D = dyn Object<dyn Geometry2D, dyn Material2D>;
+pub trait Object2D: Object<dyn Geometry2D, dyn Material2D> + Object<dyn Geometry, dyn Material> {
+}
 
-pub type Object3D = dyn Object<dyn Geometry3D, dyn Material3D>;
+pub trait Object3D: Object<dyn Geometry3D, dyn Material3D> + Object<dyn Geometry, dyn Material> {
+}
 
 pub type Frame2D<'a> = Box<dyn Frame<'a, Object2D>>;
