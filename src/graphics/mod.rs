@@ -37,11 +37,9 @@ where
     fn add(&self, object: &'a O);
 }
 
-pub trait GraphicsEmpty: Graphics + TryInto<Box<dyn Graphics2D>, Error = ()> {
-}
+pub trait GraphicsEmpty: Graphics + TryInto<Box<dyn Graphics2D>, Error = ()> {}
 
 pub trait Graphics {
-    fn new() -> Self where Self: Sized;
     fn run(&self, root: Box<dyn Frame<Object<dyn Geometry, dyn Material>>>);
 }
 
@@ -51,10 +49,25 @@ pub trait Graphics2D: Graphics {
 
 pub type TextureTarget2D = dyn TextureTarget<Object2D>;
 
-pub trait Object2D: Object<dyn Geometry2D, dyn Material2D> + Object<dyn Geometry, dyn Material> {
+pub trait Object2D:
+    Object<dyn Geometry2D, dyn Material2D> + Object<dyn Geometry, dyn Material>
+{
 }
 
-pub trait Object3D: Object<dyn Geometry3D, dyn Material3D> + Object<dyn Geometry, dyn Material> {
+pub trait Object3D:
+    Object<dyn Geometry3D, dyn Material3D> + Object<dyn Geometry, dyn Material>
+{
 }
 
 pub type Frame2D<'a> = Box<dyn Frame<'a, Object2D>>;
+
+mod targets;
+
+#[cfg(any(target_arch = "wasm32", target_arch = "asmjs", feature = "check"))]
+pub fn initialize() -> impl GraphicsEmpty {
+    targets::web::WebGL2::new()
+}
+
+pub fn initialize() -> impl GraphicsEmpty {
+    targets::shim::G {}
+}
