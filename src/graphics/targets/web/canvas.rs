@@ -1,4 +1,5 @@
 use crate::graphics::*;
+use crate::util::*;
 
 use stdweb::traits::*;
 use stdweb::unstable::TryInto;
@@ -8,16 +9,19 @@ use stdweb::web::event::ResizeEvent;
 
 use stdweb::web::html_element::CanvasElement;
 
-macro_rules! enclose {
-    ( ($( $x:ident ),*) $y:expr ) => {
-        {
-            $(let $x = $x.clone();)*
-            $y
-        }
-    };
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
+
+pub struct Canvas {
+    state: Rc<RefCell<CanvasState>>,
 }
 
-pub struct Canvas {}
+struct CanvasState {
+    context: CanvasRenderingContext2d,
+    canvas: CanvasElement,
+    size: Cell<Size>,
+    dirty: Cell<bool>,
+}
 
 impl Graphics for Canvas {
     fn run(&self, _root: Box<Frame<Object<Geometry, Material>>>) {}
@@ -46,6 +50,30 @@ impl crate::util::TryInto<Box<Graphics2D>> for Canvas {
     }
 }
 
+impl Canvas {
+    fn animate(&self, _delta: f64) {
+        let state = self.state.borrow();
+        if state.dirty.get() {
+            console!(log, "test");
+            state.canvas.set_width(state.size.get().width as u32);
+            state.canvas.set_height(state.size.get().height as u32);
+            state.dirty.set(false);
+        }
+        let cloned = self.clone();
+        window().request_animation_frame(move |delta| {
+            cloned.animate(delta);
+        });
+    }
+}
+
+impl Clone for Canvas {
+    fn clone(&self) -> Canvas {
+        Canvas {
+            state: self.state.clone(),
+        }
+    }
+}
+
 pub fn initialize() -> impl GraphicsEmpty {
     stdweb::initialize();
 
@@ -60,27 +88,51 @@ pub fn initialize() -> impl GraphicsEmpty {
         .append_html(
             r#"
 <style>
+body, html, canvas {
+    height: 100%;
+}
 body {
     margin: 0;
+    overflow: hidden;
 }
 canvas {
     width: 100%;
-    height: 100%;
 }
 </style>
             "#,
         )
         .unwrap();
 
-    let _context: CanvasRenderingContext2d = canvas.get_context().unwrap();
+    let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
 
-    canvas.set_width(canvas.offset_width() as u32);
-    canvas.set_height(canvas.offset_height() as u32);
+    let _gfx = Canvas {
+        state: Rc::new(RefCell::new(CanvasState {
+            context,
+            size: Cell::new(Size {
+                width: f64::from(canvas.offset_width()),
+                height: f64::from(canvas.offset_height()),
+            }),
+            canvas,
+            dirty: Cell::new(true),
+        })),
+    };
 
-    window().add_event_listener(enclose!( (canvas) move |_: ResizeEvent| {
-        canvas.set_width(canvas.offset_width() as u32);
-        canvas.set_height(canvas.offset_height() as u32);
-    }));
+    let gfx = _gfx.clone();
 
-    Canvas {}
+    let gfx_resize = gfx.clone();
+
+    window().add_event_listener(move |_: ResizeEvent| {
+        let state = gfx_resize.state.borrow();
+        state.size.set(Size {
+            width: f64::from(state.canvas.offset_width()),
+            height: f64::from(state.canvas.offset_height()),
+        });
+        state.dirty.set(true);
+    });
+
+    window().request_animation_frame(move |delta| {
+        _gfx.animate(delta);
+    });
+
+    gfx
 }
