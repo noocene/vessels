@@ -1,8 +1,3 @@
-pub trait TryInto<T>: Sized {
-    type Error;
-    fn try_into(self) -> Result<T, Self::Error>;
-}
-
 pub trait Geometry {}
 
 pub trait Geometry2D: Geometry {}
@@ -37,7 +32,7 @@ where
     fn add(&self, object: &'a O);
 }
 
-pub trait GraphicsEmpty: Graphics + TryInto<Box<dyn Graphics2D>, Error = ()> {}
+pub trait GraphicsEmpty: Graphics + crate::util::TryInto<Box<dyn Graphics2D>, Error = ()> {}
 
 pub trait Graphics {
     fn run(&self, root: Box<dyn Frame<Object<dyn Geometry, dyn Material>>>);
@@ -65,9 +60,5 @@ mod targets;
 
 #[cfg(any(target_arch = "wasm32", target_arch = "asmjs", feature = "check"))]
 pub fn initialize() -> impl GraphicsEmpty {
-    targets::web::WebGL2::new()
-}
-
-pub fn initialize() -> impl GraphicsEmpty {
-    targets::shim::G {}
+    targets::web::canvas::initialize()
 }
