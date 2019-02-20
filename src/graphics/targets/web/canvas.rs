@@ -54,7 +54,6 @@ impl Canvas {
     fn animate(&self, _delta: f64) {
         let state = self.state.borrow();
         if state.dirty.get() {
-            console!(log, "test");
             state.canvas.set_width(state.size.get().width as u32);
             state.canvas.set_height(state.size.get().height as u32);
             state.dirty.set(false);
