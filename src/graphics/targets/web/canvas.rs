@@ -1,5 +1,4 @@
 use crate::graphics::*;
-use crate::util::*;
 
 use stdweb::traits::*;
 use stdweb::unstable::TryInto;
@@ -9,54 +8,91 @@ use stdweb::web::event::ResizeEvent;
 
 use stdweb::web::html_element::CanvasElement;
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 
-pub struct Canvas {
-    state: Rc<RefCell<CanvasState>>,
-}
+pub struct Canvas2D {}
 
-struct CanvasState {
+impl Representation for Canvas2D {}
+
+impl Euclidean2D for Canvas2D {}
+
+pub struct CanvasGeometry {}
+
+impl Geometry<Canvas2D> for CanvasGeometry {}
+
+impl Geometry2D<Canvas2D> for CanvasGeometry {}
+
+pub struct CanvasFrame {
     context: CanvasRenderingContext2d,
     canvas: CanvasElement,
-    size: Cell<Size>,
-    dirty: Cell<bool>,
 }
 
-impl Graphics for Canvas {
-    fn run(&self, _root: Box<Frame<Object<Geometry, Material>>>) {}
-}
+impl<'a> Object<'a, Canvas2D> for CanvasFrame {}
 
-impl GraphicsEmpty for Canvas {}
-
-impl Graphics2D for Canvas {
-    fn frame(&mut self) -> Frame2D {
-        Box::new(CanvasFrame {})
+impl<'a> Frame<'a, Canvas2D> for CanvasFrame {
+    fn add(&self, _object: &'a Object<Canvas2D>) {}
+    fn resize(&self, size: Size) {
+        self.canvas.set_height(size.height as u32);
+        self.canvas.set_width(size.width as u32);
     }
 }
 
-pub struct CanvasFrame {}
-
-impl Object<dyn Geometry2D, TextureTarget2D> for CanvasFrame {}
-
-impl<'a> Frame<'a, Object2D> for CanvasFrame {
-    fn add(&self, _object: &'a Object2D) {}
+impl CanvasFrame {
+    fn show(&self) {
+        document().body().unwrap().append_child(&self.canvas);
+    }
 }
 
-impl crate::util::TryInto<Box<Graphics2D>> for Canvas {
+pub struct Canvas {
+    state: Rc<RefCell<CanvasState<'static>>>,
+}
+
+pub struct CanvasState<'a> {
+    root_frame: Option<&'a Frame<'a, Canvas2D>>,
+    size: ObserverCell<Size>,
+}
+
+impl<'a, R> Graphics<'a, R> for Canvas {
+    fn run(&self, root: &'static Frame<Canvas2D>) {
+        let mut state = self.state.borrow_mut();
+        state.root_frame = Some(root);
+        let cloned = self.clone();
+        window().request_animation_frame(move |delta| {
+            cloned.animate(delta);
+        });
+    }
+    fn frame(&self) -> CanvasFrame {
+        let d = document();
+        let canvas: CanvasElement = d.create_element("canvas").unwrap().try_into().unwrap();
+        let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
+        CanvasFrame { canvas, context }
+    }
+}
+
+impl<'a> Graphics2D<'a> for Canvas {
+    type R = Canvas2D;
+}
+
+impl<'a> GraphicsEmpty<'a> for Canvas {}
+
+impl<'a> crate::util::TryInto<&'a Graphics2D<'a, R = Canvas2D>> for Canvas {
     type Error = ();
-    fn try_into(self) -> Result<Box<dyn Graphics2D>, Self::Error> {
-        Ok(Box::new(self))
+    fn try_into(self) -> Result<Canvas, Self::Error> {
+        Ok(self)
     }
 }
 
-impl Canvas {
+impl<'a> Canvas {
     fn animate(&self, _delta: f64) {
         let state = self.state.borrow();
-        if state.dirty.get() {
-            state.canvas.set_width(state.size.get().width as u32);
-            state.canvas.set_height(state.size.get().height as u32);
-            state.dirty.set(false);
+        match &state.root_frame {
+            Some(frame) => {
+                if state.size.is_dirty() {
+                    frame.resize(state.size.get());
+                }
+            }
+            None => {}
         }
         let cloned = self.clone();
         window().request_animation_frame(move |delta| {
@@ -65,7 +101,7 @@ impl Canvas {
     }
 }
 
-impl Clone for Canvas {
+impl<'a> Clone for Canvas {
     fn clone(&self) -> Canvas {
         Canvas {
             state: self.state.clone(),
@@ -73,16 +109,11 @@ impl Clone for Canvas {
     }
 }
 
-pub fn initialize() -> impl GraphicsEmpty {
+pub fn initialize<'a>() -> Canvas {
     stdweb::initialize();
 
-    let d = document();
-
-    let canvas: CanvasElement = d.create_element("canvas").unwrap().try_into().unwrap();
-
-    d.body().unwrap().append_child(&canvas);
-
-    d.head()
+    document()
+        .head()
         .unwrap()
         .append_html(
             r#"
@@ -102,35 +133,27 @@ canvas {
         )
         .unwrap();
 
-    let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
+    let body = document().body().unwrap();
 
-    let _gfx = Canvas {
+    let gfx = Canvas {
         state: Rc::new(RefCell::new(CanvasState {
-            context,
-            size: Cell::new(Size {
-                width: f64::from(canvas.offset_width()),
-                height: f64::from(canvas.offset_height()),
+            size: ObserverCell::new(Size {
+                width: f64::from(body.offset_width()),
+                height: f64::from(body.offset_height()),
             }),
-            canvas,
-            dirty: Cell::new(true),
+            root_frame: None,
         })),
     };
-
-    let gfx = _gfx.clone();
 
     let gfx_resize = gfx.clone();
 
     window().add_event_listener(move |_: ResizeEvent| {
         let state = gfx_resize.state.borrow();
+        let body = document().body().unwrap();
         state.size.set(Size {
-            width: f64::from(state.canvas.offset_width()),
-            height: f64::from(state.canvas.offset_height()),
+            width: f64::from(body.offset_width()),
+            height: f64::from(body.offset_height()),
         });
-        state.dirty.set(true);
-    });
-
-    window().request_animation_frame(move |delta| {
-        _gfx.animate(delta);
     });
 
     gfx

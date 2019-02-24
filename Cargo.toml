@@ -4,36 +4,12 @@ version = "0.1.0"
 authors = ["Jacob Swart", "Tyler Poon"]
 edition = "2018"
 
-[target.wasm32-unknown-unknown.dependencies]
-stdweb = "0.4.13"
-serde_derive = "1.0.84"
-stdweb-derive = "0.5.1"
-serde = "1.0.84"
-weak-table = "0.2.3"
-
-[target.asmjs-unknown-emscripten.dependencies]
-stdweb = "0.4.13"
-serde_derive = "1.0.84"
-stdweb-derive = "0.5.1"
-serde = "1.0.84"
-weak-table = "0.2.3"
-
-[target.wasm32-unknown-emscripten.dependencies]
-stdweb = "0.4.13"
-serde_derive = "1.0.84"
-stdweb-derive = "0.5.1"
-serde = "1.0.84"
-weak-table = "0.2.3"
-
-[build-dependencies]
-webgl_generator = "0.2.0"
-
 [dependencies]
 stdweb = { version = "0.4.13", optional = true }
-weak-table = { version = "0.2.3", optional = true }
 serde = { version = "1.0.84", optional = true }
 serde_derive = { version = "1.0.84", optional = true }
 stdweb-derive = { version = "0.5.1", optional = true }
+no-panic = "0.1.8"
 
 [features]
-check = ["stdweb", "weak-table", "serde", "serde_derive", "stdweb-derive"]
+check = ["stdweb", "serde", "serde_derive", "stdweb-derive"]

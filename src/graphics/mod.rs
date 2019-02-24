@@ -1,64 +1,66 @@
-pub trait Geometry {}
+use crate::util::*;
 
-pub trait Geometry2D: Geometry {}
+pub trait Representation: Sized {}
 
-pub trait Geometry3D: Geometry {}
+pub trait Euclidean2D: Representation {}
 
-pub trait Material {}
+pub trait Geometry<Representation> {}
 
-pub trait Material2D: Material {}
-
-pub trait Material3D: Material {}
-
-pub trait TextureTarget<O>: Material2D + RenderTarget<O>
+pub trait Geometry2D<T>: Geometry<T>
 where
-    O: ?Sized + Object<dyn Geometry, dyn Material>,
+    T: Euclidean2D,
 {
 }
 
-pub trait Object<G, M>
+pub trait Material<Representation> {}
+
+pub trait Material2D<T>: Material<T>
 where
-    G: ?Sized + Geometry,
-    M: ?Sized + Material,
+    T: Euclidean2D,
 {
 }
 
-pub trait RenderTarget<O: ?Sized + Object<dyn Geometry, dyn Material>> {}
-
-pub trait Frame<'a, O>: Object<Geometry2D, TextureTarget<O>>
+pub trait Object<'a, T>
 where
-    O: ?Sized + Object<dyn Geometry, dyn Material>,
-{
-    fn add(&self, object: &'a O);
-}
-
-pub trait GraphicsEmpty: Graphics + crate::util::TryInto<Box<dyn Graphics2D>, Error = ()> {}
-
-pub trait Graphics {
-    fn run(&self, root: Box<dyn Frame<Object<dyn Geometry, dyn Material>>>);
-}
-
-pub trait Graphics2D: Graphics {
-    fn frame(&mut self) -> Frame2D;
-}
-
-pub type TextureTarget2D = dyn TextureTarget<Object2D>;
-
-pub trait Object2D:
-    Object<dyn Geometry2D, dyn Material2D> + Object<dyn Geometry, dyn Material>
+    T: Representation,
 {
 }
 
-pub trait Object3D:
-    Object<dyn Geometry3D, dyn Material3D> + Object<dyn Geometry, dyn Material>
+pub trait Frame<'a, T>: Object<'a, T>
+where
+    T: Representation,
 {
+    fn add(&self, object: &'a Object<T>);
+    fn resize(&self, size: Size);
 }
 
-pub type Frame2D<'a> = Box<dyn Frame<'a, Object2D>>;
+pub trait GraphicsEmpty<'a>:
+    TryInto<&'a <Self as GraphicsEmpty<'a>>::Output2D, Error = ()>
+{
+    type Output2D: Graphics2D<'a>;
+}
+
+pub trait Graphics<'a, R>
+where
+    R: Representation,
+{
+    fn run(&self, root: &'a Frame<R>);
+    fn frame(&self) -> &'a Frame<R>;
+}
+
+pub trait Graphics2D<'a>: Graphics<'a, <Self as Graphics2D<'a>>::R> {
+    type R: Euclidean2D;
+}
+
+#[derive(Clone, Copy)]
+pub struct Size {
+    pub width: f64,
+    pub height: f64,
+}
 
 mod targets;
 
 #[cfg(any(target_arch = "wasm32", target_arch = "asmjs", feature = "check"))]
-pub fn initialize() -> impl GraphicsEmpty {
-    targets::web::canvas::initialize()
+pub fn initialize<'a>() -> &'a GraphicsEmpty<'a> {
+    &targets::web::canvas::initialize()
 }
