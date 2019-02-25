@@ -5,6 +5,11 @@ pub trait TryInto<T> {
     fn try_into<'a>(self) -> Result<&'a T, Self::Error>;
 }
 
+pub trait TryFrom<T>: Sized {
+    type Error;
+    fn try_from(value: T) -> Result<Self, Self::Error>;
+}
+
 pub struct ObserverCell<T>
 where
     T: Copy,

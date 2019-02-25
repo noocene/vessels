@@ -34,11 +34,7 @@ where
     fn resize(&self, size: Size);
 }
 
-pub trait GraphicsEmpty<'a>:
-    TryInto<&'a <Self as GraphicsEmpty<'a>>::Output2D, Error = ()>
-{
-    type Output2D: Graphics2D<'a>;
-}
+pub trait GraphicsEmpty<'a> {}
 
 pub trait Graphics<'a, R>
 where
@@ -48,7 +44,9 @@ where
     fn frame(&self) -> &'a Frame<R>;
 }
 
-pub trait Graphics2D<'a>: Graphics<'a, <Self as Graphics2D<'a>>::R> {
+pub trait Graphics2D<'a>:
+    Graphics<'a, <Self as Graphics2D<'a>>::R> + TryFrom<&'a GraphicsEmpty<'a>, Error = ()>
+{
     type R: Euclidean2D;
 }
 
