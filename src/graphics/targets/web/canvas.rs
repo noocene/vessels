@@ -22,10 +22,10 @@ pub struct CanvasFrame {
     canvas: CanvasElement,
 }
 
-impl<'a> Object<'a, Canvas2D> for CanvasFrame {}
+impl Object<Canvas2D> for CanvasFrame {}
 
-impl<'a> Frame<'a, Canvas2D> for CanvasFrame {
-    fn add(&self, _object: &'a Object<Canvas2D>) {}
+impl Frame<Canvas2D> for CanvasFrame {
+    fn add(&self, _object: Box<Object<Canvas2D>>) {}
     fn resize(&self, size: Size) {
         self.canvas.set_height(size.height as u32);
         self.canvas.set_width(size.width as u32);
@@ -39,16 +39,16 @@ impl CanvasFrame {
 }
 
 pub struct Canvas {
-    state: Rc<RefCell<CanvasState<'static>>>,
+    state: Rc<RefCell<CanvasState>>,
 }
 
-pub struct CanvasState<'a> {
-    root_frame: Option<&'a Frame<'a, Canvas2D>>,
+pub struct CanvasState {
+    root_frame: Option<Box<Frame<Canvas2D>>>,
     size: ObserverCell<Size>,
 }
 
-impl Graphics<'static, Canvas2D> for Canvas {
-    fn run(&self, root: &'static Frame<Canvas2D>) {
+impl Graphics<Canvas2D> for Canvas {
+    fn run(&self, root: Box<Frame<Canvas2D>>) {
         let mut state = self.state.borrow_mut();
         state.root_frame = Some(root);
         let cloned = self.clone();
@@ -64,11 +64,11 @@ impl Graphics<'static, Canvas2D> for Canvas {
     }
 }
 
-impl Graphics2D<'static> for Canvas {
+impl Graphics2D for Canvas {
     type R = Canvas2D;
 }
 
-impl<'a> GraphicsEmpty<'a> for Canvas {}
+impl GraphicsEmpty for Canvas {}
 
 impl TryFrom<Canvas> for Canvas {
     type Error = ();
