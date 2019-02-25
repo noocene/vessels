@@ -76,10 +76,10 @@ impl<'a> Graphics2D<'a> for Canvas {
 
 impl<'a> GraphicsEmpty<'a> for Canvas {}
 
-impl<'a> crate::util::TryInto<&'a Graphics2D<'a, R = Canvas2D>> for Canvas {
+impl<'a> crate::util::TryFrom<Canvas> for Graphics2D<'a, R = Canvas2D> {
     type Error = ();
-    fn try_into(self) -> Result<Canvas, Self::Error> {
-        Ok(self)
+    fn try_from(value: Canvas) -> Result<Self, Self::Error> {
+        Ok(value)
     }
 }
 
