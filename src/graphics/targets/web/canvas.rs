@@ -17,12 +17,6 @@ impl Representation for Canvas2D {}
 
 impl Euclidean2D for Canvas2D {}
 
-pub struct CanvasGeometry {}
-
-impl Geometry<Canvas2D> for CanvasGeometry {}
-
-impl Geometry2D<Canvas2D> for CanvasGeometry {}
-
 pub struct CanvasFrame {
     context: CanvasRenderingContext2d,
     canvas: CanvasElement,
@@ -53,7 +47,7 @@ pub struct CanvasState<'a> {
     size: ObserverCell<Size>,
 }
 
-impl<'a, R> Graphics<'a, R> for Canvas {
+impl Graphics<'static, Canvas2D> for Canvas {
     fn run(&self, root: &'static Frame<Canvas2D>) {
         let mut state = self.state.borrow_mut();
         state.root_frame = Some(root);
@@ -62,28 +56,28 @@ impl<'a, R> Graphics<'a, R> for Canvas {
             cloned.animate(delta);
         });
     }
-    fn frame(&self) -> CanvasFrame {
+    fn frame(&self) -> Box<Frame<Canvas2D>> {
         let d = document();
         let canvas: CanvasElement = d.create_element("canvas").unwrap().try_into().unwrap();
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
-        CanvasFrame { canvas, context }
+        Box::new(CanvasFrame { canvas, context })
     }
 }
 
-impl<'a> Graphics2D<'a> for Canvas {
+impl Graphics2D<'static> for Canvas {
     type R = Canvas2D;
 }
 
 impl<'a> GraphicsEmpty<'a> for Canvas {}
 
-impl<'a> crate::util::TryFrom<Canvas> for Graphics2D<'a, R = Canvas2D> {
+impl TryFrom<Canvas> for Canvas {
     type Error = ();
     fn try_from(value: Canvas) -> Result<Self, Self::Error> {
         Ok(value)
     }
 }
 
-impl<'a> Canvas {
+impl Canvas {
     fn animate(&self, _delta: f64) {
         let state = self.state.borrow();
         match &state.root_frame {
@@ -101,7 +95,7 @@ impl<'a> Canvas {
     }
 }
 
-impl<'a> Clone for Canvas {
+impl Clone for Canvas {
     fn clone(&self) -> Canvas {
         Canvas {
             state: self.state.clone(),
@@ -109,7 +103,7 @@ impl<'a> Clone for Canvas {
     }
 }
 
-pub fn initialize<'a>() -> Canvas {
+pub fn initialize() -> Box<Canvas> {
     stdweb::initialize();
 
     document()
@@ -156,5 +150,5 @@ canvas {
         });
     });
 
-    gfx
+    Box::new(gfx)
 }

@@ -41,11 +41,11 @@ where
     R: Representation,
 {
     fn run(&self, root: &'a Frame<R>);
-    fn frame(&self) -> &'a Frame<R>;
+    fn frame(&self) -> Box<Frame<R>>;
 }
 
 pub trait Graphics2D<'a>:
-    Graphics<'a, <Self as Graphics2D<'a>>::R> + TryFrom<&'a GraphicsEmpty<'a>, Error = ()>
+    Graphics<'a, <Self as Graphics2D<'a>>::R> + TryFrom<Self, Error = ()>
 {
     type R: Euclidean2D;
 }
@@ -59,6 +59,6 @@ pub struct Size {
 mod targets;
 
 #[cfg(any(target_arch = "wasm32", target_arch = "asmjs", feature = "check"))]
-pub fn initialize<'a>() -> &'a GraphicsEmpty<'a> {
-    &targets::web::canvas::initialize()
+pub fn initialize<'a>() -> Box<GraphicsEmpty<'a>> {
+    targets::web::canvas::initialize()
 }

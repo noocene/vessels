@@ -1,13 +1,22 @@
 use std::cell::Cell;
 
-pub trait TryInto<T> {
-    type Error;
-    fn try_into<'a>(self) -> Result<&'a T, Self::Error>;
-}
-
 pub trait TryFrom<T>: Sized {
     type Error;
     fn try_from(value: T) -> Result<Self, Self::Error>;
+}
+pub trait TryInto<T>: Sized {
+    type Error;
+    fn try_into(self) -> Result<T, Self::Error>;
+}
+impl<T, U> TryInto<U> for T
+where
+    U: TryFrom<T>,
+{
+    type Error = U::Error;
+
+    fn try_into(self) -> Result<U, U::Error> {
+        U::try_from(self)
+    }
 }
 
 pub struct ObserverCell<T>
