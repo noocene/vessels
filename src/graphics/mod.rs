@@ -58,15 +58,7 @@ pub struct Size {
 mod targets;
 
 #[cfg(any(target_arch = "wasm32", target_arch = "asmjs", feature = "check"))]
-pub type AbstractGraphics2D =
-    Box<Graphics2D<Representation = targets::web::canvas::CanvasRepresentation>>;
-
-impl TryFrom<AbstractGraphics> for AbstractGraphics2D {
-    type Error = ();
-    fn try_from(value: AbstractGraphics) -> Result<AbstractGraphics2D, Self::Error> {
-        value.try_into()
-    }
-}
+pub type AbstractGraphics2D = Box<targets::web::canvas::Canvas>;
 
 #[cfg(any(target_arch = "wasm32", target_arch = "asmjs", feature = "check"))]
 pub fn new() -> AbstractGraphics {

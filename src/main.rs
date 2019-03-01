@@ -1,5 +1,5 @@
 use vitruvia::graphics;
-use vitruvia::graphics::AbstractGraphics2D;
+use vitruvia::graphics::{AbstractGraphics2D, Graphics};
 use vitruvia::util::TryInto;
 
 pub fn main() {
