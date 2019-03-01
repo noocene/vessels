@@ -34,18 +34,19 @@ where
     fn resize(&self, size: Size);
 }
 
-pub trait GraphicsEmpty {}
+pub struct AbstractGraphics {}
 
-pub trait Graphics<R>
-where
-    R: Representation,
-{
-    fn run(&self, root: Box<Frame<R>>);
-    fn frame(&self) -> Box<Frame<R>>;
+pub trait Graphics {
+    type Representation: Representation;
+    fn run(&self, root: Box<Frame<Self::Representation>>);
+    fn frame(&self) -> Box<Frame<Self::Representation>>;
 }
 
-pub trait Graphics2D: Graphics<<Self as Graphics2D>::R> + TryFrom<Self, Error = ()> {
-    type R: Euclidean2D;
+pub trait Graphics2D: Graphics
+where
+    Self::Representation: Euclidean2D,
+    Box<Self>: TryFrom<AbstractGraphics, Error = ()>,
+{
 }
 
 #[derive(Clone, Copy)]
@@ -57,6 +58,17 @@ pub struct Size {
 mod targets;
 
 #[cfg(any(target_arch = "wasm32", target_arch = "asmjs", feature = "check"))]
-pub fn initialize() -> Box<GraphicsEmpty> {
-    targets::web::canvas::initialize()
+pub type AbstractGraphics2D =
+    Box<Graphics2D<Representation = targets::web::canvas::CanvasRepresentation>>;
+
+impl TryFrom<AbstractGraphics> for AbstractGraphics2D {
+    type Error = ();
+    fn try_from(value: AbstractGraphics) -> Result<AbstractGraphics2D, Self::Error> {
+        value.try_into()
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", target_arch = "asmjs", feature = "check"))]
+pub fn new() -> AbstractGraphics {
+    AbstractGraphics {}
 }

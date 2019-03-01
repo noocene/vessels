@@ -11,30 +11,24 @@ use stdweb::web::html_element::CanvasElement;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub struct Canvas2D {}
+pub struct CanvasRepresentation {}
 
-impl Representation for Canvas2D {}
+impl Representation for CanvasRepresentation {}
 
-impl Euclidean2D for Canvas2D {}
+impl Euclidean2D for CanvasRepresentation {}
 
 pub struct CanvasFrame {
     context: CanvasRenderingContext2d,
     canvas: CanvasElement,
 }
 
-impl Object<Canvas2D> for CanvasFrame {}
+impl Object<CanvasRepresentation> for CanvasFrame {}
 
-impl Frame<Canvas2D> for CanvasFrame {
-    fn add(&self, _object: Box<Object<Canvas2D>>) {}
+impl Frame<CanvasRepresentation> for CanvasFrame {
+    fn add(&self, _object: Box<Object<CanvasRepresentation>>) {}
     fn resize(&self, size: Size) {
         self.canvas.set_height(size.height as u32);
         self.canvas.set_width(size.width as u32);
-    }
-}
-
-impl CanvasFrame {
-    fn show(&self) {
-        document().body().unwrap().append_child(&self.canvas);
     }
 }
 
@@ -43,12 +37,13 @@ pub struct Canvas {
 }
 
 pub struct CanvasState {
-    root_frame: Option<Box<Frame<Canvas2D>>>,
+    root_frame: Option<Box<Frame<CanvasRepresentation>>>,
     size: ObserverCell<Size>,
 }
 
-impl Graphics<Canvas2D> for Canvas {
-    fn run(&self, root: Box<Frame<Canvas2D>>) {
+impl Graphics for Canvas {
+    type Representation = CanvasRepresentation;
+    fn run(&self, root: Box<Frame<CanvasRepresentation>>) {
         let mut state = self.state.borrow_mut();
         state.root_frame = Some(root);
         let cloned = self.clone();
@@ -56,7 +51,7 @@ impl Graphics<Canvas2D> for Canvas {
             cloned.animate(delta);
         });
     }
-    fn frame(&self) -> Box<Frame<Canvas2D>> {
+    fn frame(&self) -> Box<Frame<CanvasRepresentation>> {
         let d = document();
         let canvas: CanvasElement = d.create_element("canvas").unwrap().try_into().unwrap();
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
@@ -64,16 +59,12 @@ impl Graphics<Canvas2D> for Canvas {
     }
 }
 
-impl Graphics2D for Canvas {
-    type R = Canvas2D;
-}
+impl Graphics2D for Canvas {}
 
-impl GraphicsEmpty for Canvas {}
-
-impl TryFrom<Canvas> for Canvas {
+impl TryFrom<AbstractGraphics> for Box<Canvas> {
     type Error = ();
-    fn try_from(value: Canvas) -> Result<Self, Self::Error> {
-        Ok(value)
+    fn try_from(_value: AbstractGraphics) -> Result<Self, Self::Error> {
+        Ok(initialize())
     }
 }
 
@@ -104,8 +95,6 @@ impl Clone for Canvas {
 }
 
 pub fn initialize() -> Box<Canvas> {
-    stdweb::initialize();
-
     document()
         .head()
         .unwrap()
