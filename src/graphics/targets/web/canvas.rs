@@ -11,21 +11,15 @@ use stdweb::web::html_element::CanvasElement;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub struct CanvasRepresentation {}
-
-impl Representation for CanvasRepresentation {}
-
-impl Euclidean2D for CanvasRepresentation {}
-
 pub struct CanvasFrame {
     context: CanvasRenderingContext2d,
     canvas: CanvasElement,
 }
 
-impl Object<CanvasRepresentation> for CanvasFrame {}
+impl Object2D for CanvasFrame {}
 
-impl Frame<CanvasRepresentation> for CanvasFrame {
-    fn add(&self, _object: Box<Object<CanvasRepresentation>>) {}
+impl Frame2D for CanvasFrame {
+    fn add(&self, _object: Box<Object2D>) {}
     fn resize(&self, size: Size) {
         self.canvas.set_height(size.height as u32);
         self.canvas.set_width(size.width as u32);
@@ -37,13 +31,13 @@ pub struct Canvas {
 }
 
 pub struct CanvasState {
-    root_frame: Option<Box<Frame<CanvasRepresentation>>>,
+    root_frame: Option<CanvasFrame>,
     size: ObserverCell<Size>,
 }
 
-impl Graphics for Canvas {
-    type Representation = CanvasRepresentation;
-    fn run(&self, root: Box<Frame<CanvasRepresentation>>) {
+impl Graphics2D for Canvas {
+    type Frame = CanvasFrame;
+    fn run(&self, root: CanvasFrame) {
         let mut state = self.state.borrow_mut();
         state.root_frame = Some(root);
         let cloned = self.clone();
@@ -51,20 +45,11 @@ impl Graphics for Canvas {
             cloned.animate(delta);
         });
     }
-    fn frame(&self) -> Box<Frame<CanvasRepresentation>> {
+    fn frame(&self) -> CanvasFrame {
         let d = document();
         let canvas: CanvasElement = d.create_element("canvas").unwrap().try_into().unwrap();
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
-        Box::new(CanvasFrame { canvas, context })
-    }
-}
-
-impl Graphics2D for Canvas {}
-
-impl TryFrom<AbstractGraphics> for Box<Canvas> {
-    type Error = ();
-    fn try_from(_value: AbstractGraphics) -> Result<Self, Self::Error> {
-        Ok(initialize())
+        CanvasFrame { canvas, context }
     }
 }
 
@@ -94,7 +79,7 @@ impl Clone for Canvas {
     }
 }
 
-pub fn initialize() -> Box<Canvas> {
+pub fn new() -> impl Graphics2D {
     document()
         .head()
         .unwrap()
@@ -139,5 +124,5 @@ canvas {
         });
     });
 
-    Box::new(gfx)
+    gfx
 }
