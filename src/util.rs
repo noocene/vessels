@@ -1,10 +1,10 @@
 use std::cell::Cell;
 
-pub trait TryFrom<T>: Sized {
+trait TryFrom<T>: Sized {
     type Error;
     fn try_from(value: T) -> Result<Self, Self::Error>;
 }
-pub trait TryInto<T>: Sized {
+trait TryInto<T>: Sized {
     type Error;
     fn try_into(self) -> Result<T, Self::Error>;
 }
