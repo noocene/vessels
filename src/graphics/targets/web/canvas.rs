@@ -11,6 +11,10 @@ use stdweb::web::html_element::CanvasElement;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use std::slice::Iter;
+
+use std::ops::Deref;
+
 type CanvasImage = CanvasElement;
 
 impl ImageRepresentation for CanvasImage {}
@@ -48,7 +52,7 @@ impl Into<Image<RGBA8, Texture2D>> for CanvasImage {
 struct CanvasFrame {
     context: CanvasRenderingContext2d,
     canvas: CanvasElement,
-    contents: Vec<Box<Object2D<CanvasImage>>>,
+    contents: Vec<Object2D<CanvasImage>>,
     pixel_ratio: f64,
 }
 
@@ -78,30 +82,38 @@ impl CanvasFrame {
     }
     fn draw(&self) {
         self.contents.iter().for_each(|object| {
-            let base_position = object.position();
-            object.render().iter().for_each(|entity| match &entity.representation {
+            let draw = |base_position: Point2D, content: Iter<Entity2D<CanvasImage>>| {
+                content.for_each(|entity| match &entity.representation {
                 EntityFormat2D::RasterEntity2D(representation) => {
                     js! {
-                        @{&self.context}.drawImage(@{&representation.texture}, @{base_position.x + entity.offset.x},
-                        @{base_position.y + entity.offset.y});
+                        @{&self.context}.drawImage(@{representation.texture.deref()}, @{base_position.x + entity.offset.x}, @{base_position.y + entity.offset.y});
                     }
                 }
                 EntityFormat2D::VectorEntity2D(representation) => {
                     self.context.begin_path();
                     let segments = representation.segments.iter().enumerate();
-                    segments.for_each(|segment| if let VectorEntity2DSegment::Point(point) = segment.1 {
-                        match segment.0{
-                            0 => {
-                                self.context.move_to((point.x + entity.offset.x) * self.pixel_ratio, (point.y + entity.offset.y) * self.pixel_ratio);
-                            }
-                            _ => {
-                                self.context.line_to((point.x + entity.offset.x) * self.pixel_ratio, (point.y + entity.offset.y) * self.pixel_ratio);
+                    segments.for_each(|segment| {
+                        if let VectorEntity2DSegment::Point(point) = segment.1 {
+                            match segment.0 {
+                                0 => {
+                                    self.context.move_to(
+                                        (point.x + entity.offset.x) * self.pixel_ratio,
+                                        (point.y + entity.offset.y) * self.pixel_ratio,
+                                    );
+                                }
+                                _ => {
+                                    self.context.line_to(
+                                        (point.x + entity.offset.x) * self.pixel_ratio,
+                                        (point.y + entity.offset.y) * self.pixel_ratio,
+                                    );
+                                }
                             }
                         }
                     });
                     match &representation.stroke {
                         Some(stroke) => {
-                            self.context.set_stroke_style_color(&stroke.color.as_hex_color());
+                            self.context
+                                .set_stroke_style_color(&stroke.color.as_hex_color());
                             self.context.set_line_width(stroke.width.into());
                             self.context.fill(FillRule::NonZero);
                         }
@@ -109,25 +121,42 @@ impl CanvasFrame {
                     }
                     match &representation.fill {
                         Some(fill) => {
-                            self.context.set_fill_style_color(&fill.color.as_hex_color());
+                            self.context
+                                .set_fill_style_color(&fill.color.as_hex_color());
                             self.context.stroke();
                         }
                         None => {}
                     }
                 }
-            })
+            });
+            };
+            let base_position: Point2D;
+            let content: Iter<Entity2D<CanvasImage>>;
+            match object {
+                Object2D::Dynamic(object) => {
+                    base_position = object.position();
+                    let _content = object.render();
+                    content = _content.iter();
+                    draw(base_position, content);
+                }
+                Object2D::Static(object) => {
+                    base_position = object.position;
+                    content = object.content.iter();
+                    draw(base_position, content);
+                }
+            }
         });
     }
 }
 
-impl Object2D<CanvasImage> for CanvasFrame {
+impl DynamicObject2D<CanvasImage> for CanvasFrame {
     fn position(&self) -> Point2D {
         Point2D::default()
     }
     fn render(&self) -> Cow<[Entity2D<CanvasImage>]> {
         Cow::from(vec![Entity2D {
             representation: EntityFormat2D::RasterEntity2D(RasterEntity2D {
-                texture: &self.canvas,
+                texture: Box::new(self.canvas.clone()),
             }),
             offset: Distance2D::default(),
         }])
@@ -135,12 +164,18 @@ impl Object2D<CanvasImage> for CanvasFrame {
 }
 
 impl Frame2D<CanvasImage> for CanvasFrame {
-    fn add(&mut self, object: Box<Object2D<CanvasImage>>) {
+    fn add(&mut self, object: Object2D<CanvasImage>) {
         self.contents.push(object);
     }
     fn resize(&self, size: Size2D) {
         self.canvas.set_height(size.height as u32);
         self.canvas.set_width(size.width as u32);
+    }
+    fn get_size(&self) -> Size2D {
+        Size2D {
+            width: self.canvas.width().into(),
+            height: self.canvas.height().into(),
+        }
     }
 }
 

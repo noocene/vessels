@@ -48,11 +48,11 @@ pub struct Image<T: PixelFormat, U: ImageFormat> {
 }
 
 #[derive(Clone)]
-pub struct RasterEntity2D<'a, T>
+pub struct RasterEntity2D<T>
 where
     T: ImageRepresentation,
 {
-    pub texture: &'a T,
+    pub texture: Box<T>,
 }
 
 #[derive(Clone)]
@@ -81,24 +81,24 @@ pub struct VectorEntity2D {
 }
 
 #[derive(Clone)]
-pub struct Entity2D<'a, T>
+pub struct Entity2D<T>
 where
     T: ImageRepresentation,
 {
     pub offset: Distance2D,
-    pub representation: EntityFormat2D<'a, T>,
+    pub representation: EntityFormat2D<T>,
 }
 
 #[derive(Clone)]
-pub enum EntityFormat2D<'a, T>
+pub enum EntityFormat2D<T>
 where
     T: ImageRepresentation,
 {
     VectorEntity2D(VectorEntity2D),
-    RasterEntity2D(RasterEntity2D<'a, T>),
+    RasterEntity2D(RasterEntity2D<T>),
 }
 
-pub trait Object2D<T>
+pub trait DynamicObject2D<T>
 where
     T: ImageRepresentation,
 {
@@ -106,32 +106,29 @@ where
     fn render(&self) -> Cow<[Entity2D<T>]>;
 }
 
-pub struct ConcreteObject2D<'a, T>
+pub struct StaticObject2D<T>
 where
     T: ImageRepresentation,
 {
     pub position: Point2D,
-    pub contents: Vec<Entity2D<'a, T>>,
+    pub content: Vec<Entity2D<T>>,
 }
 
-impl<'a, T> Object2D<T> for ConcreteObject2D<'a, T>
+pub enum Object2D<T>
 where
     T: ImageRepresentation,
 {
-    fn position(&self) -> Point2D {
-        self.position
-    }
-    fn render(&self) -> Cow<[Entity2D<T>]> {
-        Cow::from(&self.contents)
-    }
+    Static(StaticObject2D<T>),
+    Dynamic(Box<DynamicObject2D<T>>),
 }
 
-pub trait Frame2D<T>: Object2D<T>
+pub trait Frame2D<T>: DynamicObject2D<T>
 where
     T: ImageRepresentation,
 {
-    fn add(&mut self, object: Box<Object2D<T>>);
+    fn add(&mut self, object: Object2D<T>);
     fn resize(&self, size: Size2D);
+    fn get_size(&self) -> Size2D;
 }
 
 pub trait Graphics2D {

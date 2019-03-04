@@ -1,15 +1,15 @@
 use vitruvia::graphics;
 use vitruvia::graphics::{
-    ConcreteObject2D, Distance2D, Entity2D, EntityFormat2D, Frame2D, Graphics2D, Point2D,
+    Distance2D, Entity2D, EntityFormat2D, Frame2D, Graphics2D, Object2D, Point2D, StaticObject2D,
     VectorEntity2D, VectorEntity2DSegment, VectorEntity2DStroke, RGBA8,
 };
 
 fn main() {
     let gfx = graphics::new();
     let mut root = gfx.frame();
-    root.add(Box::new(ConcreteObject2D {
+    root.add(Object2D::Static(StaticObject2D {
         position: Point2D::default(),
-        contents: vec![Entity2D {
+        content: vec![Entity2D {
             offset: Distance2D::default(),
             representation: EntityFormat2D::VectorEntity2D(VectorEntity2D {
                 closed: false,
