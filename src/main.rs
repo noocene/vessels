@@ -1,9 +1,8 @@
 use vitruvia::graphics;
 use vitruvia::graphics::{
     Distance2D, DynamicObject2D, Entity2D, Frame2D, Graphics2D, ImageRepresentation, Object2D,
-    Point2D, Rect2D, Size2D, StaticObject2D, StrokeCapType, StrokeJoinType, Transform2D,
-    VectorEntity2DFill, VectorEntity2DSegment, VectorEntity2DShadow, VectorEntity2DStroke,
-    VectorEntityTexture, RGBA8,
+    Point2D, Rect2D, Size2D, StaticObject2D, Transform2D, VectorEntity2DFill,
+    VectorEntity2DSegment, VectorEntity2DShadow, VectorEntityTexture, RGBA8,
 };
 
 use std::borrow::Cow;
@@ -11,7 +10,7 @@ use std::borrow::Cow;
 fn main() {
     let gfx = graphics::new();
     let mut root = gfx.frame();
-    let mut frame = gfx.frame();
+    let frame = gfx.frame();
 
     pub struct TestObject<T>
     where
