@@ -33,11 +33,51 @@ impl RGBA8 {
             f64::from(self.a) / 255.
         )
     }
+    pub fn with_alpha(mut self, alpha: u8) -> Self {
+        self.a = alpha;
+        self
+    }
+    pub fn black() -> Self {
+        RGBA8 {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 255,
+        }
+    }
+    pub fn white() -> Self {
+        RGBA8 {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 255,
+        }
+    }
 }
 
 impl ToHexColor for RGBA8 {
     fn to_hex_color(&self) -> String {
         format!("#{:x?}{:x?}{:x?}{:x?}", self.r, self.g, self.b, self.a)
+    }
+}
+
+impl<T> Into<VectorEntity2DFill<T>> for RGBA8
+where
+    T: ImageRepresentation,
+{
+    fn into(self) -> VectorEntity2DFill<T> {
+        VectorEntity2DFill {
+            content: self.into(),
+        }
+    }
+}
+
+impl<T> Into<VectorEntityTexture<T>> for RGBA8
+where
+    T: ImageRepresentation,
+{
+    fn into(self) -> VectorEntityTexture<T> {
+        VectorEntityTexture::Solid(self)
     }
 }
 
@@ -99,6 +139,24 @@ pub struct VectorEntity2DShadow {
     pub blur: f64,
 }
 
+impl VectorEntity2DShadow {
+    pub fn new(color: RGBA8) -> Self {
+        VectorEntity2DShadow {
+            color,
+            offset: Distance2D::default(),
+            blur: 0.,
+        }
+    }
+    pub fn blur(mut self, amount: f64) -> Self {
+        self.blur = amount;
+        self
+    }
+    pub fn offset(mut self, distance: Distance2D) -> Self {
+        self.offset = distance;
+        self
+    }
+}
+
 #[derive(Clone)]
 pub struct VectorEntityRadialGradient {
     pub stops: Vec<VectorEntityGradientStop>,
@@ -128,6 +186,20 @@ where
     pub width: f32,
     pub cap: StrokeCapType,
     pub join: StrokeJoinType,
+}
+
+impl<T> Default for VectorEntity2DStroke<T>
+where
+    T: ImageRepresentation,
+{
+    fn default() -> Self {
+        VectorEntity2DStroke {
+            content: RGBA8::black().into(),
+            cap: StrokeCapType::Butt,
+            join: StrokeJoinType::Miter,
+            width: 1.,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -209,6 +281,170 @@ where
     pub content: Vec<Entity2D<T>>,
 }
 
+impl<T> StaticObject2D<T>
+where
+    T: ImageRepresentation,
+{
+    pub fn from_entity(entity: Entity2D<T>) -> Object2D<T> {
+        Object2D::Static(StaticObject2D {
+            content: vec![entity],
+            orientation: Transform2D::default(),
+        })
+    }
+}
+
+#[derive(Default)]
+pub struct VectorGeometryBuilder {
+    segments: Vec<VectorEntity2DSegment>,
+}
+
+impl VectorGeometryBuilder {
+    pub fn new() -> Self {
+        VectorGeometryBuilder::default()
+    }
+    pub fn line_to(mut self, to: Point2D) -> Self {
+        self.segments.push(VectorEntity2DSegment::LineTo(to));
+        self
+    }
+    pub fn quadratic_to(mut self, to: Point2D, handle: Point2D) -> Self {
+        self.segments
+            .push(VectorEntity2DSegment::QuadraticTo(to, handle));
+        self
+    }
+    pub fn bezier_to(mut self, to: Point2D, handle_1: Point2D, handle_2: Point2D) -> Self {
+        self.segments
+            .push(VectorEntity2DSegment::BezierTo(to, handle_1, handle_2));
+        self
+    }
+    pub fn done<T>(self) -> VectorEntityBuilder<T>
+    where
+        T: ImageRepresentation,
+    {
+        VectorEntityBuilder::new(self.segments)
+    }
+}
+
+pub struct VectorGeometryPrimitive {}
+
+impl VectorGeometryPrimitive {
+    pub fn rectangle<T>(width: f64, height: f64) -> VectorEntityBuilder<T>
+    where
+        T: ImageRepresentation,
+    {
+        VectorEntityBuilder::new(vec![
+            VectorEntity2DSegment::LineTo(Point2D::new(width, 0.)),
+            VectorEntity2DSegment::LineTo(Point2D::new(width, height)),
+            VectorEntity2DSegment::LineTo(Point2D::new(0., height)),
+        ])
+    }
+    pub fn square<T>(side_length: f64) -> VectorEntityBuilder<T>
+    where
+        T: ImageRepresentation,
+    {
+        VectorGeometryPrimitive::rectangle(side_length, side_length)
+    }
+}
+
+pub struct VectorEntityBuilder<T>
+where
+    T: ImageRepresentation,
+{
+    closed: bool,
+    geometry: Vec<VectorEntity2DSegment>,
+    fill: Option<VectorEntity2DFill<T>>,
+    stroke: Option<VectorEntity2DStroke<T>>,
+    shadow: Option<VectorEntity2DShadow>,
+}
+
+impl<T> VectorEntityBuilder<T>
+where
+    T: ImageRepresentation,
+{
+    pub fn new(geometry: Vec<VectorEntity2DSegment>) -> Self {
+        VectorEntityBuilder {
+            closed: false,
+            geometry,
+            fill: None,
+            shadow: None,
+            stroke: None,
+        }
+    }
+    pub fn close(mut self) -> Self {
+        self.closed = true;
+        self
+    }
+    pub fn fill(mut self, fill: VectorEntity2DFill<T>) -> Self
+    where
+        T: ImageRepresentation,
+    {
+        self.fill = Some(fill);
+        self
+    }
+    pub fn stroke(mut self, stroke: VectorEntity2DStroke<T>) -> Self
+    where
+        T: ImageRepresentation,
+    {
+        self.stroke = Some(stroke);
+        self
+    }
+    pub fn shadow(mut self, shadow: VectorEntity2DShadow) -> Self
+    where
+        T: ImageRepresentation,
+    {
+        self.shadow = Some(shadow);
+        self
+    }
+    pub fn finalize(self) -> Entity2D<T>
+    where
+        T: ImageRepresentation,
+    {
+        Entity2D {
+            closed: self.closed,
+            segments: self.geometry,
+            orientation: Transform2D::default(),
+            fill: self.fill,
+            shadow: self.shadow,
+            stroke: self.stroke,
+        }
+    }
+}
+
+pub struct StrokeBuilder<T>
+where
+    T: ImageRepresentation,
+{
+    stroke: VectorEntity2DStroke<T>,
+}
+
+impl<T> StrokeBuilder<T>
+where
+    T: ImageRepresentation,
+{
+    pub fn new(content: VectorEntityTexture<T>, width: f32) -> Self {
+        let mut builder = StrokeBuilder {
+            stroke: VectorEntity2DStroke::default(),
+        };
+        builder.stroke.content = content;
+        builder.stroke.width = width;
+        builder
+    }
+    pub fn cap_round(mut self) -> Self {
+        self.stroke.cap = StrokeCapType::Round;
+        self
+    }
+    pub fn join_bevel(mut self) -> Self {
+        self.stroke.join = StrokeJoinType::Bevel;
+        self
+    }
+    pub fn join_round(mut self) -> Self {
+        self.stroke.join = StrokeJoinType::Round;
+        self
+    }
+    pub fn finalize(self) -> VectorEntity2DStroke<T> {
+        self.stroke
+    }
+}
+
 pub enum Object2D<T>
 where
     T: ImageRepresentation,
@@ -245,6 +481,12 @@ pub struct Size2D {
 pub struct Point2D {
     pub x: f64,
     pub y: f64,
+}
+
+impl Point2D {
+    pub fn new(x: f64, y: f64) -> Self {
+        Point2D { x, y }
+    }
 }
 
 #[derive(Clone, Copy, Default)]
