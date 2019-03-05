@@ -1,7 +1,8 @@
 use vitruvia::graphics;
 use vitruvia::graphics::{
     Distance2D, Entity2D, EntityFormat2D, Frame2D, Graphics2D, Object2D, Orientation2D, Point2D,
-    StaticObject2D, VectorEntity2D, VectorEntity2DSegment, VectorEntity2DStroke, RGBA8,
+    StaticObject2D, StrokeCapType, StrokeJoinType, VectorEntity2D, VectorEntity2DSegment,
+    VectorEntity2DStroke, RGBA8,
 };
 
 fn main() {
@@ -20,6 +21,8 @@ fn main() {
                         b: 0,
                         a: 255,
                     },
+                    cap: StrokeCapType::Round,
+                    join: StrokeJoinType::Round,
                     width: 10,
                 }),
                 fill: None,

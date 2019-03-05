@@ -62,9 +62,24 @@ pub enum VectorEntity2DSegment {
 }
 
 #[derive(Clone)]
+pub enum StrokeCapType {
+    Butt,
+    Round,
+}
+
+#[derive(Clone)]
+pub enum StrokeJoinType {
+    Bevel,
+    Round,
+    Miter,
+}
+
+#[derive(Clone)]
 pub struct VectorEntity2DStroke {
     pub color: RGBA8,
     pub width: u16,
+    pub cap: StrokeCapType,
+    pub join: StrokeJoinType,
 }
 
 #[derive(Clone)]

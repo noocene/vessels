@@ -2,7 +2,7 @@ use crate::graphics::*;
 
 use stdweb::traits::*;
 use stdweb::unstable::TryInto;
-use stdweb::web::{document, window, CanvasRenderingContext2d, FillRule};
+use stdweb::web::{document, window, CanvasRenderingContext2d, FillRule, LineCap, LineJoin};
 
 use stdweb::web::event::ResizeEvent;
 
@@ -115,6 +115,15 @@ impl CanvasFrame {
                     }
                     match &representation.stroke {
                         Some(stroke) => {
+                            self.context.set_line_cap(match &stroke.cap {
+                                StrokeCapType::Butt => LineCap::Butt,
+                                StrokeCapType::Round => LineCap::Round,
+                            });
+                            self.context.set_line_join(match &stroke.join {
+                                StrokeJoinType::Miter => LineJoin::Miter,
+                                StrokeJoinType::Round => LineJoin::Round,
+                                StrokeJoinType::Bevel => LineJoin::Bevel,
+                            });
                             self.context
                                 .set_stroke_style_color(&stroke.color.as_hex_color());
                             self.context.set_line_width(stroke.width.into());
