@@ -2,13 +2,15 @@ use crate::graphics::*;
 
 use stdweb::traits::*;
 use stdweb::unstable::TryInto;
-use stdweb::web::{document, window, CanvasRenderingContext2d, FillRule, LineCap, LineJoin};
+use stdweb::web::{
+    document, window, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap, LineJoin,
+};
 
 use stdweb::web::event::ResizeEvent;
 
 use stdweb::web::html_element::CanvasElement;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use std::slice::Iter;
@@ -54,6 +56,8 @@ struct CanvasFrame {
     canvas: CanvasElement,
     contents: Vec<Object2D<CanvasImage>>,
     pixel_ratio: f64,
+    viewport: Cell<Rect2D>,
+    size: Cell<Size2D>,
 }
 
 impl Drop for CanvasFrame {
@@ -75,32 +79,37 @@ impl CanvasFrame {
             pixel_ratio: window().device_pixel_ratio(),
             context,
             contents: vec![],
+            size: Cell::from(Size2D::default()),
+            viewport: Cell::from(Rect2D {
+                size: Size2D::default(),
+                position: Point2D { x: 0., y: 0. },
+            }),
         }
     }
     fn show(&self) {
         document().body().unwrap().append_child(&self.canvas);
     }
     fn draw(&self) {
+        let viewport = self.viewport.get();
+        let size = self.size.get();
         self.context.clear_rect(
-            0.,
-            0.,
-            self.canvas.width().into(),
-            self.canvas.height().into(),
+            viewport.position.x * self.pixel_ratio,
+            viewport.position.y * self.pixel_ratio,
+            viewport.size.width * self.pixel_ratio,
+            viewport.size.height * self.pixel_ratio,
         );
         self.contents.iter().for_each(|object| {
             let draw = |base_position: Point2D, content: Iter<Entity2D<CanvasImage>>| {
-                content.for_each(|entity| match &entity.representation {
-                EntityFormat2D::RasterEntity2D(representation) => {
-                    js! {
-                        @{&self.context}.drawImage(@{representation.texture.deref()}, @{base_position.x + entity.orientation.position.x}, @{base_position.y + entity.orientation.position.y});
-                    }
-                }
-                EntityFormat2D::VectorEntity2D(representation) => {
+                content.for_each(|entity| {
+                    let matrix = entity.orientation.to_matrix();
+                    self.context.set_transform(1.,0.,0.,1.,-viewport.position.x * self.pixel_ratio,-viewport.position.y * self.pixel_ratio);
+                    self.context.scale(size.width/viewport.size.width, size.height/viewport.size.height);
+                    self.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
                     self.context.begin_path();
-                    match &representation.shadow {
+                    match &entity.shadow {
                         Some(shadow) => {
                             self.context.set_shadow_blur(shadow.blur);
-                            self.context.set_shadow_color(&shadow.color.as_rgba_color());
+                            self.context.set_shadow_color(&shadow.color.to_rgba_color());
                             self.context.set_shadow_offset_x(shadow.offset.x);
                             self.context.set_shadow_offset_y(shadow.offset.y);
                         }
@@ -108,29 +117,33 @@ impl CanvasFrame {
                             self.context.set_shadow_color("rgba(0,0,0,0)");
                         }
                     }
-                    let segments = representation.segments.iter().enumerate();
+                    let segments = entity.segments.iter().enumerate();
                     segments.for_each(|segment| {
                         if let VectorEntity2DSegment::Point(point) = segment.1 {
                             match segment.0 {
                                 0 => {
                                     self.context.move_to(
-                                        (point.x + entity.orientation.position.x) * self.pixel_ratio,
-                                        (point.y + entity.orientation.position.y) * self.pixel_ratio,
+                                        (base_position.x + point.x + entity.orientation.position.x)
+                                            * self.pixel_ratio,
+                                        (base_position.x + point.y + entity.orientation.position.y)
+                                            * self.pixel_ratio,
                                     );
                                 }
                                 _ => {
                                     self.context.line_to(
-                                        (point.x + entity.orientation.position.x) * self.pixel_ratio,
-                                        (point.y + entity.orientation.position.y) * self.pixel_ratio,
+                                        (base_position.x + point.x + entity.orientation.position.x)
+                                            * self.pixel_ratio,
+                                        (base_position.x + point.y + entity.orientation.position.y)
+                                            * self.pixel_ratio,
                                     );
                                 }
                             }
                         }
                     });
-                    if representation.closed {
+                    if entity.closed {
                         self.context.close_path();
                     }
-                    match &representation.stroke {
+                    match &entity.stroke {
                         Some(stroke) => {
                             self.context.set_line_cap(match &stroke.cap {
                                 StrokeCapType::Butt => LineCap::Butt,
@@ -141,47 +154,113 @@ impl CanvasFrame {
                                 StrokeJoinType::Round => LineJoin::Round,
                                 StrokeJoinType::Bevel => LineJoin::Bevel,
                             });
-                            match &stroke.color {
-                                VectorEntityColor::Solid(color) => {
-                                    self.context.set_stroke_style_color(&color.as_rgba_color());
+                            match &stroke.content {
+                                VectorEntityTexture::Solid(color) => {
+                                    self.context.set_stroke_style_color(&color.to_rgba_color());
                                 }
-                                VectorEntityColor::LinearGradient(gradient) => {
-                                    let canvas_gradient = self.context.create_linear_gradient(gradient.start.x, gradient.start.y, gradient.end.x, gradient.end.y);
+                                VectorEntityTexture::LinearGradient(gradient) => {
+                                    let canvas_gradient = self.context.create_linear_gradient(
+                                        gradient.start.x,
+                                        gradient.start.y,
+                                        gradient.end.x,
+                                        gradient.end.y,
+                                    );
                                     gradient.stops.iter().for_each(|stop| {
-                                        canvas_gradient.add_color_stop(stop.offset, &stop.color.as_rgba_color()).unwrap();
+                                        canvas_gradient
+                                            .add_color_stop(
+                                                stop.offset,
+                                                &stop.color.to_rgba_color(),
+                                            )
+                                            .unwrap();
                                     });
                                     self.context.set_stroke_style_gradient(&canvas_gradient);
                                 }
-                                VectorEntityColor::RadialGradient(gradient) => {
-                                    let canvas_gradient = self.context.create_radial_gradient(gradient.start.x, gradient.start.y, gradient.start_radius, gradient.end.x, gradient.end.y, gradient.end_radius).unwrap();
+                                VectorEntityTexture::Image(image) => {
+                                    let pattern: CanvasPattern = js! {
+                                        @{&self.context}.createPattern(@{image.deref()}, "no-repeat");
+                                    }
+                                    .try_into()
+                                    .unwrap();
+                                    self.context.set_stroke_style_pattern(&pattern);
+                                }
+                                VectorEntityTexture::RadialGradient(gradient) => {
+                                    let canvas_gradient = self
+                                        .context
+                                        .create_radial_gradient(
+                                            gradient.start.x,
+                                            gradient.start.y,
+                                            gradient.start_radius,
+                                            gradient.end.x,
+                                            gradient.end.y,
+                                            gradient.end_radius,
+                                        )
+                                        .unwrap();
                                     gradient.stops.iter().for_each(|stop| {
-                                        canvas_gradient.add_color_stop(stop.offset, &stop.color.as_rgba_color()).unwrap();
+                                        canvas_gradient
+                                            .add_color_stop(
+                                                stop.offset,
+                                                &stop.color.to_rgba_color(),
+                                            )
+                                            .unwrap();
                                     });
                                     self.context.set_stroke_style_gradient(&canvas_gradient);
                                 }
                             }
-                            self.context.set_line_width(stroke.width.into());
+                            self.context.set_line_width(f64::from(stroke.width) * self.pixel_ratio);
                             self.context.stroke();
                         }
                         None => {}
                     }
-                    match &representation.fill {
+                    match &entity.fill {
                         Some(fill) => {
-                            match &fill.color {
-                                VectorEntityColor::Solid(color) => {
-                                    self.context.set_fill_style_color(&color.as_rgba_color());
-                                },
-                                VectorEntityColor::LinearGradient(gradient) => {
-                                    let canvas_gradient = self.context.create_linear_gradient(gradient.start.x, gradient.start.y, gradient.end.x, gradient.end.y);
+                            match &fill.content {
+                                VectorEntityTexture::Solid(color) => {
+                                    self.context.set_fill_style_color(&color.to_rgba_color());
+                                }
+                                VectorEntityTexture::Image(image) => {
+                                    let pattern: CanvasPattern = js! {
+                                        return @{&self.context}.createPattern(@{image.deref()}, "no-repeat");
+                                    }
+                                    .try_into()
+                                    .unwrap();
+                                    self.context.set_fill_style_pattern(&pattern);
+                                }
+                                VectorEntityTexture::LinearGradient(gradient) => {
+                                    let canvas_gradient = self.context.create_linear_gradient(
+                                        gradient.start.x,
+                                        gradient.start.y,
+                                        gradient.end.x,
+                                        gradient.end.y,
+                                    );
                                     gradient.stops.iter().for_each(|stop| {
-                                        canvas_gradient.add_color_stop(stop.offset, &stop.color.as_rgba_color()).unwrap();
+                                        canvas_gradient
+                                            .add_color_stop(
+                                                stop.offset,
+                                                &stop.color.to_rgba_color(),
+                                            )
+                                            .unwrap();
                                     });
                                     self.context.set_fill_style_gradient(&canvas_gradient);
                                 }
-                                VectorEntityColor::RadialGradient(gradient) => {
-                                    let canvas_gradient = self.context.create_radial_gradient(gradient.start.x, gradient.start.y, gradient.start_radius, gradient.end.x, gradient.end.y, gradient.end_radius).unwrap();
+                                VectorEntityTexture::RadialGradient(gradient) => {
+                                    let canvas_gradient = self
+                                        .context
+                                        .create_radial_gradient(
+                                            gradient.start.x,
+                                            gradient.start.y,
+                                            gradient.start_radius,
+                                            gradient.end.x,
+                                            gradient.end.y,
+                                            gradient.end_radius,
+                                        )
+                                        .unwrap();
                                     gradient.stops.iter().for_each(|stop| {
-                                        canvas_gradient.add_color_stop(stop.offset, &stop.color.as_rgba_color()).unwrap();
+                                        canvas_gradient
+                                            .add_color_stop(
+                                                stop.offset,
+                                                &stop.color.to_rgba_color(),
+                                            )
+                                            .unwrap();
                                     });
                                     self.context.set_fill_style_gradient(&canvas_gradient);
                                 }
@@ -190,8 +269,7 @@ impl CanvasFrame {
                         }
                         None => {}
                     }
-                }
-            });
+                });
             };
             let base_position: Point2D;
             let content: Iter<Entity2D<CanvasImage>>;
@@ -213,15 +291,35 @@ impl CanvasFrame {
 }
 
 impl DynamicObject2D<CanvasImage> for CanvasFrame {
-    fn orientation(&self) -> Orientation2D {
-        Orientation2D::default()
+    fn orientation(&self) -> Transform2D {
+        Transform2D::default()
     }
     fn render(&self) -> Cow<[Entity2D<CanvasImage>]> {
+        self.draw();
+        let size = self.size.get();
         Cow::from(vec![Entity2D {
-            representation: EntityFormat2D::RasterEntity2D(RasterEntity2D {
-                texture: Box::new(self.canvas.clone()),
+            orientation: Transform2D::default(),
+            fill: Some(VectorEntity2DFill {
+                content: VectorEntityTexture::Image(Box::new(self.canvas.clone())),
             }),
-            orientation: Orientation2D::default(),
+            shadow: None,
+            stroke: None,
+            closed: true,
+            segments: vec![
+                VectorEntity2DSegment::Point(Point2D { x: 0., y: 0. }),
+                VectorEntity2DSegment::Point(Point2D {
+                    x: 0.,
+                    y: size.height,
+                }),
+                VectorEntity2DSegment::Point(Point2D {
+                    x: size.width,
+                    y: size.height,
+                }),
+                VectorEntity2DSegment::Point(Point2D {
+                    x: size.width,
+                    y: 0.,
+                }),
+            ],
         }])
     }
 }
@@ -230,15 +328,18 @@ impl Frame2D<CanvasImage> for CanvasFrame {
     fn add(&mut self, object: Object2D<CanvasImage>) {
         self.contents.push(object);
     }
+    fn set_viewport(&self, viewport: Rect2D) {
+        self.viewport.set(viewport);
+    }
     fn resize(&self, size: Size2D) {
-        self.canvas.set_height(size.height as u32);
-        self.canvas.set_width(size.width as u32);
+        self.size.set(size);
+        self.canvas
+            .set_height((size.height * self.pixel_ratio) as u32);
+        self.canvas
+            .set_width((size.width * self.pixel_ratio) as u32);
     }
     fn get_size(&self) -> Size2D {
-        Size2D {
-            width: self.canvas.width().into(),
-            height: self.canvas.height().into(),
-        }
+        self.size.get()
     }
 }
 
@@ -270,11 +371,13 @@ impl Graphics2D for Canvas {
 
 impl Canvas {
     fn animate(&self, _delta: f64) {
-        let state = self.state.borrow();
+        let state = self.state.borrow_mut();
         match &state.root_frame {
             Some(frame) => {
                 if state.size.is_dirty() {
-                    frame.resize(state.size.get());
+                    let size = state.size.get();
+                    frame.resize(size);
+                    frame.set_viewport(Rect2D::new(size.width, size.height, 0., 0.));
                 }
                 frame.draw();
             }
@@ -319,13 +422,11 @@ canvas {
 
     let body = document().body().unwrap();
 
-    let _window = window();
-
     let gfx = Canvas {
         state: Rc::new(RefCell::new(CanvasState {
             size: ObserverCell::new(Size2D {
-                width: f64::from(body.offset_width()) * _window.device_pixel_ratio(),
-                height: f64::from(body.offset_height()) * _window.device_pixel_ratio(),
+                width: f64::from(body.offset_width()),
+                height: f64::from(body.offset_height()),
             }),
             root_frame: None,
         })),
@@ -333,13 +434,12 @@ canvas {
 
     let gfx_resize = gfx.clone();
 
-    _window.add_event_listener(move |_: ResizeEvent| {
-        let window = window();
+    window().add_event_listener(move |_: ResizeEvent| {
         let state = gfx_resize.state.borrow();
         let body = document().body().unwrap();
         state.size.set(Size2D {
-            width: f64::from(body.offset_width()) * window.device_pixel_ratio(),
-            height: f64::from(body.offset_height()) * window.device_pixel_ratio(),
+            width: f64::from(body.offset_width()),
+            height: f64::from(body.offset_height()),
         });
     });
 

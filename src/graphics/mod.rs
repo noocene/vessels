@@ -2,8 +2,8 @@ use crate::util::*;
 
 use std::borrow::Cow;
 
-pub trait AsHexColor {
-    fn as_hex_color(&self) -> String;
+pub trait ToHexColor {
+    fn to_hex_color(&self) -> String;
 }
 
 pub trait ImageRepresentation:
@@ -24,7 +24,7 @@ pub struct RGBA8 {
 }
 
 impl RGBA8 {
-    pub fn as_rgba_color(&self) -> String {
+    pub fn to_rgba_color(&self) -> String {
         format!(
             "rgba({},{},{},{})",
             self.r,
@@ -35,8 +35,8 @@ impl RGBA8 {
     }
 }
 
-impl AsHexColor for RGBA8 {
-    fn as_hex_color(&self) -> String {
+impl ToHexColor for RGBA8 {
+    fn to_hex_color(&self) -> String {
         format!("#{:x?}{:x?}{:x?}{:x?}", self.r, self.g, self.b, self.a)
     }
 }
@@ -57,14 +57,6 @@ impl ImageFormat for Texture2D {}
 pub struct Image<T: PixelFormat, U: ImageFormat> {
     pub pixels: Vec<T>,
     pub shape: U,
-}
-
-#[derive(Clone)]
-pub struct RasterEntity2D<T>
-where
-    T: ImageRepresentation,
-{
-    pub texture: Box<T>,
 }
 
 #[derive(Clone)]
@@ -116,52 +108,33 @@ pub struct VectorEntityRadialGradient {
 }
 
 #[derive(Clone)]
-pub enum VectorEntityColor {
+pub enum VectorEntityTexture<T>
+where
+    T: ImageRepresentation,
+{
     Solid(RGBA8),
     LinearGradient(VectorEntityLinearGradient),
     RadialGradient(VectorEntityRadialGradient),
+    Image(Box<T>),
 }
 
 #[derive(Clone)]
-pub struct VectorEntity2DStroke {
-    pub color: VectorEntityColor,
-    pub width: u16,
+pub struct VectorEntity2DStroke<T>
+where
+    T: ImageRepresentation,
+{
+    pub content: VectorEntityTexture<T>,
+    pub width: f32,
     pub cap: StrokeCapType,
     pub join: StrokeJoinType,
 }
 
 #[derive(Clone)]
-pub struct VectorEntity2DFill {
-    pub color: VectorEntityColor,
-}
-
-#[derive(Clone)]
-pub struct VectorEntity2D {
-    pub segments: Vec<VectorEntity2DSegment>,
-    pub stroke: Option<VectorEntity2DStroke>,
-    pub fill: Option<VectorEntity2DFill>,
-    pub shadow: Option<VectorEntity2DShadow>,
-    pub closed: bool,
-}
-
-#[derive(Clone)]
-pub struct Orientation2D {
-    position: Point2D,
-    scale: Size2D,
-    rotation: Rotation2D,
-}
-
-impl Default for Orientation2D {
-    fn default() -> Self {
-        Orientation2D {
-            scale: Size2D {
-                width: 1.,
-                height: 1.,
-            },
-            position: Point2D::default(),
-            rotation: Rotation2D::default(),
-        }
-    }
+pub struct VectorEntity2DFill<T>
+where
+    T: ImageRepresentation,
+{
+    pub content: VectorEntityTexture<T>,
 }
 
 #[derive(Clone)]
@@ -169,24 +142,61 @@ pub struct Entity2D<T>
 where
     T: ImageRepresentation,
 {
-    pub orientation: Orientation2D,
-    pub representation: EntityFormat2D<T>,
+    pub orientation: Transform2D,
+    pub segments: Vec<VectorEntity2DSegment>,
+    pub stroke: Option<VectorEntity2DStroke<T>>,
+    pub fill: Option<VectorEntity2DFill<T>>,
+    pub shadow: Option<VectorEntity2DShadow>,
+    pub closed: bool,
 }
 
 #[derive(Clone)]
-pub enum EntityFormat2D<T>
-where
-    T: ImageRepresentation,
-{
-    VectorEntity2D(VectorEntity2D),
-    RasterEntity2D(RasterEntity2D<T>),
+pub struct Transform2D {
+    pub position: Point2D,
+    pub scale: Scale2D,
+    pub rotation: Rotation2D,
+}
+
+impl Transform2D {
+    pub fn with_position(mut self, position: Point2D) -> Self {
+        self.position = position;
+        self
+    }
+    pub fn with_scale(mut self, scale: Scale2D) -> Self {
+        self.scale = scale;
+        self
+    }
+    pub fn with_rotation(mut self, rotation: Rotation2D) -> Self {
+        self.rotation = rotation;
+        self
+    }
+    pub fn to_matrix(&self) -> [f64; 6] {
+        [
+            self.scale.x,
+            0.,
+            0.,
+            self.scale.y,
+            self.position.x,
+            self.position.y,
+        ]
+    }
+}
+
+impl Default for Transform2D {
+    fn default() -> Self {
+        Transform2D {
+            scale: Scale2D { x: 1., y: 1. },
+            position: Point2D::default(),
+            rotation: Rotation2D::default(),
+        }
+    }
 }
 
 pub trait DynamicObject2D<T>
 where
     T: ImageRepresentation,
 {
-    fn orientation(&self) -> Orientation2D;
+    fn orientation(&self) -> Transform2D;
     fn render(&self) -> Cow<[Entity2D<T>]>;
 }
 
@@ -194,7 +204,7 @@ pub struct StaticObject2D<T>
 where
     T: ImageRepresentation,
 {
-    pub orientation: Orientation2D,
+    pub orientation: Transform2D,
     pub content: Vec<Entity2D<T>>,
 }
 
@@ -212,6 +222,7 @@ where
 {
     fn add(&mut self, object: Object2D<T>);
     fn resize(&self, size: Size2D);
+    fn set_viewport(&self, viewport: Rect2D);
     fn get_size(&self) -> Size2D;
 }
 
@@ -234,9 +245,26 @@ pub struct Point2D {
     pub y: f64,
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct Rect2D {
+    pub size: Size2D,
+    pub position: Point2D,
+}
+
+impl Rect2D {
+    pub fn new(width: f64, height: f64, x: f64, y: f64) -> Self {
+        Rect2D {
+            size: Size2D { width, height },
+            position: Point2D { x, y },
+        }
+    }
+}
+
 pub type Distance2D = Point2D;
 
 pub type Rotation2D = Point2D;
+
+pub type Scale2D = Point2D;
 
 mod targets;
 
