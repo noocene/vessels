@@ -23,6 +23,12 @@ pub struct RGBA8 {
     pub a: u8,
 }
 
+impl RGBA8 {
+    pub fn as_rgba_color(&self) -> String {
+        format!("rgba({},{},{},{})", self.r, self.g, self.b, self.a)
+    }
+}
+
 impl AsHexColor for RGBA8 {
     fn as_hex_color(&self) -> String {
         format!("#{:x?}{:x?}{:x?}{:x?}", self.r, self.g, self.b, self.a)

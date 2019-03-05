@@ -16,7 +16,7 @@ fn main() {
                 closed: true,
                 stroke: Some(VectorEntity2DStroke {
                     color: RGBA8 {
-                        r: 0,
+                        r: 255,
                         g: 0,
                         b: 0,
                         a: 255,

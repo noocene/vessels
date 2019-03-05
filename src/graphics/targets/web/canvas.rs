@@ -125,7 +125,7 @@ impl CanvasFrame {
                                 StrokeJoinType::Bevel => LineJoin::Bevel,
                             });
                             self.context
-                                .set_stroke_style_color(&stroke.color.as_hex_color());
+                                .set_stroke_style_color(&stroke.color.as_rgba_color());
                             self.context.set_line_width(stroke.width.into());
                             self.context.stroke();
                         }
@@ -134,7 +134,7 @@ impl CanvasFrame {
                     match &representation.fill {
                         Some(fill) => {
                             self.context
-                                .set_fill_style_color(&fill.color.as_hex_color());
+                                .set_fill_style_color(&fill.color.as_rgba_color());
                             self.context.fill(FillRule::NonZero);
                         }
                         None => {}
