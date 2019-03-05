@@ -117,26 +117,45 @@ impl CanvasFrame {
                             self.context.set_shadow_color("rgba(0,0,0,0)");
                         }
                     }
-                    let segments = entity.segments.iter().enumerate();
+                    let segments = entity.segments.iter();
+                    self.context.move_to(entity.orientation.position.x, entity.orientation.position.y);
                     segments.for_each(|segment| {
-                        if let VectorEntity2DSegment::Point(point) = segment.1 {
-                            match segment.0 {
-                                0 => {
-                                    self.context.move_to(
-                                        (base_position.x + point.x + entity.orientation.position.x)
-                                            * self.pixel_ratio,
-                                        (base_position.x + point.y + entity.orientation.position.y)
-                                            * self.pixel_ratio,
-                                    );
-                                }
-                                _ => {
-                                    self.context.line_to(
-                                        (base_position.x + point.x + entity.orientation.position.x)
-                                            * self.pixel_ratio,
-                                        (base_position.x + point.y + entity.orientation.position.y)
-                                            * self.pixel_ratio,
-                                    );
-                                }
+                        match segment {
+                            VectorEntity2DSegment::LineTo(point) => {
+                                self.context.line_to(
+                                    (base_position.x + point.x + entity.orientation.position.x)
+                                        * self.pixel_ratio,
+                                    (base_position.x + point.y + entity.orientation.position.y)
+                                        * self.pixel_ratio,
+                                );
+                            },
+                            VectorEntity2DSegment::BezierTo(point, handle_1, handle_2) => {
+                                self.context.bezier_curve_to(
+                                    (base_position.x + point.x + entity.orientation.position.x)
+                                        * self.pixel_ratio,
+                                    (base_position.x + point.y + entity.orientation.position.y)
+                                        * self.pixel_ratio,
+                                    (base_position.x + handle_1.x + entity.orientation.position.x)
+                                        * self.pixel_ratio,
+                                    (base_position.x + handle_1.y + entity.orientation.position.y)
+                                        * self.pixel_ratio,
+                                    (base_position.x + handle_2.x + entity.orientation.position.x)
+                                        * self.pixel_ratio,
+                                    (base_position.x + handle_2.y + entity.orientation.position.y)
+                                        * self.pixel_ratio,
+                                );
+                            }
+                            VectorEntity2DSegment::QuadraticTo(point, handle) => {
+                                self.context.quadratic_curve_to(
+                                    (base_position.x + point.x + entity.orientation.position.x)
+                                        * self.pixel_ratio,
+                                    (base_position.x + point.y + entity.orientation.position.y)
+                                        * self.pixel_ratio,
+                                    (base_position.x + handle.x + entity.orientation.position.x)
+                                        * self.pixel_ratio,
+                                    (base_position.x + handle.y + entity.orientation.position.y)
+                                        * self.pixel_ratio,
+                                );
                             }
                         }
                     });
@@ -306,16 +325,16 @@ impl DynamicObject2D<CanvasImage> for CanvasFrame {
             stroke: None,
             closed: true,
             segments: vec![
-                VectorEntity2DSegment::Point(Point2D { x: 0., y: 0. }),
-                VectorEntity2DSegment::Point(Point2D {
+                VectorEntity2DSegment::LineTo(Point2D { x: 0., y: 0. }),
+                VectorEntity2DSegment::LineTo(Point2D {
                     x: 0.,
                     y: size.height,
                 }),
-                VectorEntity2DSegment::Point(Point2D {
+                VectorEntity2DSegment::LineTo(Point2D {
                     x: size.width,
                     y: size.height,
                 }),
-                VectorEntity2DSegment::Point(Point2D {
+                VectorEntity2DSegment::LineTo(Point2D {
                     x: size.width,
                     y: 0.,
                 }),

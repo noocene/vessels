@@ -13,7 +13,7 @@ fn main() {
         orientation: Transform2D::default(),
         content: vec![Entity2D {
             orientation: Transform2D::default(),
-            closed: true,
+            closed: false,
             stroke: Some(VectorEntity2DStroke {
                 content: VectorEntityTexture::Solid(RGBA8 {
                     r: 0,
@@ -37,10 +37,12 @@ fn main() {
             }),
             fill: None,
             segments: vec![
-                VectorEntity2DSegment::Point(Point2D { x: 0., y: 0. }),
-                VectorEntity2DSegment::Point(Point2D { x: 0., y: 100. }),
-                VectorEntity2DSegment::Point(Point2D { x: 100., y: 100. }),
-                VectorEntity2DSegment::Point(Point2D { x: 100., y: 0. }),
+                VectorEntity2DSegment::LineTo(Point2D { x: 0., y: 100. }),
+                VectorEntity2DSegment::LineTo(Point2D { x: 100., y: 100. }),
+                VectorEntity2DSegment::QuadraticTo(
+                    Point2D { x: 100., y: 0. },
+                    Point2D { x: 50., y: 50. },
+                ),
             ],
         }],
     }));

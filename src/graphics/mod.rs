@@ -61,8 +61,9 @@ pub struct Image<T: PixelFormat, U: ImageFormat> {
 
 #[derive(Clone)]
 pub enum VectorEntity2DSegment {
-    Point(Point2D),
-    Curve(Point2D, Point2D),
+    LineTo(Point2D),
+    QuadraticTo(Point2D, Point2D),
+    BezierTo(Point2D, Point2D, Point2D),
 }
 
 #[derive(Clone)]
