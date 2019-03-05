@@ -124,8 +124,25 @@ impl CanvasFrame {
                                 StrokeJoinType::Round => LineJoin::Round,
                                 StrokeJoinType::Bevel => LineJoin::Bevel,
                             });
-                            self.context
-                                .set_stroke_style_color(&stroke.color.as_rgba_color());
+                            match &stroke.color {
+                                VectorEntityColor::Solid(color) => {
+                                    self.context.set_stroke_style_color(&color.as_rgba_color());
+                                }
+                                VectorEntityColor::LinearGradient(gradient) => {
+                                    let canvas_gradient = self.context.create_linear_gradient(gradient.start.x, gradient.start.y, gradient.end.x, gradient.end.y);
+                                    gradient.stops.iter().for_each(|stop| {
+                                        canvas_gradient.add_color_stop(stop.offset, &stop.color.as_rgba_color()).unwrap();
+                                    });
+                                    self.context.set_stroke_style_gradient(&canvas_gradient);
+                                }
+                                VectorEntityColor::RadialGradient(gradient) => {
+                                    let canvas_gradient = self.context.create_radial_gradient(gradient.start.x, gradient.start.y, gradient.start_radius, gradient.end.x, gradient.end.y, gradient.end_radius).unwrap();
+                                    gradient.stops.iter().for_each(|stop| {
+                                        canvas_gradient.add_color_stop(stop.offset, &stop.color.as_rgba_color()).unwrap();
+                                    });
+                                    self.context.set_stroke_style_gradient(&canvas_gradient);
+                                }
+                            }
                             self.context.set_line_width(stroke.width.into());
                             self.context.stroke();
                         }
@@ -133,8 +150,25 @@ impl CanvasFrame {
                     }
                     match &representation.fill {
                         Some(fill) => {
-                            self.context
-                                .set_fill_style_color(&fill.color.as_rgba_color());
+                            match &fill.color {
+                                VectorEntityColor::Solid(color) => {
+                                    self.context.set_fill_style_color(&color.as_rgba_color());
+                                },
+                                VectorEntityColor::LinearGradient(gradient) => {
+                                    let canvas_gradient = self.context.create_linear_gradient(gradient.start.x, gradient.start.y, gradient.end.x, gradient.end.y);
+                                    gradient.stops.iter().for_each(|stop| {
+                                        canvas_gradient.add_color_stop(stop.offset, &stop.color.as_rgba_color()).unwrap();
+                                    });
+                                    self.context.set_fill_style_gradient(&canvas_gradient);
+                                }
+                                VectorEntityColor::RadialGradient(gradient) => {
+                                    let canvas_gradient = self.context.create_radial_gradient(gradient.start.x, gradient.start.y, gradient.start_radius, gradient.end.x, gradient.end.y, gradient.end_radius).unwrap();
+                                    gradient.stops.iter().for_each(|stop| {
+                                        canvas_gradient.add_color_stop(stop.offset, &stop.color.as_rgba_color()).unwrap();
+                                    });
+                                    self.context.set_fill_style_gradient(&canvas_gradient);
+                                }
+                            }
                             self.context.fill(FillRule::NonZero);
                         }
                         None => {}

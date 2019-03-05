@@ -81,8 +81,37 @@ pub enum StrokeJoinType {
 }
 
 #[derive(Clone)]
-pub struct VectorEntity2DStroke {
+pub struct VectorEntityGradientStop {
+    pub offset: f64,
     pub color: RGBA8,
+}
+
+#[derive(Clone)]
+pub struct VectorEntityLinearGradient {
+    pub stops: Vec<VectorEntityGradientStop>,
+    pub start: Point2D,
+    pub end: Point2D,
+}
+
+#[derive(Clone)]
+pub struct VectorEntityRadialGradient {
+    pub stops: Vec<VectorEntityGradientStop>,
+    pub start: Point2D,
+    pub start_radius: f64,
+    pub end: Point2D,
+    pub end_radius: f64,
+}
+
+#[derive(Clone)]
+pub enum VectorEntityColor {
+    Solid(RGBA8),
+    LinearGradient(VectorEntityLinearGradient),
+    RadialGradient(VectorEntityRadialGradient),
+}
+
+#[derive(Clone)]
+pub struct VectorEntity2DStroke {
+    pub color: VectorEntityColor,
     pub width: u16,
     pub cap: StrokeCapType,
     pub join: StrokeJoinType,
@@ -90,7 +119,7 @@ pub struct VectorEntity2DStroke {
 
 #[derive(Clone)]
 pub struct VectorEntity2DFill {
-    pub color: RGBA8,
+    pub color: VectorEntityColor,
 }
 
 #[derive(Clone)]
