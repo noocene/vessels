@@ -25,7 +25,13 @@ pub struct RGBA8 {
 
 impl RGBA8 {
     pub fn as_rgba_color(&self) -> String {
-        format!("rgba({},{},{},{})", self.r, self.g, self.b, self.a)
+        format!(
+            "rgba({},{},{},{})",
+            self.r,
+            self.g,
+            self.b,
+            f64::from(self.a) / 255.
+        )
     }
 }
 
@@ -94,6 +100,13 @@ pub struct VectorEntityLinearGradient {
 }
 
 #[derive(Clone)]
+pub struct VectorEntity2DShadow {
+    pub color: RGBA8,
+    pub offset: Distance2D,
+    pub blur: f64,
+}
+
+#[derive(Clone)]
 pub struct VectorEntityRadialGradient {
     pub stops: Vec<VectorEntityGradientStop>,
     pub start: Point2D,
@@ -127,6 +140,7 @@ pub struct VectorEntity2D {
     pub segments: Vec<VectorEntity2DSegment>,
     pub stroke: Option<VectorEntity2DStroke>,
     pub fill: Option<VectorEntity2DFill>,
+    pub shadow: Option<VectorEntity2DShadow>,
     pub closed: bool,
 }
 

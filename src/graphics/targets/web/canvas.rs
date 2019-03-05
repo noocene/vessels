@@ -81,6 +81,12 @@ impl CanvasFrame {
         document().body().unwrap().append_child(&self.canvas);
     }
     fn draw(&self) {
+        self.context.clear_rect(
+            0.,
+            0.,
+            self.canvas.width().into(),
+            self.canvas.height().into(),
+        );
         self.contents.iter().for_each(|object| {
             let draw = |base_position: Point2D, content: Iter<Entity2D<CanvasImage>>| {
                 content.for_each(|entity| match &entity.representation {
@@ -91,6 +97,17 @@ impl CanvasFrame {
                 }
                 EntityFormat2D::VectorEntity2D(representation) => {
                     self.context.begin_path();
+                    match &representation.shadow {
+                        Some(shadow) => {
+                            self.context.set_shadow_blur(shadow.blur);
+                            self.context.set_shadow_color(&shadow.color.as_rgba_color());
+                            self.context.set_shadow_offset_x(shadow.offset.x);
+                            self.context.set_shadow_offset_y(shadow.offset.y);
+                        }
+                        None => {
+                            self.context.set_shadow_color("rgba(0,0,0,0)");
+                        }
+                    }
                     let segments = representation.segments.iter().enumerate();
                     segments.for_each(|segment| {
                         if let VectorEntity2DSegment::Point(point) = segment.1 {
