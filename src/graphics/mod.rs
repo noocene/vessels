@@ -81,11 +81,31 @@ pub struct VectorEntity2D {
 }
 
 #[derive(Clone)]
+pub struct Orientation2D {
+    position: Point2D,
+    scale: Size2D,
+    rotation: Rotation2D,
+}
+
+impl Default for Orientation2D {
+    fn default() -> Self {
+        Orientation2D {
+            scale: Size2D {
+                width: 1.,
+                height: 1.,
+            },
+            position: Point2D::default(),
+            rotation: Rotation2D::default(),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct Entity2D<T>
 where
     T: ImageRepresentation,
 {
-    pub offset: Distance2D,
+    pub orientation: Orientation2D,
     pub representation: EntityFormat2D<T>,
 }
 
@@ -102,7 +122,7 @@ pub trait DynamicObject2D<T>
 where
     T: ImageRepresentation,
 {
-    fn position(&self) -> Point2D;
+    fn orientation(&self) -> Orientation2D;
     fn render(&self) -> Cow<[Entity2D<T>]>;
 }
 
@@ -110,7 +130,7 @@ pub struct StaticObject2D<T>
 where
     T: ImageRepresentation,
 {
-    pub position: Point2D,
+    pub orientation: Orientation2D,
     pub content: Vec<Entity2D<T>>,
 }
 
@@ -151,6 +171,8 @@ pub struct Point2D {
 }
 
 pub type Distance2D = Point2D;
+
+pub type Rotation2D = Point2D;
 
 mod targets;
 

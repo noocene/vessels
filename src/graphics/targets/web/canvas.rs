@@ -86,7 +86,7 @@ impl CanvasFrame {
                 content.for_each(|entity| match &entity.representation {
                 EntityFormat2D::RasterEntity2D(representation) => {
                     js! {
-                        @{&self.context}.drawImage(@{representation.texture.deref()}, @{base_position.x + entity.offset.x}, @{base_position.y + entity.offset.y});
+                        @{&self.context}.drawImage(@{representation.texture.deref()}, @{base_position.x + entity.orientation.position.x}, @{base_position.y + entity.orientation.position.y});
                     }
                 }
                 EntityFormat2D::VectorEntity2D(representation) => {
@@ -97,14 +97,14 @@ impl CanvasFrame {
                             match segment.0 {
                                 0 => {
                                     self.context.move_to(
-                                        (point.x + entity.offset.x) * self.pixel_ratio,
-                                        (point.y + entity.offset.y) * self.pixel_ratio,
+                                        (point.x + entity.orientation.position.x) * self.pixel_ratio,
+                                        (point.y + entity.orientation.position.y) * self.pixel_ratio,
                                     );
                                 }
                                 _ => {
                                     self.context.line_to(
-                                        (point.x + entity.offset.x) * self.pixel_ratio,
-                                        (point.y + entity.offset.y) * self.pixel_ratio,
+                                        (point.x + entity.orientation.position.x) * self.pixel_ratio,
+                                        (point.y + entity.orientation.position.y) * self.pixel_ratio,
                                     );
                                 }
                             }
@@ -134,13 +134,13 @@ impl CanvasFrame {
             let content: Iter<Entity2D<CanvasImage>>;
             match object {
                 Object2D::Dynamic(object) => {
-                    base_position = object.position();
+                    base_position = object.orientation().position;
                     let _content = object.render();
                     content = _content.iter();
                     draw(base_position, content);
                 }
                 Object2D::Static(object) => {
-                    base_position = object.position;
+                    base_position = object.orientation.position;
                     content = object.content.iter();
                     draw(base_position, content);
                 }
@@ -150,15 +150,15 @@ impl CanvasFrame {
 }
 
 impl DynamicObject2D<CanvasImage> for CanvasFrame {
-    fn position(&self) -> Point2D {
-        Point2D::default()
+    fn orientation(&self) -> Orientation2D {
+        Orientation2D::default()
     }
     fn render(&self) -> Cow<[Entity2D<CanvasImage>]> {
         Cow::from(vec![Entity2D {
             representation: EntityFormat2D::RasterEntity2D(RasterEntity2D {
                 texture: Box::new(self.canvas.clone()),
             }),
-            offset: Distance2D::default(),
+            orientation: Orientation2D::default(),
         }])
     }
 }
