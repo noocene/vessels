@@ -28,5 +28,8 @@ serde = { version = "1.0.84", optional = true }
 serde_derive = { version = "1.0.84", optional = true }
 stdweb-derive = { version = "0.5.1", optional = true }
 
+[profile.release]
+lto = true
+
 [features]
 check = ["stdweb", "serde", "serde_derive", "stdweb-derive"]
