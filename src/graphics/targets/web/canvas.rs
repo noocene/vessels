@@ -110,12 +110,15 @@ impl CanvasFrame {
                             }
                         }
                     });
+                    if representation.closed {
+                        self.context.close_path();
+                    }
                     match &representation.stroke {
                         Some(stroke) => {
                             self.context
                                 .set_stroke_style_color(&stroke.color.as_hex_color());
                             self.context.set_line_width(stroke.width.into());
-                            self.context.fill(FillRule::NonZero);
+                            self.context.stroke();
                         }
                         None => {}
                     }
@@ -123,7 +126,7 @@ impl CanvasFrame {
                         Some(fill) => {
                             self.context
                                 .set_fill_style_color(&fill.color.as_hex_color());
-                            self.context.stroke();
+                            self.context.fill(FillRule::NonZero);
                         }
                         None => {}
                     }

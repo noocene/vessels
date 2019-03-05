@@ -12,7 +12,7 @@ fn main() {
         content: vec![Entity2D {
             orientation: Orientation2D::default(),
             representation: EntityFormat2D::VectorEntity2D(VectorEntity2D {
-                closed: false,
+                closed: true,
                 stroke: Some(VectorEntity2DStroke {
                     color: RGBA8 {
                         r: 0,
