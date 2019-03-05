@@ -225,6 +225,7 @@ where
     fn resize(&self, size: Size2D);
     fn set_viewport(&self, viewport: Rect2D);
     fn get_size(&self) -> Size2D;
+    fn to_image(&self) -> Box<T>;
 }
 
 pub trait Graphics2D {

@@ -360,6 +360,10 @@ impl Frame2D<CanvasImage> for CanvasFrame {
     fn get_size(&self) -> Size2D {
         self.size.get()
     }
+    fn to_image(&self) -> Box<CanvasImage> {
+        self.draw();
+        Box::new(self.canvas.clone())
+    }
 }
 
 struct Canvas {
