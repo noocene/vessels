@@ -6,7 +6,7 @@ fn main() {
     let gfx = graphics::new();
     let mut root = gfx.frame();
     let mut rrect = StaticObject2D::from_entity(
-        Primitive::circle(200.)
+        Primitive::squircle(200., 1.)
             .fill(RGBA8::black().with_alpha(255).into())
             .finalize(),
     );

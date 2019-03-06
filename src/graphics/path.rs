@@ -271,6 +271,34 @@ impl Primitive {
             ),
         ])
     }
+    pub fn squircle<T>(radius: f64, k_factor: f64) -> StyleHelper<T>
+    where
+        T: ImageRepresentation,
+    {
+        StyleHelper::new(vec![
+            Segment::MoveTo(Point2D::new(radius, 0.)),
+            Segment::CubicTo(
+                Point2D::new(radius * 2., radius),
+                Point2D::new(radius * (1. + k_factor), 0.),
+                Point2D::new(radius * 2., radius * (1. - k_factor)),
+            ),
+            Segment::CubicTo(
+                Point2D::new(radius, radius * 2.),
+                Point2D::new(radius * 2., radius * (1. + k_factor)),
+                Point2D::new(radius * (1. + k_factor), radius * 2.),
+            ),
+            Segment::CubicTo(
+                Point2D::new(0., radius),
+                Point2D::new(radius * (1. - k_factor), radius * 2.),
+                Point2D::new(0., radius * (1. + k_factor)),
+            ),
+            Segment::CubicTo(
+                Point2D::new(radius, 0.),
+                Point2D::new(0., radius * (1. - k_factor)),
+                Point2D::new(radius * (1. - k_factor), 0.),
+            ),
+        ])
+    }
 }
 
 pub struct StyleHelper<T>
