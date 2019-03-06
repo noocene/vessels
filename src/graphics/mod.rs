@@ -1,8 +1,11 @@
 use crate::util::*;
+use crate::graphics::path::*;
 
 const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
 
 use std::borrow::Cow;
+
+pub mod path;
 
 pub trait ToHexColor {
     fn to_hex_color(&self) -> String;
@@ -63,23 +66,23 @@ impl ToHexColor for RGBA8 {
     }
 }
 
-impl<T> Into<VectorEntity2DFill<T>> for RGBA8
+impl<T> Into<Fill<T>> for RGBA8
 where
     T: ImageRepresentation,
 {
-    fn into(self) -> VectorEntity2DFill<T> {
-        VectorEntity2DFill {
+    fn into(self) -> Fill<T> {
+        Fill {
             content: self.into(),
         }
     }
 }
 
-impl<T> Into<VectorEntityTexture<T>> for RGBA8
+impl<T> Into<VectorTexture<T>> for RGBA8
 where
     T: ImageRepresentation,
 {
-    fn into(self) -> VectorEntityTexture<T> {
-        VectorEntityTexture::Solid(self)
+    fn into(self) -> VectorTexture<T> {
+        VectorTexture::Solid(self)
     }
 }
 
@@ -102,14 +105,6 @@ pub struct Image<T: PixelFormat, U: ImageFormat> {
 }
 
 #[derive(Clone)]
-pub enum VectorEntity2DSegment {
-    LineTo(Point2D),
-    MoveTo(Point2D),
-    QuadraticTo(Point2D, Point2D),
-    CubicTo(Point2D, Point2D, Point2D),
-}
-
-#[derive(Clone)]
 pub enum StrokeCapType {
     Butt,
     Round,
@@ -120,110 +115,6 @@ pub enum StrokeJoinType {
     Bevel,
     Round,
     Miter,
-}
-
-#[derive(Clone)]
-pub struct VectorEntityGradientStop {
-    pub offset: f64,
-    pub color: RGBA8,
-}
-
-#[derive(Clone)]
-pub struct VectorEntityLinearGradient {
-    pub stops: Vec<VectorEntityGradientStop>,
-    pub start: Point2D,
-    pub end: Point2D,
-}
-
-#[derive(Clone)]
-pub struct VectorEntity2DShadow {
-    pub color: RGBA8,
-    pub offset: Distance2D,
-    pub blur: f64,
-}
-
-impl VectorEntity2DShadow {
-    pub fn new(color: RGBA8) -> Self {
-        VectorEntity2DShadow {
-            color,
-            offset: Distance2D::default(),
-            blur: 0.,
-        }
-    }
-    pub fn blur(mut self, amount: f64) -> Self {
-        self.blur = amount;
-        self
-    }
-    pub fn offset(mut self, distance: Distance2D) -> Self {
-        self.offset = distance;
-        self
-    }
-}
-
-#[derive(Clone)]
-pub struct VectorEntityRadialGradient {
-    pub stops: Vec<VectorEntityGradientStop>,
-    pub start: Point2D,
-    pub start_radius: f64,
-    pub end: Point2D,
-    pub end_radius: f64,
-}
-
-#[derive(Clone)]
-pub enum VectorEntityTexture<T>
-where
-    T: ImageRepresentation,
-{
-    Solid(RGBA8),
-    LinearGradient(VectorEntityLinearGradient),
-    RadialGradient(VectorEntityRadialGradient),
-    Image(Box<T>),
-}
-
-#[derive(Clone)]
-pub struct VectorEntity2DStroke<T>
-where
-    T: ImageRepresentation,
-{
-    pub content: VectorEntityTexture<T>,
-    pub width: f32,
-    pub cap: StrokeCapType,
-    pub join: StrokeJoinType,
-}
-
-impl<T> Default for VectorEntity2DStroke<T>
-where
-    T: ImageRepresentation,
-{
-    fn default() -> Self {
-        VectorEntity2DStroke {
-            content: RGBA8::black().into(),
-            cap: StrokeCapType::Butt,
-            join: StrokeJoinType::Miter,
-            width: 1.,
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct VectorEntity2DFill<T>
-where
-    T: ImageRepresentation,
-{
-    pub content: VectorEntityTexture<T>,
-}
-
-#[derive(Clone)]
-pub struct Entity2D<T>
-where
-    T: ImageRepresentation,
-{
-    pub orientation: Transform2D,
-    pub segments: Vec<VectorEntity2DSegment>,
-    pub stroke: Option<VectorEntity2DStroke<T>>,
-    pub fill: Option<VectorEntity2DFill<T>>,
-    pub shadow: Option<VectorEntity2DShadow>,
-    pub closed: bool,
 }
 
 #[derive(Clone)]
@@ -277,7 +168,7 @@ where
     T: ImageRepresentation,
 {
     fn orientation(&self) -> Transform2D;
-    fn render(&self) -> Cow<[Entity2D<T>]>;
+    fn render(&self) -> Cow<[Path<T>]>;
 }
 
 pub struct StaticObject2D<T>
@@ -285,226 +176,18 @@ where
     T: ImageRepresentation,
 {
     pub orientation: Transform2D,
-    pub content: Vec<Entity2D<T>>,
+    pub content: Vec<Path<T>>,
 }
 
 impl<T> StaticObject2D<T>
 where
     T: ImageRepresentation,
 {
-    pub fn from_entity(entity: Entity2D<T>) -> Object2D<T> {
+    pub fn from_entity(entity: Path<T>) -> Object2D<T> {
         Object2D::Static(StaticObject2D {
             content: vec![entity],
             orientation: Transform2D::default(),
         })
-    }
-}
-
-#[derive(Default)]
-pub struct VectorGeometryBuilder {
-    segments: Vec<VectorEntity2DSegment>,
-}
-
-impl VectorGeometryBuilder {
-    pub fn new() -> Self {
-        VectorGeometryBuilder::default()
-    }
-    pub fn line_to(mut self, to: Point2D) -> Self {
-        self.segments.push(VectorEntity2DSegment::LineTo(to));
-        self
-    }
-    pub fn quadratic_to(mut self, to: Point2D, handle: Point2D) -> Self {
-        self.segments
-            .push(VectorEntity2DSegment::QuadraticTo(to, handle));
-        self
-    }
-    pub fn bezier_to(mut self, to: Point2D, handle_1: Point2D, handle_2: Point2D) -> Self {
-        self.segments
-            .push(VectorEntity2DSegment::CubicTo(to, handle_1, handle_2));
-        self
-    }
-    pub fn done<T>(self) -> VectorEntityBuilder<T>
-    where
-        T: ImageRepresentation,
-    {
-        VectorEntityBuilder::new(self.segments)
-    }
-}
-
-pub struct VectorGeometryPrimitive {}
-
-impl VectorGeometryPrimitive {
-    pub fn rectangle<T>(width: f64, height: f64) -> VectorEntityBuilder<T>
-    where
-        T: ImageRepresentation,
-    {
-        VectorEntityBuilder::new(vec![
-            VectorEntity2DSegment::LineTo(Point2D::new(width, 0.)),
-            VectorEntity2DSegment::LineTo(Point2D::new(width, height)),
-            VectorEntity2DSegment::LineTo(Point2D::new(0., height)),
-        ])
-    }
-    pub fn rounded_rectangle<T>(width: f64, height: f64, radius: f64) -> VectorEntityBuilder<T>
-    where
-        T: ImageRepresentation,
-    {
-        VectorEntityBuilder::new(vec![
-            VectorEntity2DSegment::MoveTo(Point2D::new(radius, 0.)),
-            VectorEntity2DSegment::LineTo(Point2D::new(width - radius, 0.)),
-            VectorEntity2DSegment::CubicTo(
-                Point2D::new(width, radius),
-                Point2D::new(
-                    width - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                    0.,
-                ),
-                Point2D::new(
-                    width,
-                    radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ),
-            ),
-            VectorEntity2DSegment::LineTo(Point2D::new(width, height - radius)),
-            VectorEntity2DSegment::CubicTo(
-                Point2D::new(width - radius, height),
-                Point2D::new(
-                    width,
-                    height - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ),
-                Point2D::new(
-                    width - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                    height,
-                ),
-            ),
-            VectorEntity2DSegment::LineTo(Point2D::new(radius, height)),
-            VectorEntity2DSegment::CubicTo(
-                Point2D::new(0., height - radius),
-                Point2D::new(
-                    radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                    height,
-                ),
-                Point2D::new(
-                    0.,
-                    height - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ),
-            ),
-            VectorEntity2DSegment::LineTo(Point2D::new(0., radius)),
-            VectorEntity2DSegment::CubicTo(
-                Point2D::new(radius, 0.),
-                Point2D::new(0., radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)),
-                Point2D::new(radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.),
-            ),
-        ])
-    }
-    pub fn square<T>(side_length: f64) -> VectorEntityBuilder<T>
-    where
-        T: ImageRepresentation,
-    {
-        VectorGeometryPrimitive::rectangle(side_length, side_length)
-    }
-    pub fn rounded_square<T>(side_length: f64, radius: f64) -> VectorEntityBuilder<T>
-    where
-        T: ImageRepresentation,
-    {
-        VectorGeometryPrimitive::rounded_rectangle(side_length, side_length, radius)
-    }
-}
-
-pub struct VectorEntityBuilder<T>
-where
-    T: ImageRepresentation,
-{
-    closed: bool,
-    geometry: Vec<VectorEntity2DSegment>,
-    fill: Option<VectorEntity2DFill<T>>,
-    stroke: Option<VectorEntity2DStroke<T>>,
-    shadow: Option<VectorEntity2DShadow>,
-}
-
-impl<T> VectorEntityBuilder<T>
-where
-    T: ImageRepresentation,
-{
-    pub fn new(geometry: Vec<VectorEntity2DSegment>) -> Self {
-        VectorEntityBuilder {
-            closed: false,
-            geometry,
-            fill: None,
-            shadow: None,
-            stroke: None,
-        }
-    }
-    pub fn close(mut self) -> Self {
-        self.closed = true;
-        self
-    }
-    pub fn fill(mut self, fill: VectorEntity2DFill<T>) -> Self
-    where
-        T: ImageRepresentation,
-    {
-        self.fill = Some(fill);
-        self
-    }
-    pub fn stroke(mut self, stroke: VectorEntity2DStroke<T>) -> Self
-    where
-        T: ImageRepresentation,
-    {
-        self.stroke = Some(stroke);
-        self
-    }
-    pub fn shadow(mut self, shadow: VectorEntity2DShadow) -> Self
-    where
-        T: ImageRepresentation,
-    {
-        self.shadow = Some(shadow);
-        self
-    }
-    pub fn finalize(self) -> Entity2D<T>
-    where
-        T: ImageRepresentation,
-    {
-        Entity2D {
-            closed: self.closed,
-            segments: self.geometry,
-            orientation: Transform2D::default(),
-            fill: self.fill,
-            shadow: self.shadow,
-            stroke: self.stroke,
-        }
-    }
-}
-
-pub struct StrokeBuilder<T>
-where
-    T: ImageRepresentation,
-{
-    stroke: VectorEntity2DStroke<T>,
-}
-
-impl<T> StrokeBuilder<T>
-where
-    T: ImageRepresentation,
-{
-    pub fn new(content: VectorEntityTexture<T>, width: f32) -> Self {
-        let mut builder = StrokeBuilder {
-            stroke: VectorEntity2DStroke::default(),
-        };
-        builder.stroke.content = content;
-        builder.stroke.width = width;
-        builder
-    }
-    pub fn cap_round(mut self) -> Self {
-        self.stroke.cap = StrokeCapType::Round;
-        self
-    }
-    pub fn join_bevel(mut self) -> Self {
-        self.stroke.join = StrokeJoinType::Bevel;
-        self
-    }
-    pub fn join_round(mut self) -> Self {
-        self.stroke.join = StrokeJoinType::Round;
-        self
-    }
-    pub fn finalize(self) -> VectorEntity2DStroke<T> {
-        self.stroke
     }
 }
 

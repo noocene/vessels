@@ -99,7 +99,7 @@ impl CanvasFrame {
             viewport.size.height * self.pixel_ratio,
         );
         self.contents.iter().for_each(|object| {
-            let draw = |base_position: Point2D, content: Iter<Entity2D<CanvasImage>>| {
+            let draw = |base_position: Point2D, content: Iter<Path<CanvasImage>>| {
                 content.for_each(|entity| {
                     let matrix = entity.orientation.to_matrix();
                     self.context.set_transform(1.,0.,0.,1.,-viewport.position.x * self.pixel_ratio,-viewport.position.y * self.pixel_ratio);
@@ -121,7 +121,7 @@ impl CanvasFrame {
                     self.context.move_to(entity.orientation.position.x, entity.orientation.position.y);
                     segments.for_each(|segment| {
                         match segment {
-                            VectorEntity2DSegment::LineTo(point) => {
+                            Segment2D::LineTo(point) => {
                                 self.context.line_to(
                                     (base_position.x + point.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
@@ -129,7 +129,7 @@ impl CanvasFrame {
                                         * self.pixel_ratio,
                                 );
                             },
-                            VectorEntity2DSegment::MoveTo(point) => {
+                            Segment2D::MoveTo(point) => {
                                 self.context.move_to(
                                     (base_position.x + point.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
@@ -137,7 +137,7 @@ impl CanvasFrame {
                                         * self.pixel_ratio,
                                 );
                             },
-                            VectorEntity2DSegment::CubicTo(point, handle_1, handle_2) => {
+                            Segment2D::CubicTo(point, handle_1, handle_2) => {
                                 self.context.bezier_curve_to(
                                     (base_position.x + handle_1.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
@@ -153,7 +153,7 @@ impl CanvasFrame {
                                         * self.pixel_ratio,
                                 );
                             }
-                            VectorEntity2DSegment::QuadraticTo(point, handle) => {
+                            Segment2D::QuadraticTo(point, handle) => {
                                 self.context.quadratic_curve_to(
                                     (base_position.x + handle.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
@@ -182,10 +182,10 @@ impl CanvasFrame {
                                 StrokeJoinType::Bevel => LineJoin::Bevel,
                             });
                             match &stroke.content {
-                                VectorEntityTexture::Solid(color) => {
+                                VectorTexture::Solid(color) => {
                                     self.context.set_stroke_style_color(&color.to_rgba_color());
                                 }
-                                VectorEntityTexture::LinearGradient(gradient) => {
+                                VectorTexture::LinearGradient(gradient) => {
                                     let canvas_gradient = self.context.create_linear_gradient(
                                         gradient.start.x,
                                         gradient.start.y,
@@ -202,7 +202,7 @@ impl CanvasFrame {
                                     });
                                     self.context.set_stroke_style_gradient(&canvas_gradient);
                                 }
-                                VectorEntityTexture::Image(image) => {
+                                VectorTexture::Image(image) => {
                                     let pattern: CanvasPattern = js! {
                                         @{&self.context}.createPattern(@{image.deref()}, "no-repeat");
                                     }
@@ -210,7 +210,7 @@ impl CanvasFrame {
                                     .unwrap();
                                     self.context.set_stroke_style_pattern(&pattern);
                                 }
-                                VectorEntityTexture::RadialGradient(gradient) => {
+                                VectorTexture::RadialGradient(gradient) => {
                                     let canvas_gradient = self
                                         .context
                                         .create_radial_gradient(
@@ -241,10 +241,10 @@ impl CanvasFrame {
                     match &entity.fill {
                         Some(fill) => {
                             match &fill.content {
-                                VectorEntityTexture::Solid(color) => {
+                                VectorTexture::Solid(color) => {
                                     self.context.set_fill_style_color(&color.to_rgba_color());
                                 }
-                                VectorEntityTexture::Image(image) => {
+                                VectorTexture::Image(image) => {
                                     let pattern: CanvasPattern = js! {
                                         return @{&self.context}.createPattern(@{image.deref()}, "no-repeat");
                                     }
@@ -252,7 +252,7 @@ impl CanvasFrame {
                                     .unwrap();
                                     self.context.set_fill_style_pattern(&pattern);
                                 }
-                                VectorEntityTexture::LinearGradient(gradient) => {
+                                VectorTexture::LinearGradient(gradient) => {
                                     let canvas_gradient = self.context.create_linear_gradient(
                                         gradient.start.x,
                                         gradient.start.y,
@@ -269,7 +269,7 @@ impl CanvasFrame {
                                     });
                                     self.context.set_fill_style_gradient(&canvas_gradient);
                                 }
-                                VectorEntityTexture::RadialGradient(gradient) => {
+                                VectorTexture::RadialGradient(gradient) => {
                                     let canvas_gradient = self
                                         .context
                                         .create_radial_gradient(
@@ -299,7 +299,7 @@ impl CanvasFrame {
                 });
             };
             let base_position: Point2D;
-            let content: Iter<Entity2D<CanvasImage>>;
+            let content: Iter<Path<CanvasImage>>;
             match object {
                 Object2D::Dynamic(object) => {
                     base_position = object.orientation().position;
@@ -321,28 +321,28 @@ impl DynamicObject2D<CanvasImage> for CanvasFrame {
     fn orientation(&self) -> Transform2D {
         Transform2D::default()
     }
-    fn render(&self) -> Cow<[Entity2D<CanvasImage>]> {
+    fn render(&self) -> Cow<[Path<CanvasImage>]> {
         self.draw();
         let size = self.size.get();
-        Cow::from(vec![Entity2D {
+        Cow::from(vec![Path {
             orientation: Transform2D::default(),
-            fill: Some(VectorEntity2DFill {
-                content: VectorEntityTexture::Image(Box::new(self.canvas.clone())),
+            fill: Some(Fill {
+                content: VectorTexture::Image(Box::new(self.canvas.clone())),
             }),
             shadow: None,
             stroke: None,
             closed: true,
             segments: vec![
-                VectorEntity2DSegment::LineTo(Point2D { x: 0., y: 0. }),
-                VectorEntity2DSegment::LineTo(Point2D {
+                Segment2D::LineTo(Point2D { x: 0., y: 0. }),
+                Segment2D::LineTo(Point2D {
                     x: 0.,
                     y: size.height,
                 }),
-                VectorEntity2DSegment::LineTo(Point2D {
+                Segment2D::LineTo(Point2D {
                     x: size.width,
                     y: size.height,
                 }),
-                VectorEntity2DSegment::LineTo(Point2D {
+                Segment2D::LineTo(Point2D {
                     x: size.width,
                     y: 0.,
                 }),
