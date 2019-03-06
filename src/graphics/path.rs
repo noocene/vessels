@@ -42,8 +42,8 @@ impl Shadow {
         self.blur = amount;
         self
     }
-    pub fn offset(mut self, Distance2D: Distance2D) -> Self {
-        self.offset = Distance2D;
+    pub fn offset(mut self, distance: Distance2D) -> Self {
+        self.offset = distance;
         self
     }
 }
