@@ -1,8 +1,6 @@
 use crate::graphics::path::*;
 use crate::util::*;
 
-const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
-
 use std::borrow::Cow;
 
 pub mod path;

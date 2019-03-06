@@ -1,5 +1,7 @@
 use crate::graphics::*;
 
+const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
+
 #[derive(Clone)]
 pub enum Segment {
     LineTo(Point2D),
@@ -228,6 +230,46 @@ impl Primitive {
         T: ImageRepresentation,
     {
         Primitive::rounded_rectangle(side_length, side_length, radius)
+    }
+    pub fn circle<T>(radius: f64) -> StyleHelper<T>
+    where
+        T: ImageRepresentation,
+    {
+        StyleHelper::new(vec![
+            Segment::MoveTo(Point2D::new(radius, 0.)),
+            Segment::CubicTo(
+                Point2D::new(radius * 2., radius),
+                Point2D::new(radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.),
+                Point2D::new(
+                    radius * 2.,
+                    radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                ),
+            ),
+            Segment::CubicTo(
+                Point2D::new(radius, radius * 2.),
+                Point2D::new(
+                    radius * 2.,
+                    radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                ),
+                Point2D::new(
+                    radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                    radius * 2.,
+                ),
+            ),
+            Segment::CubicTo(
+                Point2D::new(0., radius),
+                Point2D::new(
+                    radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                    radius * 2.,
+                ),
+                Point2D::new(0., radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)),
+            ),
+            Segment::CubicTo(
+                Point2D::new(radius, 0.),
+                Point2D::new(0., radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)),
+                Point2D::new(radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.),
+            ),
+        ])
     }
 }
 
