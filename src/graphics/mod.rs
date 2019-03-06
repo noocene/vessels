@@ -1,5 +1,5 @@
-use crate::util::*;
 use crate::graphics::path::*;
+use crate::util::*;
 
 const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
 
@@ -77,12 +77,12 @@ where
     }
 }
 
-impl<T> Into<VectorTexture<T>> for RGBA8
+impl<T> Into<Texture<T>> for RGBA8
 where
     T: ImageRepresentation,
 {
-    fn into(self) -> VectorTexture<T> {
-        VectorTexture::Solid(self)
+    fn into(self) -> Texture<T> {
+        Texture::Solid(self)
     }
 }
 

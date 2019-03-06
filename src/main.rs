@@ -1,16 +1,12 @@
 use vitruvia::graphics;
-use vitruvia::graphics::{
-    Distance2D, Frame2D, Graphics2D, Object2D, StaticObject2D,  RGBA8,
-};
-use vitruvia::graphics::path::{
-    StrokeBuilder, Shadow2D,GeometryPrimitive,
-};
+use vitruvia::graphics::path::Primitive;
+use vitruvia::graphics::{Frame2D, Graphics2D, Object2D, StaticObject2D, RGBA8};
 
 fn main() {
     let gfx = graphics::new();
     let mut root = gfx.frame();
     let mut rrect = StaticObject2D::from_entity(
-        GeometryPrimitive::rounded_square(200., 10.)
+        Primitive::rounded_square(200., 10.)
             .fill(RGBA8::black().with_alpha(255).into())
             .finalize(),
     );

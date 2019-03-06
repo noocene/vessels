@@ -121,7 +121,7 @@ impl CanvasFrame {
                     self.context.move_to(entity.orientation.position.x, entity.orientation.position.y);
                     segments.for_each(|segment| {
                         match segment {
-                            Segment2D::LineTo(point) => {
+                            Segment::LineTo(point) => {
                                 self.context.line_to(
                                     (base_position.x + point.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
@@ -129,7 +129,7 @@ impl CanvasFrame {
                                         * self.pixel_ratio,
                                 );
                             },
-                            Segment2D::MoveTo(point) => {
+                            Segment::MoveTo(point) => {
                                 self.context.move_to(
                                     (base_position.x + point.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
@@ -137,7 +137,7 @@ impl CanvasFrame {
                                         * self.pixel_ratio,
                                 );
                             },
-                            Segment2D::CubicTo(point, handle_1, handle_2) => {
+                            Segment::CubicTo(point, handle_1, handle_2) => {
                                 self.context.bezier_curve_to(
                                     (base_position.x + handle_1.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
@@ -153,7 +153,7 @@ impl CanvasFrame {
                                         * self.pixel_ratio,
                                 );
                             }
-                            Segment2D::QuadraticTo(point, handle) => {
+                            Segment::QuadraticTo(point, handle) => {
                                 self.context.quadratic_curve_to(
                                     (base_position.x + handle.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
@@ -182,10 +182,10 @@ impl CanvasFrame {
                                 StrokeJoinType::Bevel => LineJoin::Bevel,
                             });
                             match &stroke.content {
-                                VectorTexture::Solid(color) => {
+                                Texture::Solid(color) => {
                                     self.context.set_stroke_style_color(&color.to_rgba_color());
                                 }
-                                VectorTexture::LinearGradient(gradient) => {
+                                Texture::LinearGradient(gradient) => {
                                     let canvas_gradient = self.context.create_linear_gradient(
                                         gradient.start.x,
                                         gradient.start.y,
@@ -202,7 +202,7 @@ impl CanvasFrame {
                                     });
                                     self.context.set_stroke_style_gradient(&canvas_gradient);
                                 }
-                                VectorTexture::Image(image) => {
+                                Texture::Image(image) => {
                                     let pattern: CanvasPattern = js! {
                                         @{&self.context}.createPattern(@{image.deref()}, "no-repeat");
                                     }
@@ -210,7 +210,7 @@ impl CanvasFrame {
                                     .unwrap();
                                     self.context.set_stroke_style_pattern(&pattern);
                                 }
-                                VectorTexture::RadialGradient(gradient) => {
+                                Texture::RadialGradient(gradient) => {
                                     let canvas_gradient = self
                                         .context
                                         .create_radial_gradient(
@@ -241,10 +241,10 @@ impl CanvasFrame {
                     match &entity.fill {
                         Some(fill) => {
                             match &fill.content {
-                                VectorTexture::Solid(color) => {
+                                Texture::Solid(color) => {
                                     self.context.set_fill_style_color(&color.to_rgba_color());
                                 }
-                                VectorTexture::Image(image) => {
+                                Texture::Image(image) => {
                                     let pattern: CanvasPattern = js! {
                                         return @{&self.context}.createPattern(@{image.deref()}, "no-repeat");
                                     }
@@ -252,7 +252,7 @@ impl CanvasFrame {
                                     .unwrap();
                                     self.context.set_fill_style_pattern(&pattern);
                                 }
-                                VectorTexture::LinearGradient(gradient) => {
+                                Texture::LinearGradient(gradient) => {
                                     let canvas_gradient = self.context.create_linear_gradient(
                                         gradient.start.x,
                                         gradient.start.y,
@@ -269,7 +269,7 @@ impl CanvasFrame {
                                     });
                                     self.context.set_fill_style_gradient(&canvas_gradient);
                                 }
-                                VectorTexture::RadialGradient(gradient) => {
+                                Texture::RadialGradient(gradient) => {
                                     let canvas_gradient = self
                                         .context
                                         .create_radial_gradient(
@@ -327,22 +327,22 @@ impl DynamicObject2D<CanvasImage> for CanvasFrame {
         Cow::from(vec![Path {
             orientation: Transform2D::default(),
             fill: Some(Fill {
-                content: VectorTexture::Image(Box::new(self.canvas.clone())),
+                content: Texture::Image(Box::new(self.canvas.clone())),
             }),
             shadow: None,
             stroke: None,
             closed: true,
             segments: vec![
-                Segment2D::LineTo(Point2D { x: 0., y: 0. }),
-                Segment2D::LineTo(Point2D {
+                Segment::LineTo(Point2D { x: 0., y: 0. }),
+                Segment::LineTo(Point2D {
                     x: 0.,
                     y: size.height,
                 }),
-                Segment2D::LineTo(Point2D {
+                Segment::LineTo(Point2D {
                     x: size.width,
                     y: size.height,
                 }),
-                Segment2D::LineTo(Point2D {
+                Segment::LineTo(Point2D {
                     x: size.width,
                     y: 0.,
                 }),

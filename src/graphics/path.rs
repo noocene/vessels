@@ -1,7 +1,7 @@
 use crate::graphics::*;
 
 #[derive(Clone)]
-pub enum Segment2D {
+pub enum Segment {
     LineTo(Point2D),
     MoveTo(Point2D),
     QuadraticTo(Point2D, Point2D),
@@ -22,15 +22,15 @@ pub struct LinearGradient {
 }
 
 #[derive(Clone)]
-pub struct Shadow2D {
+pub struct Shadow {
     pub color: RGBA8,
     pub offset: Distance2D,
     pub blur: f64,
 }
 
-impl Shadow2D {
+impl Shadow {
     pub fn new(color: RGBA8) -> Self {
-        Shadow2D {
+        Shadow {
             color,
             offset: Distance2D::default(),
             blur: 0.,
@@ -40,8 +40,8 @@ impl Shadow2D {
         self.blur = amount;
         self
     }
-    pub fn offset(mut self, distance: Distance2D) -> Self {
-        self.offset = distance;
+    pub fn offset(mut self, Distance2D: Distance2D) -> Self {
+        self.offset = Distance2D;
         self
     }
 }
@@ -56,7 +56,7 @@ pub struct RadialGradient {
 }
 
 #[derive(Clone)]
-pub enum VectorTexture<T>
+pub enum Texture<T>
 where
     T: ImageRepresentation,
 {
@@ -71,7 +71,7 @@ pub struct Stroke<T>
 where
     T: ImageRepresentation,
 {
-    pub content: VectorTexture<T>,
+    pub content: Texture<T>,
     pub width: f32,
     pub cap: StrokeCapType,
     pub join: StrokeJoinType,
@@ -109,7 +109,7 @@ pub struct Fill<T>
 where
     T: ImageRepresentation,
 {
-    pub content: VectorTexture<T>,
+    pub content: Texture<T>,
 }
 
 #[derive(Clone)]
@@ -118,65 +118,63 @@ where
     T: ImageRepresentation,
 {
     pub orientation: Transform2D,
-    pub segments: Vec<Segment2D>,
+    pub segments: Vec<Segment>,
     pub stroke: Option<Stroke<T>>,
     pub fill: Option<Fill<T>>,
-    pub shadow: Option<Shadow2D>,
+    pub shadow: Option<Shadow>,
     pub closed: bool,
 }
 
 #[derive(Default)]
-pub struct GeometryBuilder {
-    segments: Vec<Segment2D>,
+pub struct Builder {
+    segments: Vec<Segment>,
 }
 
-impl GeometryBuilder {
+impl Builder {
     pub fn new() -> Self {
-        GeometryBuilder::default()
+        Builder::default()
     }
     pub fn line_to(mut self, to: Point2D) -> Self {
-        self.segments.push(Segment2D::LineTo(to));
+        self.segments.push(Segment::LineTo(to));
         self
     }
     pub fn quadratic_to(mut self, to: Point2D, handle: Point2D) -> Self {
-        self.segments
-            .push(Segment2D::QuadraticTo(to, handle));
+        self.segments.push(Segment::QuadraticTo(to, handle));
         self
     }
     pub fn bezier_to(mut self, to: Point2D, handle_1: Point2D, handle_2: Point2D) -> Self {
-        self.segments
-            .push(Segment2D::CubicTo(to, handle_1, handle_2));
+        self.segments.push(Segment::CubicTo(to, handle_1, handle_2));
         self
     }
-    pub fn done<T>(self) -> Builder<T>
+    pub fn done<T>(self) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
-        Builder::new(self.segments)
+        StyleHelper::new(self.segments)
     }
 }
 
-pub struct GeometryPrimitive {}
+pub struct Primitive {}
 
-impl GeometryPrimitive {
-    pub fn rectangle<T>(width: f64, height: f64) -> Builder<T>
+impl Primitive {
+    pub fn rectangle<T>(width: f64, height: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
-        Builder::new(vec![
-            Segment2D::LineTo(Point2D::new(width, 0.)),
-            Segment2D::LineTo(Point2D::new(width, height)),
-            Segment2D::LineTo(Point2D::new(0., height)),
+        StyleHelper::new(vec![
+            Segment::LineTo(Point2D::new(width, 0.)),
+            Segment::LineTo(Point2D::new(width, height)),
+            Segment::LineTo(Point2D::new(0., height)),
         ])
     }
-    pub fn rounded_rectangle<T>(width: f64, height: f64, radius: f64) -> Builder<T>
+    pub fn rounded_rectangle<T>(width: f64, height: f64, radius: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
-        Builder::new(vec![
-            Segment2D::MoveTo(Point2D::new(radius, 0.)),
-            Segment2D::LineTo(Point2D::new(width - radius, 0.)),
-            Segment2D::CubicTo(
+        StyleHelper::new(vec![
+            Segment::MoveTo(Point2D::new(radius, 0.)),
+            Segment::LineTo(Point2D::new(width - radius, 0.)),
+            Segment::CubicTo(
                 Point2D::new(width, radius),
                 Point2D::new(
                     width - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
@@ -187,8 +185,8 @@ impl GeometryPrimitive {
                     radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
                 ),
             ),
-            Segment2D::LineTo(Point2D::new(width, height - radius)),
-            Segment2D::CubicTo(
+            Segment::LineTo(Point2D::new(width, height - radius)),
+            Segment::CubicTo(
                 Point2D::new(width - radius, height),
                 Point2D::new(
                     width,
@@ -199,8 +197,8 @@ impl GeometryPrimitive {
                     height,
                 ),
             ),
-            Segment2D::LineTo(Point2D::new(radius, height)),
-            Segment2D::CubicTo(
+            Segment::LineTo(Point2D::new(radius, height)),
+            Segment::CubicTo(
                 Point2D::new(0., height - radius),
                 Point2D::new(
                     radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
@@ -211,45 +209,45 @@ impl GeometryPrimitive {
                     height - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
                 ),
             ),
-            Segment2D::LineTo(Point2D::new(0., radius)),
-            Segment2D::CubicTo(
+            Segment::LineTo(Point2D::new(0., radius)),
+            Segment::CubicTo(
                 Point2D::new(radius, 0.),
                 Point2D::new(0., radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)),
                 Point2D::new(radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.),
             ),
         ])
     }
-    pub fn square<T>(side_length: f64) -> Builder<T>
+    pub fn square<T>(side_length: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
-        GeometryPrimitive::rectangle(side_length, side_length)
+        Primitive::rectangle(side_length, side_length)
     }
-    pub fn rounded_square<T>(side_length: f64, radius: f64) -> Builder<T>
+    pub fn rounded_square<T>(side_length: f64, radius: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
-        GeometryPrimitive::rounded_rectangle(side_length, side_length, radius)
+        Primitive::rounded_rectangle(side_length, side_length, radius)
     }
 }
 
-pub struct Builder<T>
+pub struct StyleHelper<T>
 where
     T: ImageRepresentation,
 {
     closed: bool,
-    geometry: Vec<Segment2D>,
+    geometry: Vec<Segment>,
     fill: Option<Fill<T>>,
     stroke: Option<Stroke<T>>,
-    shadow: Option<Shadow2D>,
+    shadow: Option<Shadow>,
 }
 
-impl<T> Builder<T>
+impl<T> StyleHelper<T>
 where
     T: ImageRepresentation,
 {
-    pub fn new(geometry: Vec<Segment2D>) -> Self {
-        Builder {
+    pub fn new(geometry: Vec<Segment>) -> Self {
+        StyleHelper {
             closed: false,
             geometry,
             fill: None,
@@ -275,7 +273,7 @@ where
         self.stroke = Some(stroke);
         self
     }
-    pub fn shadow(mut self, shadow: Shadow2D) -> Self
+    pub fn shadow(mut self, shadow: Shadow) -> Self
     where
         T: ImageRepresentation,
     {
@@ -308,7 +306,7 @@ impl<T> StrokeBuilder<T>
 where
     T: ImageRepresentation,
 {
-    pub fn new(content: VectorTexture<T>, width: f32) -> Self {
+    pub fn new(content: Texture<T>, width: f32) -> Self {
         let mut builder = StrokeBuilder {
             stroke: Stroke::default(),
         };
