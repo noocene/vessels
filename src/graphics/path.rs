@@ -271,33 +271,43 @@ impl Primitive {
             ),
         ])
     }
-    pub fn squircle<T>(radius: f64, k_factor: f64) -> StyleHelper<T>
+    pub fn continuous_curvature_rectangle<T>(
+        horizontal_radius: f64,
+        vertical_radius: f64,
+        k_factor: f64,
+    ) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
         StyleHelper::new(vec![
-            Segment::MoveTo(Point2D::new(radius, 0.)),
+            Segment::MoveTo(Point2D::new(horizontal_radius, 0.)),
             Segment::CubicTo(
-                Point2D::new(radius * 2., radius),
-                Point2D::new(radius * (1. + k_factor), 0.),
-                Point2D::new(radius * 2., radius * (1. - k_factor)),
+                Point2D::new(horizontal_radius * 2., vertical_radius),
+                Point2D::new(horizontal_radius * (1. + k_factor), 0.),
+                Point2D::new(horizontal_radius * 2., vertical_radius * (1. - k_factor)),
             ),
             Segment::CubicTo(
-                Point2D::new(radius, radius * 2.),
-                Point2D::new(radius * 2., radius * (1. + k_factor)),
-                Point2D::new(radius * (1. + k_factor), radius * 2.),
+                Point2D::new(horizontal_radius, vertical_radius * 2.),
+                Point2D::new(horizontal_radius * 2., vertical_radius * (1. + k_factor)),
+                Point2D::new(horizontal_radius * (1. + k_factor), vertical_radius * 2.),
             ),
             Segment::CubicTo(
-                Point2D::new(0., radius),
-                Point2D::new(radius * (1. - k_factor), radius * 2.),
-                Point2D::new(0., radius * (1. + k_factor)),
+                Point2D::new(0., vertical_radius),
+                Point2D::new(horizontal_radius * (1. - k_factor), vertical_radius * 2.),
+                Point2D::new(0., vertical_radius * (1. + k_factor)),
             ),
             Segment::CubicTo(
-                Point2D::new(radius, 0.),
-                Point2D::new(0., radius * (1. - k_factor)),
-                Point2D::new(radius * (1. - k_factor), 0.),
+                Point2D::new(horizontal_radius, 0.),
+                Point2D::new(0., vertical_radius * (1. - k_factor)),
+                Point2D::new(horizontal_radius * (1. - k_factor), 0.),
             ),
         ])
+    }
+    pub fn continuous_curvature_square<T>(radius: f64, k_factor: f64) -> StyleHelper<T>
+    where
+        T: ImageRepresentation,
+    {
+        Primitive::continuous_curvature_rectangle(radius, radius, k_factor)
     }
 }
 
