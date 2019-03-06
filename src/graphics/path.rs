@@ -92,6 +92,19 @@ where
 }
 
 #[derive(Clone)]
+pub enum StrokeCapType {
+    Butt,
+    Round,
+}
+
+#[derive(Clone)]
+pub enum StrokeJoinType {
+    Bevel,
+    Round,
+    Miter,
+}
+
+#[derive(Clone)]
 pub struct Fill<T>
 where
     T: ImageRepresentation,

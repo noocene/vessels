@@ -105,19 +105,6 @@ pub struct Image<T: PixelFormat, U: ImageFormat> {
 }
 
 #[derive(Clone)]
-pub enum StrokeCapType {
-    Butt,
-    Round,
-}
-
-#[derive(Clone)]
-pub enum StrokeJoinType {
-    Bevel,
-    Round,
-    Miter,
-}
-
-#[derive(Clone)]
 pub struct Transform2D {
     pub position: Point2D,
     pub scale: Scale2D,
