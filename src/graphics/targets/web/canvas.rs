@@ -129,12 +129,16 @@ impl CanvasFrame {
                                         * self.pixel_ratio,
                                 );
                             },
-                            VectorEntity2DSegment::BezierTo(point, handle_1, handle_2) => {
-                                self.context.bezier_curve_to(
+                            VectorEntity2DSegment::MoveTo(point) => {
+                                self.context.move_to(
                                     (base_position.x + point.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
                                     (base_position.x + point.y + entity.orientation.position.y)
                                         * self.pixel_ratio,
+                                );
+                            },
+                            VectorEntity2DSegment::CubicTo(point, handle_1, handle_2) => {
+                                self.context.bezier_curve_to(
                                     (base_position.x + handle_1.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
                                     (base_position.x + handle_1.y + entity.orientation.position.y)
@@ -143,17 +147,21 @@ impl CanvasFrame {
                                         * self.pixel_ratio,
                                     (base_position.x + handle_2.y + entity.orientation.position.y)
                                         * self.pixel_ratio,
-                                );
-                            }
-                            VectorEntity2DSegment::QuadraticTo(point, handle) => {
-                                self.context.quadratic_curve_to(
                                     (base_position.x + point.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
                                     (base_position.x + point.y + entity.orientation.position.y)
                                         * self.pixel_ratio,
+                                );
+                            }
+                            VectorEntity2DSegment::QuadraticTo(point, handle) => {
+                                self.context.quadratic_curve_to(
                                     (base_position.x + handle.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
                                     (base_position.x + handle.y + entity.orientation.position.y)
+                                        * self.pixel_ratio,
+                                    (base_position.x + point.x + entity.orientation.position.x)
+                                        * self.pixel_ratio,
+                                    (base_position.x + point.y + entity.orientation.position.y)
                                         * self.pixel_ratio,
                                 );
                             }

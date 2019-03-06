@@ -1,5 +1,7 @@
 use crate::util::*;
 
+const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
+
 use std::borrow::Cow;
 
 pub trait ToHexColor {
@@ -102,8 +104,9 @@ pub struct Image<T: PixelFormat, U: ImageFormat> {
 #[derive(Clone)]
 pub enum VectorEntity2DSegment {
     LineTo(Point2D),
+    MoveTo(Point2D),
     QuadraticTo(Point2D, Point2D),
-    BezierTo(Point2D, Point2D, Point2D),
+    CubicTo(Point2D, Point2D, Point2D),
 }
 
 #[derive(Clone)]
@@ -253,6 +256,10 @@ impl Transform2D {
             self.position.y,
         ]
     }
+    pub fn translate(&mut self, x: f64, y: f64) {
+        self.position.x += x;
+        self.position.y += y;
+    }
 }
 
 impl Default for Transform2D {
@@ -313,7 +320,7 @@ impl VectorGeometryBuilder {
     }
     pub fn bezier_to(mut self, to: Point2D, handle_1: Point2D, handle_2: Point2D) -> Self {
         self.segments
-            .push(VectorEntity2DSegment::BezierTo(to, handle_1, handle_2));
+            .push(VectorEntity2DSegment::CubicTo(to, handle_1, handle_2));
         self
     }
     pub fn done<T>(self) -> VectorEntityBuilder<T>
@@ -337,11 +344,67 @@ impl VectorGeometryPrimitive {
             VectorEntity2DSegment::LineTo(Point2D::new(0., height)),
         ])
     }
+    pub fn rounded_rectangle<T>(width: f64, height: f64, radius: f64) -> VectorEntityBuilder<T>
+    where
+        T: ImageRepresentation,
+    {
+        VectorEntityBuilder::new(vec![
+            VectorEntity2DSegment::MoveTo(Point2D::new(radius, 0.)),
+            VectorEntity2DSegment::LineTo(Point2D::new(width - radius, 0.)),
+            VectorEntity2DSegment::CubicTo(
+                Point2D::new(width, radius),
+                Point2D::new(
+                    width - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                    0.,
+                ),
+                Point2D::new(
+                    width,
+                    radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                ),
+            ),
+            VectorEntity2DSegment::LineTo(Point2D::new(width, height - radius)),
+            VectorEntity2DSegment::CubicTo(
+                Point2D::new(width - radius, height),
+                Point2D::new(
+                    width,
+                    height - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                ),
+                Point2D::new(
+                    width - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                    height,
+                ),
+            ),
+            VectorEntity2DSegment::LineTo(Point2D::new(radius, height)),
+            VectorEntity2DSegment::CubicTo(
+                Point2D::new(0., height - radius),
+                Point2D::new(
+                    radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                    height,
+                ),
+                Point2D::new(
+                    0.,
+                    height - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                ),
+            ),
+            VectorEntity2DSegment::LineTo(Point2D::new(0., radius)),
+            VectorEntity2DSegment::CubicTo(
+                Point2D::new(radius, 0.),
+                Point2D::new(0., radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)),
+                Point2D::new(radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.),
+            ),
+        ])
+    }
     pub fn square<T>(side_length: f64) -> VectorEntityBuilder<T>
     where
         T: ImageRepresentation,
     {
         VectorGeometryPrimitive::rectangle(side_length, side_length)
+    }
+    pub fn rounded_square<T>(side_length: f64, radius: f64) -> VectorEntityBuilder<T>
+    where
+        T: ImageRepresentation,
+    {
+        VectorGeometryPrimitive::rounded_rectangle(side_length, side_length, radius)
     }
 }
 
