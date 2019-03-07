@@ -1,5 +1,7 @@
 use crate::graphics::*;
 
+use crate::errors::Error;
+
 const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
 
 #[derive(Clone)]
@@ -14,6 +16,19 @@ pub enum Segment {
 pub struct GradientStop {
     pub offset: f64,
     pub color: RGBA8,
+}
+
+impl GradientStop {
+    fn new(offset: f64, color: RGBA8) -> Result<Self, Error> {
+       if offset > 1.0 || offset < 0.0 {
+           return Err(Error::color_stop());
+       } 
+
+       Ok(GradientStop {
+           offset: offset,
+           color: color
+       })
+    }
 }
 
 #[derive(Clone)]

@@ -16,8 +16,8 @@ impl Error {
         self.ctx.get_context()
     }       
 
-    pub(crate) fn color_stop(err: stdweb::web::error::AddColorStopError) -> Error {
-        Error::from(ErrorKind::ColorStopError(err.to_string()))
+    pub(crate) fn color_stop() -> Error {
+        Error::from(ErrorKind::ColorStopOffsetError)
     }
 }
 
@@ -39,7 +39,7 @@ impl fmt::Display for Error {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ErrorKind {
-    ColorStopError(String),
+    ColorStopOffsetError,
 
     #[doc(hidden)]
     __Nonexhaustive,
@@ -48,8 +48,8 @@ pub enum ErrorKind {
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ErrorKind::ColorStopError(ref msg) => {
-                write!(f, "{}", msg)
+            ErrorKind::ColorStopOffsetError => {
+                write!(f, "Colorstop offset out of bounds")
             }
             ErrorKind::__Nonexhaustive => panic!("Invalid Error!"),
         }
