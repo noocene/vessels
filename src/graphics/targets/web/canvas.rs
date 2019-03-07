@@ -17,8 +17,6 @@ use std::slice::Iter;
 
 use std::ops::Deref;
 
-use crate::errors::Error;
-
 type CanvasImage = CanvasElement;
 
 impl ImageRepresentation for CanvasImage {}
@@ -30,11 +28,11 @@ impl From<Image<RGBA8, Texture2D>> for CanvasImage {
             .unwrap()
             .try_into()
             .unwrap();
-        canvas.set_width(input.shape.width);
-        canvas.set_height(input.shape.height);
+        canvas.set_width(input.format.width);
+        canvas.set_height(input.format.height);
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
         let image = context
-            .create_image_data(f64::from(input.shape.width), f64::from(input.shape.height))
+            .create_image_data(f64::from(input.format.width), f64::from(input.format.height))
             .unwrap();
         context.put_image_data(image, 0., 0.).unwrap();
         canvas
@@ -45,7 +43,7 @@ impl Into<Image<RGBA8, Texture2D>> for CanvasImage {
     fn into(self) -> Image<RGBA8, Texture2D> {
         Image {
             pixels: vec![],
-            shape: Texture2D {
+            format: Texture2D {
                 height: 0,
                 width: 0,
             },
@@ -59,7 +57,7 @@ struct CanvasFrame {
     contents: Vec<Object2D<CanvasImage>>,
     pixel_ratio: f64,
     viewport: Cell<Rect2D>,
-    size: Cell<Size2D>,
+    size: Cell<Vec2D>,
 }
 
 impl Drop for CanvasFrame {
@@ -81,38 +79,38 @@ impl CanvasFrame {
             pixel_ratio: window().device_pixel_ratio(),
             context,
             contents: vec![],
-            size: Cell::from(Size2D::default()),
+            size: Cell::from(Vec2D::default()),
             viewport: Cell::from(Rect2D {
-                size: Size2D::default(),
-                position: Point2D { x: 0., y: 0. },
+                size: Vec2D::default(),
+                position: (0., 0.).into(),
             }),
         }
     }
     fn show(&self) {
         document().body().unwrap().append_child(&self.canvas);
     }
-    fn draw(&self) -> Result<(), Error> {
+    fn draw(&self) {
         let viewport = self.viewport.get();
         let size = self.size.get();
         self.context.set_transform(
-            (size.width / viewport.size.width) * self.pixel_ratio,
+            (size.x / viewport.size.x) * self.pixel_ratio,
             0.,
             0.,
-            (size.height / viewport.size.height) * self.pixel_ratio,
+            (size.y / viewport.size.y) * self.pixel_ratio,
             -viewport.position.x * self.pixel_ratio,
             -viewport.position.y * self.pixel_ratio,
         );
         self.context.clear_rect(
             viewport.position.x,
             viewport.position.y,
-            viewport.size.width,
-            viewport.size.height,
+            viewport.size.x,
+            viewport.size.y,
         );
         self.context.save();
-        for object in self.contents.iter() {
-            let draw = |orientation: Transform2D, content: Iter<Path<CanvasImage>>| -> Result<(), Error> {
+        self.contents.iter().for_each(|object| {
+            let draw = |orientation: Transform2D, content: Iter<Path<CanvasImage>>| {
                 let matrix = orientation.to_matrix();
-                for entity in content {
+                content.for_each(|entity| {
                     self.context.restore();
                     self.context.save();
                     self.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
@@ -181,13 +179,14 @@ impl CanvasFrame {
                                         gradient.end.x,
                                         gradient.end.y,
                                     );
-                                    for stop in gradient.stops.iter() {
+                                    gradient.stops.iter().for_each(|stop| {
                                         canvas_gradient
                                             .add_color_stop(
                                                 stop.offset,
                                                 &stop.color.to_rgba_color(),
-                                            ).map_err(Error::color_stop)?;
-                                    }
+                                            )
+                                            .unwrap();
+                                    });
                                     self.context.set_stroke_style_gradient(&canvas_gradient);
                                 }
                                 Texture::Image(image) => {
@@ -284,8 +283,7 @@ impl CanvasFrame {
                         }
                         None => {}
                     }
-                }
-                Ok(())
+                });
             };
             let orientation: Transform2D;
             let content: Iter<Path<CanvasImage>>;
@@ -294,16 +292,15 @@ impl CanvasFrame {
                     orientation = object.orientation();
                     let _content = object.render();
                     content = _content.iter();
-                    draw(orientation, content)?;
+                    draw(orientation, content);
                 }
                 Object2D::Static(object) => {
                     orientation = object.orientation.clone();
                     content = object.content.iter();
-                    draw(orientation, content)?;
+                    draw(orientation, content);
                 }
             }
-        }
-        Ok(())
+        });
     }
 }
 
@@ -323,19 +320,10 @@ impl DynamicObject2D<CanvasImage> for CanvasFrame {
             stroke: None,
             closed: true,
             segments: vec![
-                Segment::LineTo(Point2D { x: 0., y: 0. }),
-                Segment::LineTo(Point2D {
-                    x: 0.,
-                    y: size.height,
-                }),
-                Segment::LineTo(Point2D {
-                    x: size.width,
-                    y: size.height,
-                }),
-                Segment::LineTo(Point2D {
-                    x: size.width,
-                    y: 0.,
-                }),
+                Segment::LineTo((0., 0.).into()),
+                Segment::LineTo((0., size.y).into()),
+                Segment::LineTo(size),
+                Segment::LineTo((size.x, 0.).into()),
             ],
         }])
     }
@@ -348,14 +336,14 @@ impl Frame2D<CanvasImage> for CanvasFrame {
     fn set_viewport(&self, viewport: Rect2D) {
         self.viewport.set(viewport);
     }
-    fn resize(&self, size: Size2D) {
+    fn resize(&self, size: Vec2D) {
         self.size.set(size);
         self.canvas
-            .set_height((size.height * self.pixel_ratio) as u32);
+            .set_height((size.y * self.pixel_ratio) as u32);
         self.canvas
-            .set_width((size.width * self.pixel_ratio) as u32);
+            .set_width((size.x * self.pixel_ratio) as u32);
     }
-    fn get_size(&self) -> Size2D {
+    fn get_size(&self) -> Vec2D {
         self.size.get()
     }
     fn to_image(&self) -> Box<CanvasImage> {
@@ -370,7 +358,7 @@ struct Canvas {
 
 struct CanvasState {
     root_frame: Option<CanvasFrame>,
-    size: ObserverCell<Size2D>,
+    size: ObserverCell<Vec2D>,
 }
 
 impl Graphics2D for Canvas {
@@ -398,7 +386,7 @@ impl Canvas {
                 if state.size.is_dirty() {
                     let size = state.size.get();
                     frame.resize(size);
-                    frame.set_viewport(Rect2D::new(size.width, size.height, 0., 0.));
+                    frame.set_viewport(Rect2D::new((0., 0.).into(), size));
                 }
                 frame.draw();
             }
@@ -445,10 +433,7 @@ canvas {
 
     let gfx = Canvas {
         state: Rc::new(RefCell::new(CanvasState {
-            size: ObserverCell::new(Size2D {
-                width: f64::from(body.offset_width()),
-                height: f64::from(body.offset_height()),
-            }),
+            size: ObserverCell::new((body.offset_width().into(), body.offset_height().into()).into()),
             root_frame: None,
         })),
     };
@@ -458,10 +443,7 @@ canvas {
     window().add_event_listener(move |_: ResizeEvent| {
         let state = gfx_resize.state.borrow();
         let body = document().body().unwrap();
-        state.size.set(Size2D {
-            width: f64::from(body.offset_width()),
-            height: f64::from(body.offset_height()),
-        });
+        state.size.set((body.offset_width().into(), body.offset_height().into()).into());
     });
 
     gfx

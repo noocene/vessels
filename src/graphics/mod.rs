@@ -1,6 +1,8 @@
 use crate::graphics::path::*;
 use crate::util::*;
 
+use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign, Div, DivAssign};
+
 use std::borrow::Cow;
 
 pub mod path;
@@ -91,7 +93,7 @@ pub trait ImageFormat {}
 #[derive(Clone)]
 pub struct Texture2D {
     pub width: u32,
-    pub height: u32,
+    pub height: u32
 }
 
 impl ImageFormat for Texture2D {}
@@ -99,22 +101,22 @@ impl ImageFormat for Texture2D {}
 #[derive(Clone)]
 pub struct Image<T: PixelFormat, U: ImageFormat> {
     pub pixels: Vec<T>,
-    pub shape: U,
+    pub format: U,
 }
 
 #[derive(Clone)]
 pub struct Transform2D {
-    pub position: Point2D,
-    pub scale: Scale2D,
+    pub position: Vec2D,
+    pub scale: Vec2D,
     pub rotation: f64,
 }
 
 impl Transform2D {
-    pub fn with_position(mut self, position: Point2D) -> Self {
+    pub fn with_position(mut self, position: Vec2D) -> Self {
         self.position = position;
         self
     }
-    pub fn with_scale(mut self, scale: Scale2D) -> Self {
+    pub fn with_scale(mut self, scale: Vec2D) -> Self {
         self.scale = scale;
         self
     }
@@ -132,18 +134,16 @@ impl Transform2D {
             self.position.y,
         ]
     }
-    pub fn translate(&mut self, x: f64, y: f64) -> &mut Self {
-        self.position.x += x;
-        self.position.y += y;
+    pub fn translate(&mut self, offset: Vec2D) -> &mut Self {
+        self.position += offset;
         self
     }
     pub fn rotate(&mut self, rotation: f64) -> &mut Self {
         self.rotation += rotation;
         self
     }
-    pub fn scale(&mut self, x: f64, y: f64) -> &mut Self {
-        self.scale.x *= x;
-        self.scale.y *= y;
+    pub fn scale(&mut self, scale: Vec2D) -> &mut Self {
+        self.scale *= scale;
         self
     }
 }
@@ -151,8 +151,8 @@ impl Transform2D {
 impl Default for Transform2D {
     fn default() -> Self {
         Transform2D {
-            scale: Scale2D { x: 1., y: 1. },
-            position: Point2D::default(),
+            scale: Vec2D { x: 1., y: 1. },
+            position: Vec2D::default(),
             rotation: 0.,
         }
     }
@@ -199,9 +199,9 @@ where
     T: ImageRepresentation,
 {
     fn add(&mut self, object: Object2D<T>);
-    fn resize(&self, size: Size2D);
+    fn resize(&self, size: Vec2D);
     fn set_viewport(&self, viewport: Rect2D);
-    fn get_size(&self) -> Size2D;
+    fn get_size(&self) -> Vec2D;
     fn to_image(&self) -> Box<T>;
 }
 
@@ -213,41 +213,109 @@ pub trait Graphics2D {
 }
 
 #[derive(Clone, Copy, Default)]
-pub struct Size2D {
-    pub width: f64,
-    pub height: f64,
-}
-
-#[derive(Clone, Copy, Default)]
-pub struct Point2D {
+pub struct Vec2D {
     pub x: f64,
     pub y: f64,
 }
 
-impl Point2D {
-    pub fn new(x: f64, y: f64) -> Self {
-        Point2D { x, y }
+impl From<(f64, f64)> for Vec2D {
+    fn from(input: (f64, f64)) -> Vec2D {
+        Vec2D{
+            x: input.0, y: input.1
+        }
+    }
+}
+
+impl Add<Vec2D> for Vec2D {
+    type Output = Vec2D;
+    fn add(self, other: Vec2D) -> Vec2D {
+        Vec2D {
+            x: self.x + other.x,
+            y: self.y + other.y
+        }
+    }
+}
+
+impl AddAssign for Vec2D {
+    fn add_assign(&mut self, other: Vec2D) {
+        *self = Vec2D {
+            x: self.x + other.x,
+            y: self.y + other.y
+        }
+    }
+}
+
+impl Sub<Vec2D> for Vec2D {
+    type Output = Vec2D;
+    fn sub(self, other: Vec2D) -> Vec2D {
+        Vec2D {
+            x: self.x - other.x,
+            y: self.y - other.y
+        }
+    }
+}
+
+impl SubAssign for Vec2D {
+    fn sub_assign(&mut self, other: Vec2D) {
+        *self = Vec2D {
+            x: self.x - other.x,
+            y: self.y - other.y
+        }
+    }
+}
+
+impl Div<Vec2D> for Vec2D {
+    type Output = Vec2D;
+    fn div(self, other: Vec2D) -> Vec2D {
+        Vec2D {
+            x: self.x / other.x,
+            y: self.y / other.y
+        }
+    }
+}
+
+impl DivAssign for Vec2D {
+    fn div_assign(&mut self, other: Vec2D) {
+        *self = Vec2D {
+            x: self.x / other.x,
+            y: self.y / other.y
+        }
+    }
+}
+
+impl Mul<Vec2D> for Vec2D {
+    type Output = Vec2D;
+    fn mul(self, other: Vec2D) -> Vec2D {
+        Vec2D {
+            x: self.x * other.x,
+            y: self.y * other.y
+        }
+    }
+}
+
+impl MulAssign for Vec2D {
+    fn mul_assign(&mut self, other: Vec2D) {
+        *self = Vec2D {
+            x: self.x * other.x,
+            y: self.y * other.y
+        }
     }
 }
 
 #[derive(Clone, Copy, Default)]
 pub struct Rect2D {
-    pub size: Size2D,
-    pub position: Point2D,
+    pub size: Vec2D,
+    pub position: Vec2D,
 }
 
 impl Rect2D {
-    pub fn new(width: f64, height: f64, x: f64, y: f64) -> Self {
+    pub fn new(position: Vec2D, size: Vec2D) -> Self {
         Rect2D {
-            size: Size2D { width, height },
-            position: Point2D { x, y },
+            size,
+            position
         }
     }
 }
-
-pub type Distance2D = Point2D;
-
-pub type Scale2D = Point2D;
 
 mod targets;
 

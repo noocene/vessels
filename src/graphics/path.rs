@@ -4,10 +4,10 @@ const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
 
 #[derive(Clone)]
 pub enum Segment {
-    LineTo(Point2D),
-    MoveTo(Point2D),
-    QuadraticTo(Point2D, Point2D),
-    CubicTo(Point2D, Point2D, Point2D),
+    LineTo(Vec2D),
+    MoveTo(Vec2D),
+    QuadraticTo(Vec2D, Vec2D),
+    CubicTo(Vec2D, Vec2D, Vec2D),
 }
 
 #[derive(Clone)]
@@ -19,14 +19,14 @@ pub struct GradientStop {
 #[derive(Clone)]
 pub struct LinearGradient {
     pub stops: Vec<GradientStop>,
-    pub start: Point2D,
-    pub end: Point2D,
+    pub start: Vec2D,
+    pub end: Vec2D,
 }
 
 #[derive(Clone)]
 pub struct Shadow {
     pub color: RGBA8,
-    pub offset: Distance2D,
+    pub offset: Vec2D,
     pub blur: f64,
 }
 
@@ -34,7 +34,7 @@ impl Shadow {
     pub fn new(color: RGBA8) -> Self {
         Shadow {
             color,
-            offset: Distance2D::default(),
+            offset: Vec2D::default(),
             blur: 0.,
         }
     }
@@ -42,7 +42,7 @@ impl Shadow {
         self.blur = amount;
         self
     }
-    pub fn offset(mut self, distance: Distance2D) -> Self {
+    pub fn offset(mut self, distance: Vec2D) -> Self {
         self.offset = distance;
         self
     }
@@ -51,9 +51,9 @@ impl Shadow {
 #[derive(Clone)]
 pub struct RadialGradient {
     pub stops: Vec<GradientStop>,
-    pub start: Point2D,
+    pub start: Vec2D,
     pub start_radius: f64,
-    pub end: Point2D,
+    pub end: Vec2D,
     pub end_radius: f64,
 }
 
@@ -127,6 +127,20 @@ where
     pub closed: bool,
 }
 
+impl<T> Path<T> where T: ImageRepresentation {
+    pub fn with_origin(mut self, offset: Vec2D) -> Self {
+        self.segments = self.segments.iter().map(|segment| {
+            match segment {
+                Segment::CubicTo(point, handle_1, handle_2) => Segment::CubicTo(*point - offset, *handle_1 - offset, *handle_2 - offset),
+                Segment::QuadraticTo(point, handle) => Segment::QuadraticTo(*point - offset, *handle - offset),
+                Segment::MoveTo(point) => Segment::MoveTo(*point - offset),
+                Segment::LineTo(point) => Segment::LineTo(*point - offset)
+            }
+        }).collect();
+        self
+    }
+}
+
 #[derive(Default)]
 pub struct Builder {
     segments: Vec<Segment>,
@@ -136,15 +150,15 @@ impl Builder {
     pub fn new() -> Self {
         Builder::default()
     }
-    pub fn line_to(mut self, to: Point2D) -> Self {
+    pub fn line_to(mut self, to: Vec2D) -> Self {
         self.segments.push(Segment::LineTo(to));
         self
     }
-    pub fn quadratic_to(mut self, to: Point2D, handle: Point2D) -> Self {
+    pub fn quadratic_to(mut self, to: Vec2D, handle: Vec2D) -> Self {
         self.segments.push(Segment::QuadraticTo(to, handle));
         self
     }
-    pub fn bezier_to(mut self, to: Point2D, handle_1: Point2D, handle_2: Point2D) -> Self {
+    pub fn bezier_to(mut self, to: Vec2D, handle_1: Vec2D, handle_2: Vec2D) -> Self {
         self.segments.push(Segment::CubicTo(to, handle_1, handle_2));
         self
     }
@@ -159,63 +173,63 @@ impl Builder {
 pub struct Primitive {}
 
 impl Primitive {
-    pub fn rectangle<T>(width: f64, height: f64) -> StyleHelper<T>
+    pub fn rectangle<T>(size: Vec2D) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
         StyleHelper::new(vec![
-            Segment::LineTo(Point2D::new(width, 0.)),
-            Segment::LineTo(Point2D::new(width, height)),
-            Segment::LineTo(Point2D::new(0., height)),
+            Segment::LineTo((size.x, 0.).into()),
+            Segment::LineTo((size.x, size.y).into()),
+            Segment::LineTo((0., size.y).into()),
         ])
     }
-    pub fn rounded_rectangle<T>(width: f64, height: f64, radius: f64) -> StyleHelper<T>
+    pub fn rounded_rectangle<T>(size: Vec2D, radius: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
         StyleHelper::new(vec![
-            Segment::MoveTo(Point2D::new(radius, 0.)),
-            Segment::LineTo(Point2D::new(width - radius, 0.)),
+            Segment::MoveTo((radius, 0.).into()),
+            Segment::LineTo((size.x - radius, 0.).into()),
             Segment::CubicTo(
-                Point2D::new(width, radius),
-                Point2D::new(
-                    width - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                (size.x, radius).into(),
+                (
+                    size.x - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
                     0.,
-                ),
-                Point2D::new(
-                    width,
+                ).into(),
+                (
+                    size.x,
                     radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ),
+                ).into(),
             ),
-            Segment::LineTo(Point2D::new(width, height - radius)),
+            Segment::LineTo((size.x, size.y - radius).into()),
             Segment::CubicTo(
-                Point2D::new(width - radius, height),
-                Point2D::new(
-                    width,
-                    height - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ),
-                Point2D::new(
-                    width - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                    height,
-                ),
+                (size.x - radius, size.y).into(),
+                (
+                    size.x,
+                    size.y - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                ).into(),
+                (
+                    size.x - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                    size.y,
+                ).into(),
             ),
-            Segment::LineTo(Point2D::new(radius, height)),
+            Segment::LineTo((radius, size.y).into()),
             Segment::CubicTo(
-                Point2D::new(0., height - radius),
-                Point2D::new(
+                (0., size.y - radius).into(),
+                (
                     radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                    height,
-                ),
-                Point2D::new(
+                    size.y,
+                ).into(),
+                (
                     0.,
-                    height - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ),
+                    size.y - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
+                ).into(),
             ),
-            Segment::LineTo(Point2D::new(0., radius)),
+            Segment::LineTo((0., radius).into()),
             Segment::CubicTo(
-                Point2D::new(radius, 0.),
-                Point2D::new(0., radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)),
-                Point2D::new(radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.),
+                (radius, 0.).into(),
+                (0., radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)).into(),
+                (radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.).into(),
             ),
         ])
     }
@@ -223,83 +237,82 @@ impl Primitive {
     where
         T: ImageRepresentation,
     {
-        Primitive::rectangle(side_length, side_length)
+        Primitive::rectangle((side_length, side_length).into())
     }
     pub fn rounded_square<T>(side_length: f64, radius: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
-        Primitive::rounded_rectangle(side_length, side_length, radius)
+        Primitive::rounded_rectangle((side_length, side_length).into(), radius)
     }
     pub fn circle<T>(radius: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
         StyleHelper::new(vec![
-            Segment::MoveTo(Point2D::new(radius, 0.)),
+            Segment::MoveTo((radius, 0.).into()),
             Segment::CubicTo(
-                Point2D::new(radius * 2., radius),
-                Point2D::new(radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.),
-                Point2D::new(
+                (radius * 2., radius).into(),
+                (radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.).into(),
+                (
                     radius * 2.,
                     radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ),
+                ).into(),
             ),
             Segment::CubicTo(
-                Point2D::new(radius, radius * 2.),
-                Point2D::new(
+                (radius, radius * 2.).into(),
+                (
                     radius * 2.,
                     radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ),
-                Point2D::new(
+                ).into(),
+                (
                     radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
                     radius * 2.,
-                ),
+                ).into(),
             ),
             Segment::CubicTo(
-                Point2D::new(0., radius),
-                Point2D::new(
+                (0., radius).into(),
+                (
                     radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
                     radius * 2.,
-                ),
-                Point2D::new(0., radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)),
+                ).into(),
+                (0., radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)).into(),
             ),
             Segment::CubicTo(
-                Point2D::new(radius, 0.),
-                Point2D::new(0., radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)),
-                Point2D::new(radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.),
+                (radius, 0.).into(),
+                (0., radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)).into(),
+                (radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.).into(),
             ),
         ])
     }
     pub fn continuous_curvature_rectangle<T>(
-        horizontal_radius: f64,
-        vertical_radius: f64,
+        radii: Vec2D,
         k_factor: f64,
     ) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
         StyleHelper::new(vec![
-            Segment::MoveTo(Point2D::new(horizontal_radius, 0.)),
+            Segment::MoveTo((radii.x, 0.).into()),
             Segment::CubicTo(
-                Point2D::new(horizontal_radius * 2., vertical_radius),
-                Point2D::new(horizontal_radius * (1. + k_factor), 0.),
-                Point2D::new(horizontal_radius * 2., vertical_radius * (1. - k_factor)),
+                (radii.x * 2., radii.y).into(),
+                (radii.x * (1. + k_factor), 0.).into(),
+                (radii.x * 2., radii.y * (1. - k_factor)).into(),
             ),
             Segment::CubicTo(
-                Point2D::new(horizontal_radius, vertical_radius * 2.),
-                Point2D::new(horizontal_radius * 2., vertical_radius * (1. + k_factor)),
-                Point2D::new(horizontal_radius * (1. + k_factor), vertical_radius * 2.),
+                (radii.x, radii.y * 2.).into(),
+                (radii.x * 2., radii.y * (1. + k_factor)).into(),
+                (radii.x * (1. + k_factor), radii.y * 2.).into(),
             ),
             Segment::CubicTo(
-                Point2D::new(0., vertical_radius),
-                Point2D::new(horizontal_radius * (1. - k_factor), vertical_radius * 2.),
-                Point2D::new(0., vertical_radius * (1. + k_factor)),
+                (0., radii.y).into(),
+                (radii.x * (1. - k_factor), radii.y * 2.).into(),
+                (0., radii.y * (1. + k_factor)).into(),
             ),
             Segment::CubicTo(
-                Point2D::new(horizontal_radius, 0.),
-                Point2D::new(0., vertical_radius * (1. - k_factor)),
-                Point2D::new(horizontal_radius * (1. - k_factor), 0.),
+                (radii.x, 0.).into(),
+                (0., radii.y * (1. - k_factor)).into(),
+                (radii.x * (1. - k_factor), 0.).into(),
             ),
         ])
     }
@@ -307,7 +320,7 @@ impl Primitive {
     where
         T: ImageRepresentation,
     {
-        Primitive::continuous_curvature_rectangle(radius, radius, k_factor)
+        Primitive::continuous_curvature_rectangle((radius,radius).into(),k_factor)
     }
 }
 
