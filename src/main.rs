@@ -1,18 +1,27 @@
 use vitruvia::graphics;
-use vitruvia::graphics::path::Primitive;
+use vitruvia::graphics::path::{Primitive, StrokeBuilder};
 use vitruvia::graphics::{Frame2D, Graphics2D, Object2D, StaticObject2D, RGBA8};
 
 fn main() {
     let gfx = graphics::new();
     let mut root = gfx.frame();
     let mut rrect = StaticObject2D::from_entity(
-        Primitive::continuous_curvature_rectangle(200., 100., 0.7)
-            .fill(RGBA8::black().with_alpha(255).into())
+        Primitive::continuous_curvature_rectangle(50., 20., 0.8)
+            .stroke(StrokeBuilder::new(RGBA8::black().into(), 1.).finalize())
             .finalize(),
     );
     if let Object2D::Static(object) = &mut rrect {
         object.orientation.translate(50., 50.);
     };
+    let mut rrect2 = StaticObject2D::from_entity(
+        Primitive::continuous_curvature_square(50., 0.8)
+            .stroke(StrokeBuilder::new(RGBA8::black().into(), 1.).finalize())
+            .finalize(),
+    );
+    if let Object2D::Static(object) = &mut rrect2 {
+        object.orientation.translate(200., 50.);
+    };
     root.add(rrect);
+    root.add(rrect2);
     gfx.run(root);
 }

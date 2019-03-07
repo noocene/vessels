@@ -125,7 +125,7 @@ impl CanvasFrame {
                                 self.context.line_to(
                                     (base_position.x + point.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
-                                    (base_position.x + point.y + entity.orientation.position.y)
+                                    (base_position.y + point.y + entity.orientation.position.y)
                                         * self.pixel_ratio,
                                 );
                             },
@@ -133,7 +133,7 @@ impl CanvasFrame {
                                 self.context.move_to(
                                     (base_position.x + point.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
-                                    (base_position.x + point.y + entity.orientation.position.y)
+                                    (base_position.y + point.y + entity.orientation.position.y)
                                         * self.pixel_ratio,
                                 );
                             },
@@ -141,15 +141,15 @@ impl CanvasFrame {
                                 self.context.bezier_curve_to(
                                     (base_position.x + handle_1.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
-                                    (base_position.x + handle_1.y + entity.orientation.position.y)
+                                    (base_position.y + handle_1.y + entity.orientation.position.y)
                                         * self.pixel_ratio,
                                     (base_position.x + handle_2.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
-                                    (base_position.x + handle_2.y + entity.orientation.position.y)
+                                    (base_position.y + handle_2.y + entity.orientation.position.y)
                                         * self.pixel_ratio,
                                     (base_position.x + point.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
-                                    (base_position.x + point.y + entity.orientation.position.y)
+                                    (base_position.y + point.y + entity.orientation.position.y)
                                         * self.pixel_ratio,
                                 );
                             }
@@ -157,11 +157,11 @@ impl CanvasFrame {
                                 self.context.quadratic_curve_to(
                                     (base_position.x + handle.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
-                                    (base_position.x + handle.y + entity.orientation.position.y)
+                                    (base_position.y + handle.y + entity.orientation.position.y)
                                         * self.pixel_ratio,
                                     (base_position.x + point.x + entity.orientation.position.x)
                                         * self.pixel_ratio,
-                                    (base_position.x + point.y + entity.orientation.position.y)
+                                    (base_position.y + point.y + entity.orientation.position.y)
                                         * self.pixel_ratio,
                                 );
                             }
