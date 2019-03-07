@@ -17,6 +17,8 @@ use std::slice::Iter;
 
 use std::ops::Deref;
 
+use crate::errors::Error;
+
 type CanvasImage = CanvasElement;
 
 impl ImageRepresentation for CanvasImage {}
@@ -89,7 +91,7 @@ impl CanvasFrame {
     fn show(&self) {
         document().body().unwrap().append_child(&self.canvas);
     }
-    fn draw(&self) {
+    fn draw(&self) -> Result<(), Error> {
         let viewport = self.viewport.get();
         let size = self.size.get();
         self.context.set_transform(
@@ -107,10 +109,10 @@ impl CanvasFrame {
             viewport.size.height,
         );
         self.context.save();
-        self.contents.iter().for_each(|object| {
-            let draw = |orientation: Transform2D, content: Iter<Path<CanvasImage>>| {
+        for object in self.contents.iter() {
+            let draw = |orientation: Transform2D, content: Iter<Path<CanvasImage>>| -> Result<(), Error> {
                 let matrix = orientation.to_matrix();
-                content.for_each(|entity| {
+                for entity in content {
                     self.context.restore();
                     self.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
                     let matrix = entity.orientation.to_matrix();
@@ -178,14 +180,13 @@ impl CanvasFrame {
                                         gradient.end.x,
                                         gradient.end.y,
                                     );
-                                    gradient.stops.iter().for_each(|stop| {
+                                    for stop in gradient.stops.iter() {
                                         canvas_gradient
                                             .add_color_stop(
                                                 stop.offset,
                                                 &stop.color.to_rgba_color(),
-                                            )
-                                            .unwrap();
-                                    });
+                                            ).map_err(Error::color_stop)?;
+                                    }
                                     self.context.set_stroke_style_gradient(&canvas_gradient);
                                 }
                                 Texture::Image(image) => {
@@ -282,7 +283,8 @@ impl CanvasFrame {
                         }
                         None => {}
                     }
-                });
+                }
+                Ok(())
             };
             let orientation: Transform2D;
             let content: Iter<Path<CanvasImage>>;
@@ -291,15 +293,16 @@ impl CanvasFrame {
                     orientation = object.orientation();
                     let _content = object.render();
                     content = _content.iter();
-                    draw(orientation, content);
+                    draw(orientation, content)?;
                 }
                 Object2D::Static(object) => {
                     orientation = object.orientation.clone();
                     content = object.content.iter();
-                    draw(orientation, content);
+                    draw(orientation, content)?;
                 }
             }
-        });
+        }
+        Ok(())
     }
 }
 
