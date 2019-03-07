@@ -106,7 +106,7 @@ pub struct Image<T: PixelFormat, U: ImageFormat> {
 pub struct Transform2D {
     pub position: Point2D,
     pub scale: Scale2D,
-    pub rotation: Rotation2D,
+    pub rotation: f64,
 }
 
 impl Transform2D {
@@ -118,23 +118,33 @@ impl Transform2D {
         self.scale = scale;
         self
     }
-    pub fn with_rotation(mut self, rotation: Rotation2D) -> Self {
+    pub fn with_rotation(mut self, rotation: f64) -> Self {
         self.rotation = rotation;
         self
     }
     pub fn to_matrix(&self) -> [f64; 6] {
         [
-            self.scale.x,
-            0.,
-            0.,
-            self.scale.y,
+            self.scale.x * self.rotation.cos(),
+            self.scale.y * self.rotation.sin(),
+            -self.scale.x * self.rotation.sin(),
+            self.scale.y * self.rotation.cos(),
             self.position.x,
             self.position.y,
         ]
     }
-    pub fn translate(&mut self, x: f64, y: f64) {
+    pub fn translate(&mut self, x: f64, y: f64) -> &mut Self {
         self.position.x += x;
         self.position.y += y;
+        self
+    }
+    pub fn rotate(&mut self, rotation: f64) -> &mut Self {
+        self.rotation += rotation;
+        self
+    }
+    pub fn scale(&mut self, x: f64, y: f64) -> &mut Self {
+        self.scale.x *= x;
+        self.scale.y *= y;
+        self
     }
 }
 
@@ -143,7 +153,7 @@ impl Default for Transform2D {
         Transform2D {
             scale: Scale2D { x: 1., y: 1. },
             position: Point2D::default(),
-            rotation: Rotation2D::default(),
+            rotation: 0.,
         }
     }
 }
@@ -236,8 +246,6 @@ impl Rect2D {
 }
 
 pub type Distance2D = Point2D;
-
-pub type Rotation2D = Point2D;
 
 pub type Scale2D = Point2D;
 

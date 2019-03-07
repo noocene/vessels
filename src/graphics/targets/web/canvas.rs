@@ -92,18 +92,28 @@ impl CanvasFrame {
     fn draw(&self) {
         let viewport = self.viewport.get();
         let size = self.size.get();
-        self.context.clear_rect(
-            viewport.position.x * self.pixel_ratio,
-            viewport.position.y * self.pixel_ratio,
-            viewport.size.width * self.pixel_ratio,
-            viewport.size.height * self.pixel_ratio,
+        self.context.set_transform(
+            (size.width / viewport.size.width) * self.pixel_ratio,
+            0.,
+            0.,
+            (size.height / viewport.size.height) * self.pixel_ratio,
+            -viewport.position.x * self.pixel_ratio,
+            -viewport.position.y * self.pixel_ratio,
         );
+        self.context.clear_rect(
+            viewport.position.x,
+            viewport.position.y,
+            viewport.size.width,
+            viewport.size.height,
+        );
+        self.context.save();
         self.contents.iter().for_each(|object| {
-            let draw = |base_position: Point2D, content: Iter<Path<CanvasImage>>| {
+            let draw = |orientation: Transform2D, content: Iter<Path<CanvasImage>>| {
+                let matrix = orientation.to_matrix();
                 content.for_each(|entity| {
+                    self.context.restore();
+                    self.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
                     let matrix = entity.orientation.to_matrix();
-                    self.context.set_transform(1.,0.,0.,1.,-viewport.position.x * self.pixel_ratio,-viewport.position.y * self.pixel_ratio);
-                    self.context.scale(size.width/viewport.size.width, size.height/viewport.size.height);
                     self.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
                     self.context.begin_path();
                     match &entity.shadow {
@@ -118,51 +128,27 @@ impl CanvasFrame {
                         }
                     }
                     let segments = entity.segments.iter();
-                    self.context.move_to(entity.orientation.position.x, entity.orientation.position.y);
+                    self.context.move_to(0., 0.);
                     segments.for_each(|segment| {
                         match segment {
                             Segment::LineTo(point) => {
                                 self.context.line_to(
-                                    (base_position.x + point.x + entity.orientation.position.x)
-                                        * self.pixel_ratio,
-                                    (base_position.y + point.y + entity.orientation.position.y)
-                                        * self.pixel_ratio,
+                                    point.x, point.y
                                 );
                             },
                             Segment::MoveTo(point) => {
                                 self.context.move_to(
-                                    (base_position.x + point.x + entity.orientation.position.x)
-                                        * self.pixel_ratio,
-                                    (base_position.y + point.y + entity.orientation.position.y)
-                                        * self.pixel_ratio,
+                                   point.x, point.y
                                 );
                             },
                             Segment::CubicTo(point, handle_1, handle_2) => {
                                 self.context.bezier_curve_to(
-                                    (base_position.x + handle_1.x + entity.orientation.position.x)
-                                        * self.pixel_ratio,
-                                    (base_position.y + handle_1.y + entity.orientation.position.y)
-                                        * self.pixel_ratio,
-                                    (base_position.x + handle_2.x + entity.orientation.position.x)
-                                        * self.pixel_ratio,
-                                    (base_position.y + handle_2.y + entity.orientation.position.y)
-                                        * self.pixel_ratio,
-                                    (base_position.x + point.x + entity.orientation.position.x)
-                                        * self.pixel_ratio,
-                                    (base_position.y + point.y + entity.orientation.position.y)
-                                        * self.pixel_ratio,
+                                    handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y 
                                 );
                             }
                             Segment::QuadraticTo(point, handle) => {
                                 self.context.quadratic_curve_to(
-                                    (base_position.x + handle.x + entity.orientation.position.x)
-                                        * self.pixel_ratio,
-                                    (base_position.y + handle.y + entity.orientation.position.y)
-                                        * self.pixel_ratio,
-                                    (base_position.x + point.x + entity.orientation.position.x)
-                                        * self.pixel_ratio,
-                                    (base_position.y + point.y + entity.orientation.position.y)
-                                        * self.pixel_ratio,
+                                    handle.x, handle.y, point.x, point.y 
                                 );
                             }
                         }
@@ -233,7 +219,7 @@ impl CanvasFrame {
                                     self.context.set_stroke_style_gradient(&canvas_gradient);
                                 }
                             }
-                            self.context.set_line_width(f64::from(stroke.width) * self.pixel_ratio);
+                            self.context.set_line_width(f64::from(stroke.width));
                             self.context.stroke();
                         }
                         None => {}
@@ -298,19 +284,19 @@ impl CanvasFrame {
                     }
                 });
             };
-            let base_position: Point2D;
+            let orientation: Transform2D;
             let content: Iter<Path<CanvasImage>>;
             match object {
                 Object2D::Dynamic(object) => {
-                    base_position = object.orientation().position;
+                    orientation = object.orientation();
                     let _content = object.render();
                     content = _content.iter();
-                    draw(base_position, content);
+                    draw(orientation, content);
                 }
                 Object2D::Static(object) => {
-                    base_position = object.orientation.position;
+                    orientation = object.orientation.clone();
                     content = object.content.iter();
-                    draw(base_position, content);
+                    draw(orientation, content);
                 }
             }
         });
