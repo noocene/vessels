@@ -42,8 +42,8 @@ impl Shadow {
         self.blur = amount;
         self
     }
-    pub fn offset(mut self, distance: Vec2D) -> Self {
-        self.offset = distance;
+    pub fn offset<T>(mut self, distance: T) -> Self where T: Into<Vec2D> {
+        self.offset = distance.into();
         self
     }
 }
@@ -128,7 +128,8 @@ where
 }
 
 impl<T> Path<T> where T: ImageRepresentation {
-    pub fn with_origin(mut self, offset: Vec2D) -> Self {
+    pub fn with_origin<U>(mut self, offset: U) -> Self where U: Into<Vec2D> {
+        let offset = offset.into();
         self.segments = self.segments.iter().map(|segment| {
             match segment {
                 Segment::CubicTo(point, handle_1, handle_2) => Segment::CubicTo(*point - offset, *handle_1 - offset, *handle_2 - offset),
@@ -150,16 +151,20 @@ impl Builder {
     pub fn new() -> Self {
         Builder::default()
     }
-    pub fn line_to(mut self, to: Vec2D) -> Self {
-        self.segments.push(Segment::LineTo(to));
+    pub fn line_to<T>(mut self, to: T) -> Self where T: Into<Vec2D> {
+        self.segments.push(Segment::LineTo(to.into()));
         self
     }
-    pub fn quadratic_to(mut self, to: Vec2D, handle: Vec2D) -> Self {
-        self.segments.push(Segment::QuadraticTo(to, handle));
+    pub fn move_to<T>(mut self, to: T) -> Self where T: Into<Vec2D> {
+        self.segments.push(Segment::MoveTo(to.into()));
         self
     }
-    pub fn bezier_to(mut self, to: Vec2D, handle_1: Vec2D, handle_2: Vec2D) -> Self {
-        self.segments.push(Segment::CubicTo(to, handle_1, handle_2));
+    pub fn quadratic_to<T>(mut self, to: T, handle: T) -> Self where T: Into<Vec2D>  {
+        self.segments.push(Segment::QuadraticTo(to.into(), handle.into()));
+        self
+    }
+    pub fn cubic_to<T>(mut self, to: T, handle_1: T, handle_2: T) -> Self where T: Into<Vec2D> {
+        self.segments.push(Segment::CubicTo(to.into(), handle_1.into(), handle_2.into()));
         self
     }
     pub fn done<T>(self) -> StyleHelper<T>
@@ -173,154 +178,114 @@ impl Builder {
 pub struct Primitive {}
 
 impl Primitive {
-    pub fn rectangle<T>(size: Vec2D) -> StyleHelper<T>
+    pub fn rectangle<T, U>(size: U) -> StyleHelper<T>
     where
         T: ImageRepresentation,
+        U: Into<Vec2D>
     {
-        StyleHelper::new(vec![
-            Segment::LineTo((size.x, 0.).into()),
-            Segment::LineTo((size.x, size.y).into()),
-            Segment::LineTo((0., size.y).into()),
-        ])
+        let size: Vec2D = size.into();
+        Builder::new().move_to((0.,0.)).line_to((size.x, 0.)).line_to((size.x, size.y)).line_to((0., size.y)).line_to((0.,0.)).done()
     }
-    pub fn rounded_rectangle<T>(size: Vec2D, radius: f64) -> StyleHelper<T>
+    pub fn rounded_rectangle<T, U>(size: U, radius: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
+        U: Into<Vec2D>
     {
-        StyleHelper::new(vec![
-            Segment::MoveTo((radius, 0.).into()),
-            Segment::LineTo((size.x - radius, 0.).into()),
-            Segment::CubicTo(
-                (size.x, radius).into(),
+        let size = size.into();
+        Builder::new().move_to((radius, 0.)).line_to((size.x - radius, 0.)).cubic_to((size.x, radius),
                 (
                     size.x - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
                     0.,
-                ).into(),
+                ),
                 (
                     size.x,
                     radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ).into(),
-            ),
-            Segment::LineTo((size.x, size.y - radius).into()),
-            Segment::CubicTo(
-                (size.x - radius, size.y).into(),
+                )).line_to((size.x, size.y - radius)).cubic_to((size.x - radius, size.y),
                 (
                     size.x,
                     size.y - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ).into(),
+                ),
                 (
                     size.x - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
                     size.y,
-                ).into(),
-            ),
-            Segment::LineTo((radius, size.y).into()),
-            Segment::CubicTo(
-                (0., size.y - radius).into(),
+                )).line_to((radius, size.y)).cubic_to((0., size.y - radius),
                 (
                     radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
                     size.y,
-                ).into(),
+                ),
                 (
                     0.,
                     size.y - radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ).into(),
-            ),
-            Segment::LineTo((0., radius).into()),
-            Segment::CubicTo(
-                (radius, 0.).into(),
-                (0., radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)).into(),
-                (radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.).into(),
-            ),
-        ])
+                )).line_to((0., radius)).cubic_to((radius, 0.),
+                (0., radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)),
+                (radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.)).done()
     }
     pub fn square<T>(side_length: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
-        Primitive::rectangle((side_length, side_length).into())
+        Primitive::rectangle((side_length, side_length))
     }
     pub fn rounded_square<T>(side_length: f64, radius: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
-        Primitive::rounded_rectangle((side_length, side_length).into(), radius)
+        Primitive::rounded_rectangle((side_length, side_length), radius)
     }
     pub fn circle<T>(radius: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
-        StyleHelper::new(vec![
-            Segment::MoveTo((radius, 0.).into()),
-            Segment::CubicTo(
-                (radius * 2., radius).into(),
-                (radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.).into(),
+        Builder::new().move_to((radius, 0.)).cubic_to((radius * 2., radius),
+                (radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.),
                 (
                     radius * 2.,
                     radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ).into(),
-            ),
-            Segment::CubicTo(
-                (radius, radius * 2.).into(),
+                )).cubic_to((radius, radius * 2.),
                 (
                     radius * 2.,
                     radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
-                ).into(),
+                ),
                 (
                     radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
                     radius * 2.,
-                ).into(),
-            ),
-            Segment::CubicTo(
-                (0., radius).into(),
+                )).cubic_to((0., radius),
                 (
                     radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO),
                     radius * 2.,
-                ).into(),
-                (0., radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)).into(),
-            ),
-            Segment::CubicTo(
-                (radius, 0.).into(),
-                (0., radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)).into(),
-                (radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.).into(),
-            ),
-        ])
+                ),
+                (0., radius * (1. + CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO))).cubic_to(
+                    (radius, 0.),
+                (0., radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO)),
+                (radius * (1. - CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO), 0.)
+                ).done()
     }
-    pub fn continuous_curvature_rectangle<T>(
-        radii: Vec2D,
+    pub fn continuous_curvature_rectangle<T, U>(
+        radii: U,
         k_factor: f64,
     ) -> StyleHelper<T>
     where
         T: ImageRepresentation,
+        U: Into<Vec2D>
     {
-        StyleHelper::new(vec![
-            Segment::MoveTo((radii.x, 0.).into()),
-            Segment::CubicTo(
-                (radii.x * 2., radii.y).into(),
-                (radii.x * (1. + k_factor), 0.).into(),
-                (radii.x * 2., radii.y * (1. - k_factor)).into(),
-            ),
-            Segment::CubicTo(
-                (radii.x, radii.y * 2.).into(),
-                (radii.x * 2., radii.y * (1. + k_factor)).into(),
-                (radii.x * (1. + k_factor), radii.y * 2.).into(),
-            ),
-            Segment::CubicTo(
-                (0., radii.y).into(),
-                (radii.x * (1. - k_factor), radii.y * 2.).into(),
-                (0., radii.y * (1. + k_factor)).into(),
-            ),
-            Segment::CubicTo(
-                (radii.x, 0.).into(),
-                (0., radii.y * (1. - k_factor)).into(),
-                (radii.x * (1. - k_factor), 0.).into(),
-            ),
-        ])
+        let radii = radii.into();
+        Builder::new().move_to((radii.x, 0.)).cubic_to(
+                (radii.x * 2., radii.y),
+                (radii.x * (1. + k_factor), 0.),
+                (radii.x * 2., radii.y * (1. - k_factor))
+            ).cubic_to((radii.x, radii.y * 2.),
+                (radii.x * 2., radii.y * (1. + k_factor)),
+                (radii.x * (1. + k_factor), radii.y * 2.)).cubic_to((0., radii.y),
+                (radii.x * (1. - k_factor), radii.y * 2.),
+                (0., radii.y * (1. + k_factor))).cubic_to((radii.x, 0.),
+                (0., radii.y * (1. - k_factor)),
+                (radii.x * (1. - k_factor), 0.)).done()
     }
     pub fn continuous_curvature_square<T>(radius: f64, k_factor: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
     {
-        Primitive::continuous_curvature_rectangle((radius,radius).into(),k_factor)
+        Primitive::continuous_curvature_rectangle((radius,radius),k_factor)
     }
 }
 

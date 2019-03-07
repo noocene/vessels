@@ -336,7 +336,8 @@ impl Frame2D<CanvasImage> for CanvasFrame {
     fn set_viewport(&self, viewport: Rect2D) {
         self.viewport.set(viewport);
     }
-    fn resize(&self, size: Vec2D) {
+    fn resize<T>(&self, size: T) where T: Into<Vec2D> {
+        let size = size.into();
         self.size.set(size);
         self.canvas
             .set_height((size.y * self.pixel_ratio) as u32);
@@ -386,7 +387,7 @@ impl Canvas {
                 if state.size.is_dirty() {
                     let size = state.size.get();
                     frame.resize(size);
-                    frame.set_viewport(Rect2D::new((0., 0.).into(), size));
+                    frame.set_viewport(Rect2D::new((0., 0.), size));
                 }
                 frame.draw();
             }
