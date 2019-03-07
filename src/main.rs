@@ -21,7 +21,7 @@ fn main() {
             .finalize(),
     );
     if let Object2D::Static(object) = &mut rrect2 {
-        object.orientation.translate(0., 0.).rotate(FRAC_PI_8);
+        object.orientation.translate(10., 0.).rotate(0.);
     };
     root.add(rrect);
     root.add(rrect2);

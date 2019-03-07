@@ -114,6 +114,7 @@ impl CanvasFrame {
                 let matrix = orientation.to_matrix();
                 for entity in content {
                     self.context.restore();
+                    self.context.save();
                     self.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
                     let matrix = entity.orientation.to_matrix();
                     self.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
