@@ -1,7 +1,7 @@
 use crate::graphics::path::*;
 use crate::util::*;
 
-use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign, Div, DivAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
 use std::borrow::Cow;
 
@@ -93,7 +93,7 @@ pub trait ImageFormat {}
 #[derive(Clone)]
 pub struct Texture2D {
     pub width: u32,
-    pub height: u32
+    pub height: u32,
 }
 
 impl ImageFormat for Texture2D {}
@@ -112,11 +112,17 @@ pub struct Transform2D {
 }
 
 impl Transform2D {
-    pub fn with_position<T>(mut self, position: T) -> Self where T: Into<Vec2D> {
+    pub fn with_position<T>(mut self, position: T) -> Self
+    where
+        T: Into<Vec2D>,
+    {
         self.position = position.into();
         self
     }
-    pub fn with_scale<T>(mut self, scale: T) -> Self where T: Into<Vec2D> {
+    pub fn with_scale<T>(mut self, scale: T) -> Self
+    where
+        T: Into<Vec2D>,
+    {
         self.scale = scale.into();
         self
     }
@@ -134,7 +140,10 @@ impl Transform2D {
             self.position.y,
         ]
     }
-    pub fn translate<T>(&mut self, offset: T) -> &mut Self where T: Into<Vec2D> {
+    pub fn translate<T>(&mut self, offset: T) -> &mut Self
+    where
+        T: Into<Vec2D>,
+    {
         self.position += offset.into();
         self
     }
@@ -142,7 +151,10 @@ impl Transform2D {
         self.rotation += rotation;
         self
     }
-    pub fn scale<T>(&mut self, scale: T) -> &mut Self where T: Into<Vec2D> {
+    pub fn scale<T>(&mut self, scale: T) -> &mut Self
+    where
+        T: Into<Vec2D>,
+    {
         self.scale *= scale.into();
         self
     }
@@ -199,7 +211,9 @@ where
     T: ImageRepresentation,
 {
     fn add(&mut self, object: Object2D<T>);
-    fn resize<U>(&self, size: U) where U: Into<Vec2D>;
+    fn resize<U>(&self, size: U)
+    where
+        U: Into<Vec2D>;
     fn set_viewport(&self, viewport: Rect2D);
     fn get_size(&self) -> Vec2D;
     fn to_image(&self) -> Box<T>;
@@ -220,92 +234,117 @@ pub struct Vec2D {
 
 impl From<(f64, f64)> for Vec2D {
     fn from(input: (f64, f64)) -> Vec2D {
-        Vec2D{
-            x: input.0, y: input.1
+        Vec2D {
+            x: input.0,
+            y: input.1,
         }
     }
 }
 
-impl<T> Add<T> for Vec2D where T: Into<Vec2D> {
+impl<T> Add<T> for Vec2D
+where
+    T: Into<Vec2D>,
+{
     type Output = Vec2D;
     fn add(self, other: T) -> Vec2D {
         let other = other.into();
         Vec2D {
             x: self.x + other.x,
-            y: self.y + other.y
+            y: self.y + other.y,
         }
     }
 }
 
-impl<T> AddAssign<T> for Vec2D where T: Into<Vec2D> {
+impl<T> AddAssign<T> for Vec2D
+where
+    T: Into<Vec2D>,
+{
     fn add_assign(&mut self, other: T) {
         let other = other.into();
         *self = Vec2D {
             x: self.x + other.x,
-            y: self.y + other.y
+            y: self.y + other.y,
         }
     }
 }
 
-impl<T> Sub<T> for Vec2D where T: Into<Vec2D> {
+impl<T> Sub<T> for Vec2D
+where
+    T: Into<Vec2D>,
+{
     type Output = Vec2D;
     fn sub(self, other: T) -> Vec2D {
         let other = other.into();
         Vec2D {
             x: self.x - other.x,
-            y: self.y - other.y
+            y: self.y - other.y,
         }
     }
 }
 
-impl<T> SubAssign<T> for Vec2D where T: Into<Vec2D> {
+impl<T> SubAssign<T> for Vec2D
+where
+    T: Into<Vec2D>,
+{
     fn sub_assign(&mut self, other: T) {
         let other = other.into();
         *self = Vec2D {
             x: self.x - other.x,
-            y: self.y - other.y
+            y: self.y - other.y,
         }
     }
 }
 
-impl<T> Div<T> for Vec2D where T: Into<Vec2D> {
+impl<T> Div<T> for Vec2D
+where
+    T: Into<Vec2D>,
+{
     type Output = Vec2D;
     fn div(self, other: T) -> Vec2D {
         let other = other.into();
         Vec2D {
             x: self.x / other.x,
-            y: self.y / other.y
+            y: self.y / other.y,
         }
     }
 }
 
-impl<T> DivAssign<T> for Vec2D where T: Into<Vec2D> {
+impl<T> DivAssign<T> for Vec2D
+where
+    T: Into<Vec2D>,
+{
     fn div_assign(&mut self, other: T) {
         let other = other.into();
         *self = Vec2D {
             x: self.x / other.x,
-            y: self.y / other.y
+            y: self.y / other.y,
         }
     }
 }
 
-impl<T> Mul<T> for Vec2D where T: Into<Vec2D> {
+impl<T> Mul<T> for Vec2D
+where
+    T: Into<Vec2D>,
+{
     type Output = Vec2D;
     fn mul(self, other: T) -> Vec2D {
         let other = other.into();
         Vec2D {
             x: self.x * other.x,
-            y: self.y * other.y
+            y: self.y * other.y,
         }
     }
 }
 
-impl<T> MulAssign<T> for Vec2D where T: Into<Vec2D> {
+impl<T> MulAssign<T> for Vec2D
+where
+    T: Into<Vec2D>,
+{
     fn mul_assign(&mut self, other: T) {
         let other = other.into();
         *self = Vec2D {
             x: self.x * other.x,
-            y: self.y * other.y
+            y: self.y * other.y,
         }
     }
 }
@@ -317,10 +356,14 @@ pub struct Rect2D {
 }
 
 impl Rect2D {
-    pub fn new<T, U>(position: T, size: U) -> Self where T: Into<Vec2D>, U: Into<Vec2D> {
+    pub fn new<T, U>(position: T, size: U) -> Self
+    where
+        T: Into<Vec2D>,
+        U: Into<Vec2D>,
+    {
         Rect2D {
             size: size.into(),
-            position: position.into()
+            position: position.into(),
         }
     }
 }

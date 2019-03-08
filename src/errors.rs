@@ -2,9 +2,7 @@ use std::fmt;
 
 use stdweb::web::error;
 
-use failure::{
-    Fail, Backtrace, Context,
-};
+use failure::{Backtrace, Context, Fail};
 
 #[derive(Debug)]
 pub struct Error {
@@ -14,7 +12,7 @@ pub struct Error {
 impl Error {
     pub fn kind(&self) -> &ErrorKind {
         self.ctx.get_context()
-    }       
+    }
 
     pub(crate) fn color_stop() -> Error {
         Error::from(ErrorKind::ColorStopOffsetError)
@@ -48,9 +46,7 @@ pub enum ErrorKind {
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ErrorKind::ColorStopOffsetError => {
-                write!(f, "Colorstop offset out of bounds")
-            }
+            ErrorKind::ColorStopOffsetError => write!(f, "Colorstop offset out of bounds"),
             ErrorKind::__Nonexhaustive => panic!("Invalid Error!"),
         }
     }
