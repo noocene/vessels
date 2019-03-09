@@ -477,3 +477,14 @@ where
         self.stroke
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gradient_stop_fail() {
+        assert!(GradientStop::new(5.0, RGBA8::white()).is_err());
+        assert!(GradientStop::new(-5.0, RGBA8::white()).is_err());
+    }
+}
