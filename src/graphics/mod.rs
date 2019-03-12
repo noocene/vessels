@@ -201,6 +201,20 @@ where
     }
 }
 
+impl<T> From<T> for StaticObject2D<T>
+where
+    T: ImageRepresentation,
+{
+    fn from(input: T) -> Self {
+        StaticObject2D {
+            orientation: Transform2D::default(),
+            content: vec![Primitive::rectangle(input.get_size())
+                .fill(Texture::Image(Box::new(input)).into())
+                .finalize()],
+        }
+    }
+}
+
 impl<T> Into<Object2D<T>> for StaticObject2D<T>
 where
     T: ImageRepresentation,

@@ -1,64 +1,15 @@
 use vitruvia::graphics;
-use vitruvia::graphics::path::{Path, Primitive, StrokeBuilder, Texture};
-use vitruvia::graphics::text::{Align, Font, Text, Weight, Wrap};
+use vitruvia::graphics::path::Primitive;
+use vitruvia::graphics::text::Text;
 use vitruvia::graphics::{
-    DynamicObject2D, Frame2D, Graphics2D, ImageRepresentation, Object2D, Rasterizer,
-    StaticObject2D, Transform2D, Vec2D, RGBA8,
+    Frame2D, Graphics2D, ImageRepresentation, Rasterizer, StaticObject2D, RGBA8,
 };
-
-use std::borrow::Cow;
-
-use std::f64::consts::FRAC_PI_4;
-
-pub struct TextObject<T>
-where
-    T: ImageRepresentation,
-{
-    texture: T,
-}
-
-impl<T> TextObject<T>
-where
-    T: ImageRepresentation,
-{
-    pub fn new(texture: T) -> Self {
-        TextObject { texture }
-    }
-    pub fn get_size(&self) -> Vec2D {
-        self.texture.get_size()
-    }
-}
-
-impl<T> DynamicObject2D<T> for TextObject<T>
-where
-    T: ImageRepresentation,
-{
-    fn orientation(&self) -> Transform2D {
-        Transform2D::default().with_position((65., 65.))
-    }
-    fn render(&self) -> Cow<[Path<T>]> {
-        Cow::from(vec![Primitive::rectangle(self.texture.get_size())
-            .fill(Texture::Image(Box::new(self.texture.clone())).into())
-            .finalize()])
-    }
-}
 
 fn main() {
     let gfx = graphics::new();
     let mut root = gfx.frame();
 
-    let text = TextObject::new(gfx.rasterize(Text {
-        weight: Weight::Normal,
-        content: "testing the thing that allows text rendering hello there テスト ensure CJK works word wrap functions over an arbitrary number of lines",
-        font: Font::SystemFont,
-        italic: false,
-        max_width: Some(170),
-        color: RGBA8::black().with_alpha(180),
-        size: 15,
-        wrap: Wrap::Normal,
-        align: Align::Start,
-        line_height: 26,
-    }));
+    let text = gfx.rasterize(Text::new("testing the thing that allows text rendering hello there テスト ensure CJK works word wrap functions over an arbitrary number of lines").with_color(RGBA8::black().with_alpha(190)).with_max_width(170).wrap());
 
     root.add(
         StaticObject2D::from_entity(
@@ -71,6 +22,8 @@ fn main() {
         }),
     );
 
-    root.add(Object2D::Dynamic(Box::new(text)));
+    root.add(StaticObject2D::from(text).with_transform(|transform| {
+        transform.translate((65., 65.));
+    }));
     gfx.run(root);
 }
