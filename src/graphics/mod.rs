@@ -16,9 +16,14 @@ pub trait ToHexColor {
 pub trait ImageRepresentation:
     From<Image<RGBA8, Texture2D>> + Into<Image<RGBA8, Texture2D>> + Clone
 {
+    fn get_size(&self) -> Vec2D;
 }
 
-impl ImageRepresentation for Image<RGBA8, Texture2D> {}
+impl ImageRepresentation for Image<RGBA8, Texture2D> {
+    fn get_size(&self) -> Vec2D {
+        (f64::from(self.format.width), f64::from(self.format.height)).into()
+    }
+}
 
 pub trait PixelFormat {}
 
@@ -257,6 +262,12 @@ impl From<(f64, f64)> for Vec2D {
             x: input.0,
             y: input.1,
         }
+    }
+}
+
+impl From<f64> for Vec2D {
+    fn from(input: f64) -> Vec2D {
+        Vec2D { x: input, y: input }
     }
 }
 

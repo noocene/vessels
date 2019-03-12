@@ -4,7 +4,7 @@ use crate::graphics::text::*;
 use stdweb::traits::*;
 use stdweb::unstable::TryInto;
 use stdweb::web::{
-    document, window, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap, LineJoin,
+    document, window, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap, LineJoin, TextAlign, TextBaseline
 };
 
 use stdweb::web::event::ResizeEvent;
@@ -16,11 +16,18 @@ use std::rc::Rc;
 
 use std::slice::Iter;
 
+use std::collections::VecDeque;
+
 use std::ops::Deref;
 
 type CanvasImage = CanvasElement;
 
-impl ImageRepresentation for CanvasImage {}
+impl ImageRepresentation for CanvasImage {
+    fn get_size(&self) -> Vec2D {
+        let dpr = window().device_pixel_ratio();
+        (f64::from(self.width()) / dpr, f64::from(self.height()) / dpr).into()
+    }
+}
 
 impl From<Image<RGBA8, Texture2D>> for CanvasImage {
     fn from(input: Image<RGBA8, Texture2D>) -> CanvasImage {
@@ -387,19 +394,101 @@ impl Rasterizer for Canvas {
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
         match input {
             Rasterizable::Text(input) => {
+                let mut lines: Vec<String> = input.content.split('\n').map(std::borrow::ToOwned::to_owned).collect();
+                canvas.set_height((f64::from(input.line_height) * dpr) as u32 * ((lines.len() - 1).max(0) as u32) + (f64::from(input.size) * dpr) as u32);
+                match input.max_width {
+                    None => {
+                        context.set_font((match input.font {
+                            Font::SystemFont => {
+                                format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
+                                    FontWeight::Normal => "400",
+                                    FontWeight::Bold => "500",
+                                    FontWeight::Heavy => "700",
+                                    FontWeight::Thin => "200",
+                                    FontWeight::Light => "200",
+                                    FontWeight::Hairline => "100"
+                                }, (f64::from(input.size) * dpr) as u32)
+                            }
+                        }).as_str());
+                        context.set_text_align(TextAlign::Start);
+                        context.set_text_baseline(TextBaseline::Hanging);
+                        context.set_fill_style_color(&input.color.to_rgba_color());
+                        canvas.set_width(context.measure_text(input.content).unwrap().get_width() as u32);
+                    }
+                    Some(max_width) => {
+                        canvas.set_width((f64::from(max_width) * dpr) as u32);
+                    }
+                }
                 context.set_font((match input.font {
                     Font::SystemFont => {
                         format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
                             FontWeight::Normal => "400",
                             FontWeight::Bold => "500",
                             FontWeight::Heavy => "700",
-                            FontWeight::Thin => "200",
-                            FontWeight::Light => "100"
+                            FontWeight::Thin => "300",
+                            FontWeight::Light => "200",
+                            FontWeight::Hairline => "100"
                         }, (f64::from(input.size) * dpr) as u32)
                     }
                 }).as_str());
+                context.set_text_align(TextAlign::Start);
+                context.set_text_baseline(TextBaseline::Hanging);
                 context.set_fill_style_color(&input.color.to_rgba_color());
-                context.fill_text(input.content, 20., 100., None);
+                if let Some(max_width) = input.max_width {
+                    lines = match input.word_wrap {
+                        WordWrap::Normal => {
+                            let mut test_string = "".to_owned();
+                            lines.reverse();
+                            let mut wrapped_lines: Vec<String> = vec![];
+                            loop {
+                                let line = lines.pop();
+                                match line {
+                                    None => {
+                                        break;
+                                    }
+                                    Some(line) => {
+                                        let words = line.split(' ').collect::<Vec<&str>>();
+                                        for (index, word) in words.iter().cloned().enumerate() {
+                                            if context.measure_text(&(test_string.clone() + word)).unwrap().get_width() <= f64::from(max_width) * dpr {
+                                                test_string += &format!(" {}", word);
+                                            } else {
+                                                test_string = test_string.trim().to_owned();
+                                                wrapped_lines.push(test_string);
+                                                lines.push(words.iter().cloned().skip(index).collect::<Vec<&str>>().join(" "));
+                                                test_string = "".to_owned();
+                                                break;
+                                            }
+                                        }
+                                        if test_string != "" {
+                                            wrapped_lines.push(test_string.clone().trim().to_owned());
+                                        }
+                                    }
+                                }
+                            }
+                            canvas.set_height((f64::from(input.line_height) * dpr) as u32 * ((wrapped_lines.len() - 1).max(0) as u32) + (f64::from(input.size) * dpr) as u32);
+                            context.set_font((match input.font {
+                                Font::SystemFont => {
+                                    format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
+                                        FontWeight::Normal => "400",
+                                        FontWeight::Bold => "500",
+                                        FontWeight::Heavy => "700",
+                                        FontWeight::Thin => "200",
+                                        FontWeight::Light => "200",
+                                        FontWeight::Hairline => "100"
+                                    }, (f64::from(input.size) * dpr) as u32)
+                                }
+                            }).as_str());
+                            context.set_text_align(TextAlign::Start);
+                            context.set_text_baseline(TextBaseline::Hanging);
+                            context.set_fill_style_color(&input.color.to_rgba_color());
+                            wrapped_lines
+                        }
+                        _ => lines
+                    }
+                }
+                for (index, line) in lines.iter().enumerate() {
+                    context.fill_text(line, 0., ((f64::from(input.line_height) * dpr) as u32 * index as u32).into(), None);
+                }
             }
         }
         canvas
