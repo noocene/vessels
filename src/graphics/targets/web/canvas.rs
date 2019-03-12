@@ -1,4 +1,5 @@
 use crate::graphics::*;
+use crate::graphics::text::*;
 
 use stdweb::traits::*;
 use stdweb::unstable::TryInto;
@@ -196,6 +197,7 @@ impl CanvasFrame {
                                     .try_into()
                                     .unwrap();
                                     self.context.set_stroke_style_pattern(&pattern);
+                                    self.context.scale(self.pixel_ratio, self.pixel_ratio)
                                 }
                                 Texture::RadialGradient(gradient) => {
                                     let canvas_gradient = self
@@ -221,7 +223,13 @@ impl CanvasFrame {
                                 }
                             }
                             self.context.set_line_width(f64::from(stroke.width));
+                            if let Texture::Image(_image) = &stroke.content {
+                                self.context.scale(1. / self.pixel_ratio, 1. / self.pixel_ratio);
+                            }
                             self.context.stroke();
+                            if let Texture::Image(_image) = &stroke.content {
+                                self.context.scale(self.pixel_ratio, self.pixel_ratio);
+                            }
                         }
                         None => {}
                     }
@@ -237,7 +245,9 @@ impl CanvasFrame {
                                     }
                                     .try_into()
                                     .unwrap();
+                                    self.context.scale(1. / self.pixel_ratio, 1. / self.pixel_ratio);
                                     self.context.set_fill_style_pattern(&pattern);
+                                    self.context.scale(self.pixel_ratio, self.pixel_ratio);
                                 }
                                 Texture::LinearGradient(gradient) => {
                                     let canvas_gradient = self.context.create_linear_gradient(
@@ -279,7 +289,13 @@ impl CanvasFrame {
                                     self.context.set_fill_style_gradient(&canvas_gradient);
                                 }
                             }
+                            if let Texture::Image(_image) = &fill.content {
+                                self.context.scale(1. / self.pixel_ratio, 1. / self.pixel_ratio);
+                            }
                             self.context.fill(FillRule::NonZero);
+                            if let Texture::Image(_image) = &fill.content {
+                                self.context.scale(self.pixel_ratio, self.pixel_ratio);
+                            }
                         }
                         None => {}
                     }
@@ -330,8 +346,8 @@ impl DynamicObject2D<CanvasImage> for CanvasFrame {
 }
 
 impl Frame2D<CanvasImage> for CanvasFrame {
-    fn add(&mut self, object: Object2D<CanvasImage>) {
-        self.contents.push(object);
+    fn add<U>(&mut self, object: U) where U: Into<Object2D<CanvasImage>> {
+        self.contents.push(object.into());
     }
     fn set_viewport(&self, viewport: Rect2D) {
         self.viewport.set(viewport);
@@ -362,8 +378,35 @@ struct CanvasState {
     size: ObserverCell<Vec2D>,
 }
 
-impl Graphics2D for Canvas {
+impl Rasterizer for Canvas {
     type Image = CanvasImage;
+    fn rasterize<'a, T>(&self, input: T) -> Self::Image where T: Into<Rasterizable<'a>> {
+        let input = input.into();
+        let canvas: CanvasElement = document().create_element("canvas").unwrap().try_into().unwrap();
+        let dpr = window().device_pixel_ratio();
+        let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
+        match input {
+            Rasterizable::Text(input) => {
+                context.set_font((match input.font {
+                    Font::SystemFont => {
+                        format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
+                            FontWeight::Normal => "400",
+                            FontWeight::Bold => "500",
+                            FontWeight::Heavy => "700",
+                            FontWeight::Thin => "200",
+                            FontWeight::Light => "100"
+                        }, (f64::from(input.size) * dpr) as u32)
+                    }
+                }).as_str());
+                context.set_fill_style_color(&input.color.to_rgba_color());
+                context.fill_text(input.content, 20., 100., None);
+            }
+        }
+        canvas
+    }
+}
+
+impl Graphics2D for Canvas {
     type Frame = CanvasFrame;
     fn run(self, root: CanvasFrame) {
         let mut state = self.state.borrow_mut();

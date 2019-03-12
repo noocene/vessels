@@ -83,6 +83,15 @@ where
     Image(Box<T>),
 }
 
+impl<T> From<T> for Texture<T>
+where
+    T: ImageRepresentation,
+{
+    fn from(input: T) -> Self {
+        Texture::Image(Box::new(input))
+    }
+}
+
 #[derive(Clone)]
 pub struct Stroke<T>
 where
@@ -127,6 +136,18 @@ where
     T: ImageRepresentation,
 {
     pub content: Texture<T>,
+}
+
+impl<T, U> From<T> for Fill<U>
+where
+    T: Into<Texture<U>>,
+    U: ImageRepresentation,
+{
+    fn from(input: T) -> Self {
+        Fill {
+            content: input.into(),
+        }
+    }
 }
 
 #[derive(Clone)]

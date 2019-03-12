@@ -1,4 +1,5 @@
 use crate::graphics::path::*;
+use crate::graphics::text::*;
 use crate::util::*;
 
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
@@ -6,9 +7,10 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 use std::borrow::Cow;
 
 pub mod path;
+pub mod text;
 
 pub trait ToHexColor {
-    fn to_hex_color(&self) -> String;
+    fn to_hex_color(&self) -> Cow<str>;
 }
 
 pub trait ImageRepresentation:
@@ -29,14 +31,14 @@ pub struct RGBA8 {
 }
 
 impl RGBA8 {
-    pub fn to_rgba_color(&self) -> String {
-        format!(
+    pub fn to_rgba_color(&self) -> Cow<str> {
+        Cow::from(format!(
             "rgba({},{},{},{})",
             self.r,
             self.g,
             self.b,
             f64::from(self.a) / 255.
-        )
+        ))
     }
     pub fn with_alpha(mut self, alpha: u8) -> Self {
         self.a = alpha;
@@ -61,19 +63,11 @@ impl RGBA8 {
 }
 
 impl ToHexColor for RGBA8 {
-    fn to_hex_color(&self) -> String {
-        format!("#{:x?}{:x?}{:x?}{:x?}", self.r, self.g, self.b, self.a)
-    }
-}
-
-impl<T> Into<Fill<T>> for RGBA8
-where
-    T: ImageRepresentation,
-{
-    fn into(self) -> Fill<T> {
-        Fill {
-            content: self.into(),
-        }
+    fn to_hex_color(&self) -> Cow<str> {
+        Cow::from(format!(
+            "#{:x?}{:x?}{:x?}{:x?}",
+            self.r, self.g, self.b, self.a
+        ))
     }
 }
 
@@ -190,11 +184,24 @@ impl<T> StaticObject2D<T>
 where
     T: ImageRepresentation,
 {
-    pub fn from_entity(entity: Path<T>) -> Object2D<T> {
-        Object2D::Static(StaticObject2D {
+    pub fn from_entity(entity: Path<T>) -> StaticObject2D<T> {
+        StaticObject2D {
             content: vec![entity],
             orientation: Transform2D::default(),
-        })
+        }
+    }
+    pub fn with_transform(mut self, closure: impl Fn(&mut Transform2D)) -> Self {
+        closure(&mut self.orientation);
+        self
+    }
+}
+
+impl<T> Into<Object2D<T>> for StaticObject2D<T>
+where
+    T: ImageRepresentation,
+{
+    fn into(self) -> Object2D<T> {
+        Object2D::Static(self)
     }
 }
 
@@ -210,7 +217,9 @@ pub trait Frame2D<T>: DynamicObject2D<T>
 where
     T: ImageRepresentation,
 {
-    fn add(&mut self, object: Object2D<T>);
+    fn add<U>(&mut self, object: U)
+    where
+        U: Into<Object2D<T>>;
     fn resize<U>(&self, size: U)
     where
         U: Into<Vec2D>;
@@ -219,8 +228,18 @@ where
     fn to_image(&self) -> Box<T>;
 }
 
-pub trait Graphics2D {
+pub enum Rasterizable<'a> {
+    Text(Text<'a>),
+}
+
+pub trait Rasterizer {
     type Image: ImageRepresentation;
+    fn rasterize<'a, T>(&self, input: T) -> Self::Image
+    where
+        T: Into<Rasterizable<'a>>;
+}
+
+pub trait Graphics2D: Rasterizer {
     type Frame: Frame2D<Self::Image>;
     fn run(self, root: Self::Frame);
     fn frame(&self) -> Self::Frame;
