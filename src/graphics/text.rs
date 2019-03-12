@@ -5,7 +5,7 @@ pub enum Font {
     SystemFont,
 }
 
-pub enum FontWeight {
+pub enum Weight {
     Hairline,
     Light,
     Thin,
@@ -14,9 +14,15 @@ pub enum FontWeight {
     Heavy,
 }
 
-pub enum WordWrap {
+pub enum Wrap {
     None,
     Normal,
+}
+
+pub enum Align {
+    Center,
+    Start,
+    End,
 }
 
 pub struct Text<'a> {
@@ -26,9 +32,10 @@ pub struct Text<'a> {
     pub color: RGBA8,
     pub italic: bool,
     pub max_width: Option<u32>,
+    pub align: Align,
     pub line_height: u16,
-    pub word_wrap: WordWrap,
-    pub weight: FontWeight,
+    pub wrap: Wrap,
+    pub weight: Weight,
 }
 
 impl<'a> Into<Rasterizable<'a>> for Text<'a> {

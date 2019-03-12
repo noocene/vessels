@@ -1,6 +1,6 @@
 use vitruvia::graphics;
 use vitruvia::graphics::path::{Path, Primitive, StrokeBuilder, Texture};
-use vitruvia::graphics::text::{Font, FontWeight, Text, WordWrap};
+use vitruvia::graphics::text::{Align, Font, Text, Weight, Wrap};
 use vitruvia::graphics::{
     DynamicObject2D, Frame2D, Graphics2D, ImageRepresentation, Object2D, Rasterizer,
     StaticObject2D, Transform2D, Vec2D, RGBA8,
@@ -48,14 +48,15 @@ fn main() {
     let mut root = gfx.frame();
 
     let text = TextObject::new(gfx.rasterize(Text {
-        weight: FontWeight::Normal,
+        weight: Weight::Normal,
         content: "testing the thing that allows text rendering hello there テスト ensure CJK works word wrap functions over an arbitrary number of lines",
         font: Font::SystemFont,
         italic: false,
         max_width: Some(170),
         color: RGBA8::black().with_alpha(180),
         size: 15,
-        word_wrap: WordWrap::Normal,
+        wrap: Wrap::Normal,
+        align: Align::Start,
         line_height: 26,
     }));
 
