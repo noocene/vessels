@@ -6,7 +6,7 @@ use vitruvia::graphics::{
     RGBA8,
 };
 use vitruvia::input::mouse;
-use vitruvia::input::{Context, Source};
+use vitruvia::input::{Context, Mouse, Source};
 
 #[macro_use]
 extern crate stdweb;
@@ -36,7 +36,7 @@ fn main() {
 
     let mouse = ctx.mouse();
 
-    mouse.bind(|event: mouse::Event| {
+    mouse.bind(move |event: mouse::Event| {
         let parse = |button: mouse::Button| match button {
             mouse::Button::Left => "left".to_owned(),
             mouse::Button::Right => "right".to_owned(),
@@ -45,11 +45,16 @@ fn main() {
         };
         console!(
             log,
-            match event {
-                mouse::Event::Down(button) => format!("{} down", parse(button)),
-                mouse::Event::Up(button) => format!("{} up", parse(button)),
-                mouse::Event::Move(delta) => format!("move ({}, {})", delta.x, delta.y),
-            }
+            format!(
+                "at ({}, {}): {}",
+                event.position.x,
+                event.position.y,
+                match event.action {
+                    mouse::Action::Down(button) => format!("{} down", parse(button)),
+                    mouse::Action::Up(button) => format!("{} up", parse(button)),
+                    mouse::Action::Move(delta) => format!("move ({}, {})", delta.x, delta.y),
+                }
+            )
         )
     });
 }
