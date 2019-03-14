@@ -2,7 +2,8 @@ use vitruvia::graphics;
 use vitruvia::graphics::path::Primitive;
 use vitruvia::graphics::text::Text;
 use vitruvia::graphics::{
-    Frame2D, Graphics2D, ImageRepresentation, Rasterizer, StaticObject2D, RGBA8,
+    ContextualGraphics2D, Frame2D, Graphics2D, ImageRepresentation, Rasterizer, StaticObject2D,
+    RGBA8,
 };
 
 fn main() {
@@ -25,5 +26,6 @@ fn main() {
     root.add(StaticObject2D::from(text).with_transform(|transform| {
         transform.translate((65., 65.));
     }));
-    gfx.run(root);
+
+    let _ctx = gfx.run(root);
 }

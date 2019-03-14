@@ -474,17 +474,26 @@ impl Rasterizer for Canvas {
     }
 }
 
+impl ContextGraphics2D for Canvas {}
+
+impl ContextualGraphics2D for Canvas {
+    type Context = Canvas;
+    fn run(self, root: CanvasFrame) -> Self::Context {
+        {
+            let mut state = self.state.borrow_mut();
+            root.show();
+            state.root_frame = Some(root);
+            let cloned = self.clone();
+            window().request_animation_frame(move |delta| {
+                cloned.animate(delta);
+            });
+        }
+        self
+    }
+}
+
 impl Graphics2D for Canvas {
     type Frame = CanvasFrame;
-    fn run(self, root: CanvasFrame) {
-        let mut state = self.state.borrow_mut();
-        root.show();
-        state.root_frame = Some(root);
-        let cloned = self.clone();
-        window().request_animation_frame(move |delta| {
-            cloned.animate(delta);
-        });
-    }
     fn frame(&self) -> CanvasFrame {
         CanvasFrame::new()
     }
@@ -519,7 +528,7 @@ impl Clone for Canvas {
     }
 }
 
-pub fn new() -> impl Graphics2D {
+pub fn new() -> impl ContextualGraphics2D {
     document()
         .head()
         .unwrap()

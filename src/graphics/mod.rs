@@ -260,8 +260,14 @@ pub trait Rasterizer {
 
 pub trait Graphics2D: Rasterizer {
     type Frame: Frame2D<Self::Image>;
-    fn run(self, root: Self::Frame);
     fn frame(&self) -> Self::Frame;
+}
+
+pub trait ContextGraphics2D: Graphics2D {}
+
+pub trait ContextualGraphics2D: Graphics2D {
+    type Context: ContextGraphics2D;
+    fn run(self, root: Self::Frame) -> Self::Context;
 }
 
 #[derive(Clone, Copy, Default)]
@@ -414,7 +420,7 @@ impl Rect2D {
 
 mod targets;
 
-pub fn new() -> impl Graphics2D {
+pub fn new() -> impl ContextualGraphics2D {
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs", feature = "check"))]
     targets::web::new()
 }
