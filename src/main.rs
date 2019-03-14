@@ -5,12 +5,17 @@ use vitruvia::graphics::{
     ContextualGraphics2D, Frame2D, Graphics2D, ImageRepresentation, Rasterizer, StaticObject2D,
     RGBA8,
 };
+use vitruvia::input::mouse;
+use vitruvia::input::{Context, Source};
+
+#[macro_use]
+extern crate stdweb;
 
 fn main() {
-    let gfx = graphics::new();
-    let mut root = gfx.frame();
+    let ctx = graphics::new();
+    let mut root = ctx.frame();
 
-    let text = gfx.rasterize(Text::new("testing the thing that allows text rendering hello there テスト ensure CJK works word wrap functions over an arbitrary number of lines").with_color(RGBA8::black().with_alpha(190)).with_max_width(170).wrap());
+    let text = ctx.rasterize(Text::new("testing the thing that allows text rendering hello there テスト ensure CJK works word wrap functions over an arbitrary number of lines").with_color(RGBA8::black().with_alpha(190)).with_max_width(170).wrap());
 
     root.add(
         StaticObject2D::from_entity(
@@ -27,5 +32,24 @@ fn main() {
         transform.translate((65., 65.));
     }));
 
-    let _ctx = gfx.run(root);
+    let ctx = ctx.run(root);
+
+    let mouse = ctx.mouse();
+
+    mouse.bind(|event: mouse::Event| {
+        let parse = |button: mouse::Button| match button {
+            mouse::Button::Left => "left".to_owned(),
+            mouse::Button::Right => "right".to_owned(),
+            mouse::Button::Middle => "middle".to_owned(),
+            mouse::Button::Auxiliary(index) => format!("auxiliary #{}", index),
+        };
+        console!(
+            log,
+            match event {
+                mouse::Event::Down(button) => format!("{} down", parse(button)),
+                mouse::Event::Up(button) => format!("{} up", parse(button)),
+                mouse::Event::Move(delta) => format!("move ({}, {})", delta.x, delta.y),
+            }
+        )
+    });
 }

@@ -10,4 +10,6 @@ extern crate failure;
 
 mod errors;
 pub mod graphics;
+pub mod input;
+mod targets;
 mod util;

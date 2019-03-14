@@ -1,5 +1,7 @@
 use crate::graphics::path::*;
 use crate::graphics::text::*;
+use crate::input::*;
+use crate::targets;
 use crate::util::*;
 
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
@@ -263,7 +265,7 @@ pub trait Graphics2D: Rasterizer {
     fn frame(&self) -> Self::Frame;
 }
 
-pub trait ContextGraphics2D: Graphics2D {}
+pub trait ContextGraphics2D: Graphics2D + Context {}
 
 pub trait ContextualGraphics2D: Graphics2D {
     type Context: ContextGraphics2D;
@@ -418,9 +420,7 @@ impl Rect2D {
     }
 }
 
-mod targets;
-
 pub fn new() -> impl ContextualGraphics2D {
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs", feature = "check"))]
-    targets::web::new()
+    targets::web::graphics::new()
 }

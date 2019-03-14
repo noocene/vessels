@@ -1,5 +1,9 @@
 use crate::graphics::*;
+use crate::input::*;
 use crate::graphics::text::*;
+use crate::util::ObserverCell;
+use crate::graphics::path::*;
+use crate::targets::web;
 
 use stdweb::traits::*;
 use stdweb::unstable::TryInto;
@@ -7,16 +11,15 @@ use stdweb::web::{
     document, window, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap, LineJoin, TextAlign, TextBaseline
 };
 
-use stdweb::web::event::ResizeEvent;
+use stdweb::web::event::{ResizeEvent, ContextMenuEvent};
 
 use stdweb::web::html_element::CanvasElement;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::borrow::Cow;
 
 use std::slice::Iter;
-
-use std::collections::VecDeque;
 
 use std::ops::Deref;
 
@@ -95,6 +98,10 @@ impl CanvasFrame {
         }
     }
     fn show(&self) {
+        self.canvas.add_event_listener(|event: ContextMenuEvent| {
+            event.prevent_default();
+            event.stop_propagation();
+        });
         document().body().unwrap().append_child(&self.canvas);
     }
     fn draw(&self) {
@@ -325,6 +332,9 @@ impl CanvasFrame {
             }
         });
     }
+    fn element(&self) -> CanvasElement {
+        self.canvas.clone()
+    }
 }
 
 impl DynamicObject2D<CanvasImage> for CanvasFrame {
@@ -474,6 +484,14 @@ impl Rasterizer for Canvas {
     }
 }
 
+impl Context for Canvas {
+    type Mouse = web::input::Mouse;
+    fn mouse(&self) -> Self::Mouse {
+        let canvas = self.element().unwrap();
+        web::input::Mouse::new(canvas)
+    }
+}
+
 impl ContextGraphics2D for Canvas {}
 
 impl ContextualGraphics2D for Canvas {
@@ -517,6 +535,13 @@ impl Canvas {
         window().request_animation_frame(move |delta| {
             cloned.animate(delta);
         });
+    }
+    fn element(&self) -> Option<CanvasElement> {
+        let frame = &self.state.borrow().root_frame;
+        match frame {
+            None => None,
+            Some(frame) => Some(frame.element())
+        }
     }
 }
 
