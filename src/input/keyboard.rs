@@ -1,6 +1,6 @@
 pub trait Keyboard: super::Source<Event> {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Numpad {
     Number(Number),
     Enter,
@@ -13,7 +13,7 @@ pub enum Numpad {
     Decimal,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Arrow {
     Up,
     Down,
@@ -21,7 +21,7 @@ pub enum Arrow {
     Right,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Number {
     Zero,
     One,
@@ -35,7 +35,7 @@ pub enum Number {
     Nine,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Function {
     F1,
     F2,
@@ -63,7 +63,7 @@ pub enum Function {
     F24,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Alpha {
     Q,
     W,
@@ -93,13 +93,13 @@ pub enum Alpha {
     M,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Location {
     Right,
     Left,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Key {
     Escape,
     Dash,
@@ -141,10 +141,16 @@ pub enum Key {
     Unknown,
 }
 
-#[derive(Debug)]
-pub enum Event {
+#[derive(Debug, Clone)]
+pub enum Action {
     Up(Key),
     Down(Key),
+}
+
+#[derive(Clone)]
+pub struct Event {
+    pub action: Action,
+    pub printable: Option<char>,
 }
 
 impl super::Event for Event {}

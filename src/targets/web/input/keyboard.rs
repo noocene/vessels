@@ -1,6 +1,8 @@
 use crate::input;
 use crate::input::keyboard;
-use crate::input::keyboard::{Alpha, Arrow, Event, Function, Key, Location, Number, Numpad};
+use crate::input::keyboard::{
+    Action, Alpha, Arrow, Event, Function, Key, Location, Number, Numpad,
+};
 
 use stdweb::traits::IKeyboardEvent;
 use stdweb::web::event::{IEvent, KeyDownEvent, KeyUpEvent};
@@ -159,19 +161,35 @@ impl Keyboard {
         let handlers = self.handlers.clone();
         let up_handlers = self.handlers.clone();
         let body = document().body().unwrap();
-        body.add_event_listener(move |event: KeyDownEvent| {
-            event.prevent_default();
-            handlers
-                .borrow()
-                .iter()
-                .for_each(|handler| handler(Event::Down(parse_code(event.code().as_str()))));
+        body.add_event_listener(move |e: KeyDownEvent| {
+            e.prevent_default();
+            let key = e.key();
+            let event = Event {
+                action: Action::Down(parse_code(e.code().as_str())),
+                printable: if key.len() == 1 {
+                    Some(key.chars().take(1).collect::<Vec<char>>()[0])
+                } else {
+                    None
+                },
+            };
+            handlers.borrow().iter().for_each(|handler| {
+                handler(event.clone());
+            });
         });
-        body.add_event_listener(move |event: KeyUpEvent| {
-            event.prevent_default();
-            up_handlers
-                .borrow()
-                .iter()
-                .for_each(|handler| handler(Event::Up(parse_code(event.code().as_str()))));
+        body.add_event_listener(move |e: KeyUpEvent| {
+            e.prevent_default();
+            let key = e.key();
+            let event = Event {
+                action: Action::Up(parse_code(e.code().as_str())),
+                printable: if key.len() == 1 {
+                    Some(key.chars().take(1).collect::<Vec<char>>()[0])
+                } else {
+                    None
+                },
+            };
+            up_handlers.borrow().iter().for_each(|handler| {
+                handler(event.clone());
+            });
         });
     }
 }

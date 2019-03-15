@@ -37,8 +37,15 @@ fn main() {
     let keyboard = ctx.keyboard();
 
     keyboard.bind(move |event: keyboard::Event| {
-        if let keyboard::Event::Down(key) = event {
-            console!(log, format!("{:?}", key))
+        if let keyboard::Action::Down(key) = event.action {
+            console!(
+                log,
+                match event.printable {
+                    None => "Unprintable".to_owned(),
+                    Some(character) => character.to_string(),
+                }
+            );
+            console!(log, format!("{:?}", key));
         }
     });
 }
