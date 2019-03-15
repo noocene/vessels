@@ -420,6 +420,6 @@ impl Rect2D {
 }
 
 pub fn new() -> impl ContextualGraphics2D {
-    #[cfg(any(target_arch = "wasm32", target_arch = "asmjs", feature = "check"))]
+    #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
     targets::web::graphics::new()
 }
