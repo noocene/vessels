@@ -11,7 +11,7 @@ use stdweb::web::{document, IEventTarget};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-type KeyEventHandler = Fn(input::keyboard::Event);
+use std::collections::HashMap;
 
 fn parse_code(code: &str) -> Key {
     match code {
@@ -134,8 +134,13 @@ fn parse_code(code: &str) -> Key {
     }
 }
 
+pub struct KeyboardState {
+    handlers: Vec<Box<Fn(input::keyboard::Event)>>,
+    keys: HashMap<Key, bool>,
+}
+
 pub struct Keyboard {
-    handlers: Rc<RefCell<Vec<Box<KeyEventHandler>>>>,
+    state: Rc<RefCell<KeyboardState>>,
 }
 
 impl input::Source<keyboard::Event> for Keyboard {
@@ -143,51 +148,80 @@ impl input::Source<keyboard::Event> for Keyboard {
     where
         F: Fn(input::keyboard::Event) + 'static,
     {
-        self.handlers.borrow_mut().push(Box::new(handler));
+        self.state.borrow_mut().handlers.push(Box::new(handler));
     }
 }
 
 impl keyboard::Keyboard for Keyboard {}
 
+impl keyboard::State for Keyboard {
+    fn poll(&mut self, key: Key) -> bool {
+        let mut state = self.state.borrow_mut();
+        let entry = state.keys.entry(key).or_insert(false);
+        *entry
+    }
+}
+
+impl keyboard::State for KeyboardState {
+    fn poll(&mut self, key: Key) -> bool {
+        *self.keys.entry(key).or_insert(false)
+    }
+}
+
 impl Keyboard {
     pub fn new() -> Keyboard {
         let keyboard = Keyboard {
-            handlers: Rc::new(RefCell::new(vec![])),
+            state: Rc::new(RefCell::new(KeyboardState {
+                handlers: vec![],
+                keys: HashMap::new(),
+            })),
         };
         keyboard.initialize();
         keyboard
     }
     fn initialize(&self) {
-        let handlers = self.handlers.clone();
-        let up_handlers = self.handlers.clone();
+        let state = self.state.clone();
+        let up_state = state.clone();
         let body = document().body().unwrap();
         body.add_event_listener(move |e: KeyDownEvent| {
+            let send_state = state.clone();
+            let mut state = state.borrow_mut();
             e.prevent_default();
             let key = e.key();
+            let k = parse_code(e.code().as_str());
+            let entry = state.keys.entry(k.clone()).or_insert(true);
+            *entry = true;
             let event = Event {
-                action: Action::Down(parse_code(e.code().as_str())),
+                action: Action::Down(k),
+                state: send_state,
                 printable: if key.len() == 1 {
                     Some(key.chars().take(1).collect::<Vec<char>>()[0])
                 } else {
                     None
                 },
             };
-            handlers.borrow().iter().for_each(|handler| {
+            state.handlers.iter().for_each(|handler| {
                 handler(event.clone());
             });
         });
         body.add_event_listener(move |e: KeyUpEvent| {
+            let send_state = up_state.clone();
+            let mut state = up_state.borrow_mut();
             e.prevent_default();
             let key = e.key();
+            let k = parse_code(e.code().as_str());
+            let entry = state.keys.entry(k.clone()).or_insert(false);
+            *entry = false;
             let event = Event {
-                action: Action::Up(parse_code(e.code().as_str())),
+                action: Action::Up(k),
+                state: send_state,
                 printable: if key.len() == 1 {
                     Some(key.chars().take(1).collect::<Vec<char>>()[0])
                 } else {
                     None
                 },
             };
-            up_handlers.borrow().iter().for_each(|handler| {
+            state.handlers.iter().for_each(|handler| {
                 handler(event.clone());
             });
         });

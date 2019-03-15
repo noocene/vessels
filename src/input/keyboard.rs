@@ -1,6 +1,13 @@
-pub trait Keyboard: super::Source<Event> {}
+use std::cell::RefCell;
+use std::rc::Rc;
 
-#[derive(Debug, Clone)]
+pub trait Keyboard: super::Source<Event> + State {}
+
+pub trait State {
+    fn poll(&mut self, key: Key) -> bool;
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Numpad {
     Number(Number),
     Enter,
@@ -13,7 +20,7 @@ pub enum Numpad {
     Decimal,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Arrow {
     Up,
     Down,
@@ -21,7 +28,7 @@ pub enum Arrow {
     Right,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Number {
     Zero,
     One,
@@ -35,7 +42,7 @@ pub enum Number {
     Nine,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Function {
     F1,
     F2,
@@ -63,7 +70,7 @@ pub enum Function {
     F24,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Alpha {
     Q,
     W,
@@ -93,13 +100,13 @@ pub enum Alpha {
     M,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Location {
     Right,
     Left,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Key {
     Escape,
     Dash,
@@ -151,6 +158,7 @@ pub enum Action {
 pub struct Event {
     pub action: Action,
     pub printable: Option<char>,
+    pub state: Rc<RefCell<State>>,
 }
 
 impl super::Event for Event {}
