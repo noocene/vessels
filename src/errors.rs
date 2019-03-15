@@ -1,7 +1,5 @@
 use std::fmt;
 
-use stdweb::web::error;
-
 use failure::{Backtrace, Context, Fail};
 
 #[derive(Debug)]

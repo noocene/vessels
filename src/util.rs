@@ -48,7 +48,4 @@ where
         self.cell.set(value);
         self.dirty.set(true);
     }
-    pub fn into_inner(self) -> T {
-        self.cell.into_inner()
-    }
 }

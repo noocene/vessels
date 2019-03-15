@@ -5,8 +5,8 @@ use vitruvia::graphics::{
     ContextualGraphics2D, Frame2D, Graphics2D, ImageRepresentation, Rasterizer, StaticObject2D,
     RGBA8,
 };
-use vitruvia::input::mouse;
-use vitruvia::input::{Context, Mouse, Source};
+use vitruvia::input::keyboard;
+use vitruvia::input::{Context, Source};
 
 #[macro_use]
 extern crate stdweb;
@@ -34,27 +34,11 @@ fn main() {
 
     let ctx = ctx.run(root);
 
-    let mouse = ctx.mouse();
+    let keyboard = ctx.keyboard();
 
-    mouse.bind(move |event: mouse::Event| {
-        let parse = |button: mouse::Button| match button {
-            mouse::Button::Left => "left".to_owned(),
-            mouse::Button::Right => "right".to_owned(),
-            mouse::Button::Middle => "middle".to_owned(),
-            mouse::Button::Auxiliary(index) => format!("auxiliary #{}", index),
-        };
-        console!(
-            log,
-            format!(
-                "at ({}, {}): {}",
-                event.position.x,
-                event.position.y,
-                match event.action {
-                    mouse::Action::Down(button) => format!("{} down", parse(button)),
-                    mouse::Action::Up(button) => format!("{} up", parse(button)),
-                    mouse::Action::Move(delta) => format!("move ({}, {})", delta.x, delta.y),
-                }
-            )
-        )
+    keyboard.bind(move |event: keyboard::Event| {
+        if let keyboard::Event::Down(key) = event {
+            console!(log, format!("{:?}", key))
+        }
     });
 }

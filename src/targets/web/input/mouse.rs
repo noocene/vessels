@@ -4,8 +4,7 @@ use crate::input::mouse;
 use crate::input::mouse::{Action, Button, Event};
 
 use stdweb::web::event::*;
-use stdweb::web::html_element::CanvasElement;
-use stdweb::web::IEventTarget;
+use stdweb::web::{document, IEventTarget};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -16,7 +15,6 @@ pub struct MouseState {
 }
 
 pub struct Mouse {
-    target: CanvasElement,
     state: Rc<RefCell<MouseState>>,
 }
 
@@ -36,9 +34,8 @@ impl input::Mouse for Mouse {
 }
 
 impl Mouse {
-    pub fn new(target: CanvasElement) -> Mouse {
+    pub fn new() -> Mouse {
         let mouse = Mouse {
-            target,
             state: Rc::new(RefCell::new(MouseState {
                 handlers: vec![],
                 position: Vec2D::default(),
@@ -51,24 +48,24 @@ impl Mouse {
         let state = self.state.clone();
         let up_state = state.clone();
         let move_state = up_state.clone();
-        self.target
-            .add_event_listener(move |event: MouseDownEvent| {
-                event.prevent_default();
-                let state = state.borrow();
-                state.handlers.iter().for_each(|handler| {
-                    handler(Event {
-                        action: Action::Down(match event.button() {
-                            MouseButton::Left => Button::Left,
-                            MouseButton::Right => Button::Right,
-                            MouseButton::Wheel => Button::Middle,
-                            MouseButton::Button4 => Button::Auxiliary(0),
-                            MouseButton::Button5 => Button::Auxiliary(1),
-                        }),
-                        position: state.position,
-                    })
-                });
+        let body = document().body().unwrap();
+        body.add_event_listener(move |event: MouseDownEvent| {
+            event.prevent_default();
+            let state = state.borrow();
+            state.handlers.iter().for_each(|handler| {
+                handler(Event {
+                    action: Action::Down(match event.button() {
+                        MouseButton::Left => Button::Left,
+                        MouseButton::Right => Button::Right,
+                        MouseButton::Wheel => Button::Middle,
+                        MouseButton::Button4 => Button::Auxiliary(0),
+                        MouseButton::Button5 => Button::Auxiliary(1),
+                    }),
+                    position: state.position,
+                })
             });
-        self.target.add_event_listener(move |event: MouseUpEvent| {
+        });
+        body.add_event_listener(move |event: MouseUpEvent| {
             event.prevent_default();
             let state = up_state.borrow();
             state.handlers.iter().for_each(|handler| {
@@ -84,19 +81,18 @@ impl Mouse {
                 })
             });
         });
-        self.target
-            .add_event_listener(move |event: MouseMoveEvent| {
-                let mut state = move_state.borrow_mut();
-                event.prevent_default();
-                state.position = (f64::from(event.client_x()), f64::from(event.client_y())).into();
-                state.handlers.iter().for_each(|handler| {
-                    handler(Event {
-                        action: Action::Move(
-                            (f64::from(event.movement_x()), f64::from(event.movement_y())).into(),
-                        ),
-                        position: state.position,
-                    })
+        body.add_event_listener(move |event: MouseMoveEvent| {
+            let mut state = move_state.borrow_mut();
+            event.prevent_default();
+            state.position = (f64::from(event.client_x()), f64::from(event.client_y())).into();
+            state.handlers.iter().for_each(|handler| {
+                handler(Event {
+                    action: Action::Move(
+                        (f64::from(event.movement_x()), f64::from(event.movement_y())).into(),
+                    ),
+                    position: state.position,
                 })
-            });
+            })
+        });
     }
 }

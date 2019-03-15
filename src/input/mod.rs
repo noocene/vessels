@@ -1,3 +1,5 @@
+pub mod keyboard;
+pub use keyboard::Keyboard;
 pub mod mouse;
 pub use mouse::Mouse;
 
@@ -14,5 +16,7 @@ pub trait Event {}
 
 pub trait Context {
     type Mouse: Mouse;
+    type Keyboard: Keyboard;
     fn mouse(&self) -> Self::Mouse;
+    fn keyboard(&self) -> Self::Keyboard;
 }

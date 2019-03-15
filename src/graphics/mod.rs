@@ -2,7 +2,6 @@ use crate::graphics::path::*;
 use crate::graphics::text::*;
 use crate::input::*;
 use crate::targets;
-use crate::util::*;
 
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 

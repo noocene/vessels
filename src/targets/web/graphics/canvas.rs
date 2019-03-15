@@ -8,7 +8,7 @@ use crate::targets::web;
 use stdweb::traits::*;
 use stdweb::unstable::TryInto;
 use stdweb::web::{
-    document, window, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap, LineJoin, TextAlign, TextBaseline
+    document, window, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap, LineJoin, TextAlign, TextBaseline,
 };
 
 use stdweb::web::event::{ResizeEvent, ContextMenuEvent};
@@ -332,9 +332,6 @@ impl CanvasFrame {
             }
         });
     }
-    fn element(&self) -> CanvasElement {
-        self.canvas.clone()
-    }
 }
 
 impl DynamicObject2D<CanvasImage> for CanvasFrame {
@@ -486,9 +483,12 @@ impl Rasterizer for Canvas {
 
 impl Context for Canvas {
     type Mouse = web::input::Mouse;
+    type Keyboard = web::input::Keyboard;
     fn mouse(&self) -> Self::Mouse {
-        let canvas = self.element().unwrap();
-        web::input::Mouse::new(canvas)
+        web::input::Mouse::new()
+    }
+    fn keyboard(&self) -> Self::Keyboard {
+        web::input::Keyboard::new()
     }
 }
 
@@ -535,13 +535,6 @@ impl Canvas {
         window().request_animation_frame(move |delta| {
             cloned.animate(delta);
         });
-    }
-    fn element(&self) -> Option<CanvasElement> {
-        let frame = &self.state.borrow().root_frame;
-        match frame {
-            None => None,
-            Some(frame) => Some(frame.element())
-        }
     }
 }
 

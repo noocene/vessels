@@ -19,7 +19,7 @@ pub struct GradientStop {
 }
 
 impl GradientStop {
-    fn new(offset: f64, color: RGBA8) -> Result<Self, Error> {
+    pub fn new(offset: f64, color: RGBA8) -> Result<Self, Error> {
         if offset > 1.0 || offset < 0.0 {
             return Err(Error::color_stop());
         }
