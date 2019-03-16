@@ -1,5 +1,5 @@
-use crate::graphics2_d::path::*;
-use crate::graphics2_d::text::*;
+use crate::graphics_2d::path::*;
+use crate::graphics_2d::text::*;
 use crate::input::*;
 use crate::targets;
 

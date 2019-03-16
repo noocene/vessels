@@ -1,4 +1,4 @@
-use crate::graphics2_d::Vector;
+use crate::graphics_2d::Vector;
 
 pub trait Mouse: super::Source<Event> {
     fn position(&self) -> Vector;

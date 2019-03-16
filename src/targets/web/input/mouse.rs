@@ -1,4 +1,4 @@
-use crate::graphics2_d::Vector;
+use crate::graphics_2d::Vector;
 use crate::input;
 use crate::input::mouse;
 use crate::input::mouse::{Action, Button, Event};
