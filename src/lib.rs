@@ -11,8 +11,8 @@ extern crate failure;
 
 mod errors;
 pub mod graphics_2d;
-pub mod text;
-pub mod path;
 pub mod input;
+pub mod path;
 mod targets;
+pub mod text;
 mod util;

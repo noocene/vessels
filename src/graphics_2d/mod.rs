@@ -8,7 +8,7 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 use std::borrow::Cow;
 
 pub trait ToHexColor {
-    fn to_hex_color(&self) -> Cow<str>;
+    fn to_hex_color(&self) -> Cow<'_, str>;
 }
 
 pub trait ImageRepresentation:
@@ -25,7 +25,7 @@ impl ImageRepresentation for Image<RGBA8, Texture2D> {
 
 pub trait PixelFormat {}
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct RGBA8 {
     pub r: u8,
     pub g: u8,
@@ -34,7 +34,7 @@ pub struct RGBA8 {
 }
 
 impl RGBA8 {
-    pub fn to_rgba_color(&self) -> Cow<str> {
+    pub fn to_rgba_color(&self) -> Cow<'_, str> {
         Cow::from(format!(
             "rgba({},{},{},{})",
             self.r,
@@ -66,7 +66,7 @@ impl RGBA8 {
 }
 
 impl ToHexColor for RGBA8 {
-    fn to_hex_color(&self) -> Cow<str> {
+    fn to_hex_color(&self) -> Cow<'_, str> {
         Cow::from(format!(
             "#{:x?}{:x?}{:x?}{:x?}",
             self.r, self.g, self.b, self.a
@@ -87,7 +87,7 @@ impl PixelFormat for RGBA8 {}
 
 pub trait ImageFormat {}
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Texture2D {
     pub width: u32,
     pub height: u32,
@@ -101,7 +101,7 @@ pub struct Image<T: PixelFormat, U: ImageFormat> {
     pub format: U,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Transform {
     pub position: Vector,
     pub scale: Vector,
@@ -170,7 +170,7 @@ impl Default for Transform {
 pub trait DynamicObject {
     type Image: ImageRepresentation;
     fn orientation(&self) -> Transform;
-    fn render(&self) -> Cow<[Path<Self::Image>]>;
+    fn render(&self) -> Cow<'_, [Path<Self::Image>]>;
 }
 
 pub struct StaticObject<T>
@@ -225,7 +225,7 @@ where
     T: ImageRepresentation,
 {
     Static(StaticObject<T>),
-    Dynamic(Box<DynamicObject<Image = T>>),
+    Dynamic(Box<dyn DynamicObject<Image = T>>),
 }
 
 pub trait Frame: DynamicObject<Image = <Self as Frame>::Image> {

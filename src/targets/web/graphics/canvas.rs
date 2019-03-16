@@ -123,7 +123,7 @@ impl CanvasFrame {
         );
         self.context.save();
         self.contents.iter().for_each(|object| {
-            let draw = |orientation: Transform, content: Iter<Path<CanvasImage>>| {
+            let draw = |orientation: Transform, content: Iter<'_, Path<CanvasImage>>| {
                 let matrix = orientation.to_matrix();
                 content.for_each(|entity| {
                     self.context.restore();
@@ -316,7 +316,7 @@ impl CanvasFrame {
                 });
             };
             let orientation: Transform;
-            let content: Iter<Path<CanvasImage>>;
+            let content: Iter<'_, Path<CanvasImage>>;
             match object {
                 Object::Dynamic(object) => {
                     orientation = object.orientation();
@@ -325,7 +325,7 @@ impl CanvasFrame {
                     draw(orientation, content);
                 }
                 Object::Static(object) => {
-                    orientation = object.orientation.clone();
+                    orientation = object.orientation;
                     content = object.content.iter();
                     draw(orientation, content);
                 }
@@ -339,7 +339,7 @@ impl DynamicObject for CanvasFrame {
     fn orientation(&self) -> Transform {
         Transform::default()
     }
-    fn render(&self) -> Cow<[Path<CanvasImage>]> {
+    fn render(&self) -> Cow<'_, [Path<CanvasImage>]> {
         self.draw();
         let size = self.size.get();
         Cow::from(vec![Path {
@@ -397,7 +397,7 @@ struct CanvasState {
 impl Rasterizer for Canvas {
     type Image = CanvasImage;
     fn rasterize<'a, T>(&self, input: T) -> Self::Image where T: Into<Rasterizable<'a>> {
-        let update_text_style = |context: &CanvasRenderingContext2d, input: &Text| {
+        let update_text_style = |context: &CanvasRenderingContext2d, input: &Text<'_>| {
             context.set_font((match input.font {
                 Font::SystemFont => {
                     format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {

@@ -134,8 +134,8 @@ fn parse_code(code: &str) -> Key {
     }
 }
 
-pub struct KeyboardState {
-    handlers: Vec<Box<Fn(input::keyboard::Event)>>,
+pub(crate) struct KeyboardState {
+    handlers: Vec<Box<dyn Fn(input::keyboard::Event)>>,
     keys: HashMap<Key, bool>,
 }
 
@@ -189,7 +189,7 @@ impl Keyboard {
             e.prevent_default();
             let key = e.key();
             let k = parse_code(e.code().as_str());
-            let entry = state.keys.entry(k.clone()).or_insert(true);
+            let entry = state.keys.entry(k).or_insert(true);
             *entry = true;
             let event = Event {
                 action: Action::Down(k),
@@ -210,7 +210,7 @@ impl Keyboard {
             e.prevent_default();
             let key = e.key();
             let k = parse_code(e.code().as_str());
-            let entry = state.keys.entry(k.clone()).or_insert(false);
+            let entry = state.keys.entry(k).or_insert(false);
             *entry = false;
             let event = Event {
                 action: Action::Up(k),

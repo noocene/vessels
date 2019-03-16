@@ -7,7 +7,7 @@ pub trait State {
     fn poll(&mut self, key: Key) -> bool;
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Copy)]
 pub enum Numpad {
     Number(Number),
     Enter,
@@ -20,7 +20,7 @@ pub enum Numpad {
     Decimal,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Copy)]
 pub enum Arrow {
     Up,
     Down,
@@ -28,7 +28,7 @@ pub enum Arrow {
     Right,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Copy)]
 pub enum Number {
     Zero,
     One,
@@ -42,7 +42,7 @@ pub enum Number {
     Nine,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Copy)]
 pub enum Function {
     F1,
     F2,
@@ -70,7 +70,7 @@ pub enum Function {
     F24,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Copy)]
 pub enum Alpha {
     Q,
     W,
@@ -100,13 +100,13 @@ pub enum Alpha {
     M,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Copy)]
 pub enum Location {
     Right,
     Left,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Copy)]
 pub enum Key {
     Escape,
     Dash,
@@ -148,7 +148,7 @@ pub enum Key {
     Unknown,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Action {
     Up(Key),
     Down(Key),
@@ -158,7 +158,7 @@ pub enum Action {
 pub struct Event {
     pub action: Action,
     pub printable: Option<char>,
-    pub state: Rc<RefCell<State>>,
+    pub state: Rc<RefCell<dyn State>>,
 }
 
 impl super::Event for Event {}

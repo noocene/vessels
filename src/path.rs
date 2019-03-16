@@ -4,7 +4,7 @@ use crate::errors::Error;
 
 const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum Segment {
     LineTo(Vector),
     MoveTo(Vector),
@@ -12,7 +12,7 @@ pub enum Segment {
     CubicTo(Vector, Vector, Vector),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct GradientStop {
     pub offset: f64,
     pub color: RGBA8,

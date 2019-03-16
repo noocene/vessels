@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub struct MouseState {
-    handlers: Vec<Box<Fn(input::mouse::Event)>>,
+    handlers: Vec<Box<dyn Fn(input::mouse::Event)>>,
     position: Vector,
 }
 

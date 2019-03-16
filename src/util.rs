@@ -19,7 +19,7 @@ where
     }
 }
 
-pub struct ObserverCell<T>
+pub(crate) struct ObserverCell<T>
 where
     T: Copy,
 {
@@ -31,20 +31,20 @@ impl<T> ObserverCell<T>
 where
     T: Copy,
 {
-    pub fn new(value: T) -> Self {
+    pub(crate) fn new(value: T) -> Self {
         ObserverCell {
             cell: Cell::new(value),
             dirty: Cell::new(true),
         }
     }
-    pub fn is_dirty(&self) -> bool {
+    pub(crate) fn is_dirty(&self) -> bool {
         self.dirty.get()
     }
-    pub fn get(&self) -> T {
+    pub(crate) fn get(&self) -> T {
         self.dirty.set(false);
         self.cell.get()
     }
-    pub fn set(&self, value: T) {
+    pub(crate) fn set(&self, value: T) {
         self.cell.set(value);
         self.dirty.set(true);
     }

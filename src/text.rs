@@ -38,7 +38,7 @@ pub struct Text<'a> {
 }
 
 impl<'a> Text<'a> {
-    pub fn new(content: &str) -> Text {
+    pub fn new(content: &str) -> Text<'_> {
         Text::default().with_content(content)
     }
     fn with_content(mut self, content: &'a str) -> Self {
