@@ -26,7 +26,7 @@ use std::ops::Deref;
 type CanvasImage = CanvasElement;
 
 impl ImageRepresentation for CanvasImage {
-    fn get_size(&self) -> Vec2D {
+    fn get_size(&self) -> Vector {
         let dpr = window().device_pixel_ratio();
         (f64::from(self.width()) / dpr, f64::from(self.height()) / dpr).into()
     }
@@ -65,10 +65,10 @@ impl Into<Image<RGBA8, Texture2D>> for CanvasImage {
 struct CanvasFrame {
     context: CanvasRenderingContext2d,
     canvas: CanvasElement,
-    contents: Vec<Object2D<CanvasImage>>,
+    contents: Vec<Object<CanvasImage>>,
     pixel_ratio: f64,
-    viewport: Cell<Rect2D>,
-    size: Cell<Vec2D>,
+    viewport: Cell<Rect>,
+    size: Cell<Vector>,
 }
 
 impl Drop for CanvasFrame {
@@ -90,9 +90,9 @@ impl CanvasFrame {
             pixel_ratio: window().device_pixel_ratio(),
             context,
             contents: vec![],
-            size: Cell::from(Vec2D::default()),
-            viewport: Cell::from(Rect2D {
-                size: Vec2D::default(),
+            size: Cell::from(Vector::default()),
+            viewport: Cell::from(Rect {
+                size: Vector::default(),
                 position: (0., 0.).into(),
             }),
         }
@@ -123,7 +123,7 @@ impl CanvasFrame {
         );
         self.context.save();
         self.contents.iter().for_each(|object| {
-            let draw = |orientation: Transform2D, content: Iter<Path<CanvasImage>>| {
+            let draw = |orientation: Transform, content: Iter<Path<CanvasImage>>| {
                 let matrix = orientation.to_matrix();
                 content.for_each(|entity| {
                     self.context.restore();
@@ -315,16 +315,16 @@ impl CanvasFrame {
                     }
                 });
             };
-            let orientation: Transform2D;
+            let orientation: Transform;
             let content: Iter<Path<CanvasImage>>;
             match object {
-                Object2D::Dynamic(object) => {
+                Object::Dynamic(object) => {
                     orientation = object.orientation();
                     let _content = object.render();
                     content = _content.iter();
                     draw(orientation, content);
                 }
-                Object2D::Static(object) => {
+                Object::Static(object) => {
                     orientation = object.orientation.clone();
                     content = object.content.iter();
                     draw(orientation, content);
@@ -334,15 +334,15 @@ impl CanvasFrame {
     }
 }
 
-impl DynamicObject2D<CanvasImage> for CanvasFrame {
-    fn orientation(&self) -> Transform2D {
-        Transform2D::default()
+impl DynamicObject<CanvasImage> for CanvasFrame {
+    fn orientation(&self) -> Transform {
+        Transform::default()
     }
     fn render(&self) -> Cow<[Path<CanvasImage>]> {
         self.draw();
         let size = self.size.get();
         Cow::from(vec![Path {
-            orientation: Transform2D::default(),
+            orientation: Transform::default(),
             fill: Some(Fill {
                 content: Texture::Image(Box::new(self.canvas.clone())),
             }),
@@ -359,14 +359,14 @@ impl DynamicObject2D<CanvasImage> for CanvasFrame {
     }
 }
 
-impl Frame2D<CanvasImage> for CanvasFrame {
-    fn add<U>(&mut self, object: U) where U: Into<Object2D<CanvasImage>> {
+impl Frame<CanvasImage> for CanvasFrame {
+    fn add<U>(&mut self, object: U) where U: Into<Object<CanvasImage>> {
         self.contents.push(object.into());
     }
-    fn set_viewport(&self, viewport: Rect2D) {
+    fn set_viewport(&self, viewport: Rect) {
         self.viewport.set(viewport);
     }
-    fn resize<T>(&self, size: T) where T: Into<Vec2D> {
+    fn resize<T>(&self, size: T) where T: Into<Vector> {
         let size = size.into();
         self.size.set(size);
         self.canvas
@@ -374,7 +374,7 @@ impl Frame2D<CanvasImage> for CanvasFrame {
         self.canvas
             .set_width((size.x * self.pixel_ratio) as u32);
     }
-    fn get_size(&self) -> Vec2D {
+    fn get_size(&self) -> Vector {
         self.size.get()
     }
     fn to_image(&self) -> Box<CanvasImage> {
@@ -389,7 +389,7 @@ struct Canvas {
 
 struct CanvasState {
     root_frame: Option<CanvasFrame>,
-    size: ObserverCell<Vec2D>,
+    size: ObserverCell<Vector>,
 }
 
 impl Rasterizer for Canvas {
@@ -492,9 +492,9 @@ impl Context for Canvas {
     }
 }
 
-impl ContextGraphics2D for Canvas {}
+impl ContextGraphics for Canvas {}
 
-impl ContextualGraphics2D for Canvas {
+impl ContextualGraphics for Canvas {
     type Context = Canvas;
     fn run(self, root: CanvasFrame) -> Self::Context {
         {
@@ -510,7 +510,7 @@ impl ContextualGraphics2D for Canvas {
     }
 }
 
-impl Graphics2D for Canvas {
+impl Graphics for Canvas {
     type Frame = CanvasFrame;
     fn frame(&self) -> CanvasFrame {
         CanvasFrame::new()
@@ -525,7 +525,7 @@ impl Canvas {
                 if state.size.is_dirty() {
                     let size = state.size.get();
                     frame.resize(size);
-                    frame.set_viewport(Rect2D::new((0., 0.), size));
+                    frame.set_viewport(Rect::new((0., 0.), size));
                 }
                 frame.draw();
             }
@@ -546,7 +546,7 @@ impl Clone for Canvas {
     }
 }
 
-pub fn new() -> impl ContextualGraphics2D {
+pub fn new() -> impl ContextualGraphics {
     document()
         .head()
         .unwrap()

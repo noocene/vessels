@@ -1,7 +1,7 @@
-use crate::graphics2_d::Vec2D;
+use crate::graphics2_d::Vector;
 
 pub trait Mouse: super::Source<Event> {
-    fn position(&self) -> Vec2D;
+    fn position(&self) -> Vector;
 }
 
 pub enum Button {
@@ -14,12 +14,12 @@ pub enum Button {
 pub enum Action {
     Up(Button),
     Down(Button),
-    Move(Vec2D),
+    Move(Vector),
 }
 
 pub struct Event {
     pub action: Action,
-    pub position: Vec2D,
+    pub position: Vector,
 }
 
 impl super::Event for Event {}

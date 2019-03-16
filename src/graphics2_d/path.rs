@@ -6,10 +6,10 @@ const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
 
 #[derive(Clone)]
 pub enum Segment {
-    LineTo(Vec2D),
-    MoveTo(Vec2D),
-    QuadraticTo(Vec2D, Vec2D),
-    CubicTo(Vec2D, Vec2D, Vec2D),
+    LineTo(Vector),
+    MoveTo(Vector),
+    QuadraticTo(Vector, Vector),
+    CubicTo(Vector, Vector, Vector),
 }
 
 #[derive(Clone)]
@@ -31,14 +31,14 @@ impl GradientStop {
 #[derive(Clone)]
 pub struct LinearGradient {
     pub stops: Vec<GradientStop>,
-    pub start: Vec2D,
-    pub end: Vec2D,
+    pub start: Vector,
+    pub end: Vector,
 }
 
 #[derive(Clone)]
 pub struct Shadow {
     pub color: RGBA8,
-    pub offset: Vec2D,
+    pub offset: Vector,
     pub blur: f64,
 }
 
@@ -46,7 +46,7 @@ impl Shadow {
     pub fn new(color: RGBA8) -> Self {
         Shadow {
             color,
-            offset: Vec2D::default(),
+            offset: Vector::default(),
             blur: 0.,
         }
     }
@@ -56,7 +56,7 @@ impl Shadow {
     }
     pub fn offset<T>(mut self, distance: T) -> Self
     where
-        T: Into<Vec2D>,
+        T: Into<Vector>,
     {
         self.offset = distance.into();
         self
@@ -66,9 +66,9 @@ impl Shadow {
 #[derive(Clone)]
 pub struct RadialGradient {
     pub stops: Vec<GradientStop>,
-    pub start: Vec2D,
+    pub start: Vector,
     pub start_radius: f64,
-    pub end: Vec2D,
+    pub end: Vector,
     pub end_radius: f64,
 }
 
@@ -155,7 +155,7 @@ pub struct Path<T>
 where
     T: ImageRepresentation,
 {
-    pub orientation: Transform2D,
+    pub orientation: Transform,
     pub segments: Vec<Segment>,
     pub stroke: Option<Stroke<T>>,
     pub fill: Option<Fill<T>>,
@@ -169,7 +169,7 @@ where
 {
     pub fn with_origin<U>(mut self, offset: U) -> Self
     where
-        U: Into<Vec2D>,
+        U: Into<Vector>,
     {
         let offset = offset.into();
         self.segments = self
@@ -201,21 +201,21 @@ impl Builder {
     }
     pub fn line_to<T>(mut self, to: T) -> Self
     where
-        T: Into<Vec2D>,
+        T: Into<Vector>,
     {
         self.segments.push(Segment::LineTo(to.into()));
         self
     }
     pub fn move_to<T>(mut self, to: T) -> Self
     where
-        T: Into<Vec2D>,
+        T: Into<Vector>,
     {
         self.segments.push(Segment::MoveTo(to.into()));
         self
     }
     pub fn quadratic_to<T>(mut self, to: T, handle: T) -> Self
     where
-        T: Into<Vec2D>,
+        T: Into<Vector>,
     {
         self.segments
             .push(Segment::QuadraticTo(to.into(), handle.into()));
@@ -223,7 +223,7 @@ impl Builder {
     }
     pub fn cubic_to<T>(mut self, to: T, handle_1: T, handle_2: T) -> Self
     where
-        T: Into<Vec2D>,
+        T: Into<Vector>,
     {
         self.segments.push(Segment::CubicTo(
             to.into(),
@@ -246,9 +246,9 @@ impl Primitive {
     pub fn rectangle<T, U>(size: U) -> StyleHelper<T>
     where
         T: ImageRepresentation,
-        U: Into<Vec2D>,
+        U: Into<Vector>,
     {
-        let size: Vec2D = size.into();
+        let size: Vector = size.into();
         Builder::new()
             .move_to((0., 0.))
             .line_to((size.x, 0.))
@@ -260,7 +260,7 @@ impl Primitive {
     pub fn rounded_rectangle<T, U>(size: U, radius: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
-        U: Into<Vec2D>,
+        U: Into<Vector>,
     {
         let size = size.into();
         Builder::new()
@@ -364,7 +364,7 @@ impl Primitive {
     pub fn continuous_curvature_rectangle<T, U>(radii: U, k_factor: f64) -> StyleHelper<T>
     where
         T: ImageRepresentation,
-        U: Into<Vec2D>,
+        U: Into<Vector>,
     {
         let radii = radii.into();
         Builder::new()
@@ -455,7 +455,7 @@ where
         Path {
             closed: self.closed,
             segments: self.geometry,
-            orientation: Transform2D::default(),
+            orientation: Transform::default(),
             fill: self.fill,
             shadow: self.shadow,
             stroke: self.stroke,

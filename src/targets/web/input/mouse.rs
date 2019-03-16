@@ -1,4 +1,4 @@
-use crate::graphics2_d::Vec2D;
+use crate::graphics2_d::Vector;
 use crate::input;
 use crate::input::mouse;
 use crate::input::mouse::{Action, Button, Event};
@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 pub struct MouseState {
     handlers: Vec<Box<Fn(input::mouse::Event)>>,
-    position: Vec2D,
+    position: Vector,
 }
 
 pub struct Mouse {
@@ -28,7 +28,7 @@ impl input::Source<mouse::Event> for Mouse {
 }
 
 impl input::Mouse for Mouse {
-    fn position(&self) -> Vec2D {
+    fn position(&self) -> Vector {
         self.state.borrow().position
     }
 }
@@ -38,7 +38,7 @@ impl Mouse {
         let mouse = Mouse {
             state: Rc::new(RefCell::new(MouseState {
                 handlers: vec![],
-                position: Vec2D::default(),
+                position: Vector::default(),
             })),
         };
         mouse.initialize();

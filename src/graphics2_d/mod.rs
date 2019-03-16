@@ -17,11 +17,11 @@ pub trait ToHexColor {
 pub trait ImageRepresentation:
     From<Image<RGBA8, Texture2D>> + Into<Image<RGBA8, Texture2D>> + Clone
 {
-    fn get_size(&self) -> Vec2D;
+    fn get_size(&self) -> Vector;
 }
 
 impl ImageRepresentation for Image<RGBA8, Texture2D> {
-    fn get_size(&self) -> Vec2D {
+    fn get_size(&self) -> Vector {
         (f64::from(self.format.width), f64::from(self.format.height)).into()
     }
 }
@@ -105,23 +105,23 @@ pub struct Image<T: PixelFormat, U: ImageFormat> {
 }
 
 #[derive(Clone)]
-pub struct Transform2D {
-    pub position: Vec2D,
-    pub scale: Vec2D,
+pub struct Transform {
+    pub position: Vector,
+    pub scale: Vector,
     pub rotation: f64,
 }
 
-impl Transform2D {
+impl Transform {
     pub fn with_position<T>(mut self, position: T) -> Self
     where
-        T: Into<Vec2D>,
+        T: Into<Vector>,
     {
         self.position = position.into();
         self
     }
     pub fn with_scale<T>(mut self, scale: T) -> Self
     where
-        T: Into<Vec2D>,
+        T: Into<Vector>,
     {
         self.scale = scale.into();
         self
@@ -142,7 +142,7 @@ impl Transform2D {
     }
     pub fn translate<T>(&mut self, offset: T) -> &mut Self
     where
-        T: Into<Vec2D>,
+        T: Into<Vector>,
     {
         self.position += offset.into();
         self
@@ -153,62 +153,62 @@ impl Transform2D {
     }
     pub fn scale<T>(&mut self, scale: T) -> &mut Self
     where
-        T: Into<Vec2D>,
+        T: Into<Vector>,
     {
         self.scale *= scale.into();
         self
     }
 }
 
-impl Default for Transform2D {
+impl Default for Transform {
     fn default() -> Self {
-        Transform2D {
-            scale: Vec2D { x: 1., y: 1. },
-            position: Vec2D::default(),
+        Transform {
+            scale: Vector { x: 1., y: 1. },
+            position: Vector::default(),
             rotation: 0.,
         }
     }
 }
 
-pub trait DynamicObject2D<T>
+pub trait DynamicObject<T>
 where
     T: ImageRepresentation,
 {
-    fn orientation(&self) -> Transform2D;
+    fn orientation(&self) -> Transform;
     fn render(&self) -> Cow<[Path<T>]>;
 }
 
-pub struct StaticObject2D<T>
+pub struct StaticObject<T>
 where
     T: ImageRepresentation,
 {
-    pub orientation: Transform2D,
+    pub orientation: Transform,
     pub content: Vec<Path<T>>,
 }
 
-impl<T> StaticObject2D<T>
+impl<T> StaticObject<T>
 where
     T: ImageRepresentation,
 {
-    pub fn from_entity(entity: Path<T>) -> StaticObject2D<T> {
-        StaticObject2D {
+    pub fn from_entity(entity: Path<T>) -> StaticObject<T> {
+        StaticObject {
             content: vec![entity],
-            orientation: Transform2D::default(),
+            orientation: Transform::default(),
         }
     }
-    pub fn with_transform(mut self, closure: impl Fn(&mut Transform2D)) -> Self {
+    pub fn with_transform(mut self, closure: impl Fn(&mut Transform)) -> Self {
         closure(&mut self.orientation);
         self
     }
 }
 
-impl<T> From<T> for StaticObject2D<T>
+impl<T> From<T> for StaticObject<T>
 where
     T: ImageRepresentation,
 {
     fn from(input: T) -> Self {
-        StaticObject2D {
-            orientation: Transform2D::default(),
+        StaticObject {
+            orientation: Transform::default(),
             content: vec![Primitive::rectangle(input.get_size())
                 .fill(Texture::Image(Box::new(input)).into())
                 .finalize()],
@@ -216,35 +216,35 @@ where
     }
 }
 
-impl<T> Into<Object2D<T>> for StaticObject2D<T>
+impl<T> Into<Object<T>> for StaticObject<T>
 where
     T: ImageRepresentation,
 {
-    fn into(self) -> Object2D<T> {
-        Object2D::Static(self)
+    fn into(self) -> Object<T> {
+        Object::Static(self)
     }
 }
 
-pub enum Object2D<T>
+pub enum Object<T>
 where
     T: ImageRepresentation,
 {
-    Static(StaticObject2D<T>),
-    Dynamic(Box<DynamicObject2D<T>>),
+    Static(StaticObject<T>),
+    Dynamic(Box<DynamicObject<T>>),
 }
 
-pub trait Frame2D<T>: DynamicObject2D<T>
+pub trait Frame<T>: DynamicObject<T>
 where
     T: ImageRepresentation,
 {
     fn add<U>(&mut self, object: U)
     where
-        U: Into<Object2D<T>>;
+        U: Into<Object<T>>;
     fn resize<U>(&self, size: U)
     where
-        U: Into<Vec2D>;
-    fn set_viewport(&self, viewport: Rect2D);
-    fn get_size(&self) -> Vec2D;
+        U: Into<Vector>;
+    fn set_viewport(&self, viewport: Rect);
+    fn get_size(&self) -> Vector;
     fn to_image(&self) -> Box<T>;
 }
 
@@ -259,141 +259,141 @@ pub trait Rasterizer {
         T: Into<Rasterizable<'a>>;
 }
 
-pub trait Graphics2D: Rasterizer {
-    type Frame: Frame2D<Self::Image>;
+pub trait Graphics: Rasterizer {
+    type Frame: Frame<Self::Image>;
     fn frame(&self) -> Self::Frame;
 }
 
-pub trait ContextGraphics2D: Graphics2D + Context {}
+pub trait ContextGraphics: Graphics + Context {}
 
-pub trait ContextualGraphics2D: Graphics2D {
-    type Context: ContextGraphics2D;
+pub trait ContextualGraphics: Graphics {
+    type Context: ContextGraphics;
     fn run(self, root: Self::Frame) -> Self::Context;
 }
 
 #[derive(Clone, Copy, Default)]
-pub struct Vec2D {
+pub struct Vector {
     pub x: f64,
     pub y: f64,
 }
 
-impl From<(f64, f64)> for Vec2D {
-    fn from(input: (f64, f64)) -> Vec2D {
-        Vec2D {
+impl From<(f64, f64)> for Vector {
+    fn from(input: (f64, f64)) -> Vector {
+        Vector {
             x: input.0,
             y: input.1,
         }
     }
 }
 
-impl From<f64> for Vec2D {
-    fn from(input: f64) -> Vec2D {
-        Vec2D { x: input, y: input }
+impl From<f64> for Vector {
+    fn from(input: f64) -> Vector {
+        Vector { x: input, y: input }
     }
 }
 
-impl<T> Add<T> for Vec2D
+impl<T> Add<T> for Vector
 where
-    T: Into<Vec2D>,
+    T: Into<Vector>,
 {
-    type Output = Vec2D;
-    fn add(self, other: T) -> Vec2D {
+    type Output = Vector;
+    fn add(self, other: T) -> Vector {
         let other = other.into();
-        Vec2D {
+        Vector {
             x: self.x + other.x,
             y: self.y + other.y,
         }
     }
 }
 
-impl<T> AddAssign<T> for Vec2D
+impl<T> AddAssign<T> for Vector
 where
-    T: Into<Vec2D>,
+    T: Into<Vector>,
 {
     fn add_assign(&mut self, other: T) {
         let other = other.into();
-        *self = Vec2D {
+        *self = Vector {
             x: self.x + other.x,
             y: self.y + other.y,
         }
     }
 }
 
-impl<T> Sub<T> for Vec2D
+impl<T> Sub<T> for Vector
 where
-    T: Into<Vec2D>,
+    T: Into<Vector>,
 {
-    type Output = Vec2D;
-    fn sub(self, other: T) -> Vec2D {
+    type Output = Vector;
+    fn sub(self, other: T) -> Vector {
         let other = other.into();
-        Vec2D {
+        Vector {
             x: self.x - other.x,
             y: self.y - other.y,
         }
     }
 }
 
-impl<T> SubAssign<T> for Vec2D
+impl<T> SubAssign<T> for Vector
 where
-    T: Into<Vec2D>,
+    T: Into<Vector>,
 {
     fn sub_assign(&mut self, other: T) {
         let other = other.into();
-        *self = Vec2D {
+        *self = Vector {
             x: self.x - other.x,
             y: self.y - other.y,
         }
     }
 }
 
-impl<T> Div<T> for Vec2D
+impl<T> Div<T> for Vector
 where
-    T: Into<Vec2D>,
+    T: Into<Vector>,
 {
-    type Output = Vec2D;
-    fn div(self, other: T) -> Vec2D {
+    type Output = Vector;
+    fn div(self, other: T) -> Vector {
         let other = other.into();
-        Vec2D {
+        Vector {
             x: self.x / other.x,
             y: self.y / other.y,
         }
     }
 }
 
-impl<T> DivAssign<T> for Vec2D
+impl<T> DivAssign<T> for Vector
 where
-    T: Into<Vec2D>,
+    T: Into<Vector>,
 {
     fn div_assign(&mut self, other: T) {
         let other = other.into();
-        *self = Vec2D {
+        *self = Vector {
             x: self.x / other.x,
             y: self.y / other.y,
         }
     }
 }
 
-impl<T> Mul<T> for Vec2D
+impl<T> Mul<T> for Vector
 where
-    T: Into<Vec2D>,
+    T: Into<Vector>,
 {
-    type Output = Vec2D;
-    fn mul(self, other: T) -> Vec2D {
+    type Output = Vector;
+    fn mul(self, other: T) -> Vector {
         let other = other.into();
-        Vec2D {
+        Vector {
             x: self.x * other.x,
             y: self.y * other.y,
         }
     }
 }
 
-impl<T> MulAssign<T> for Vec2D
+impl<T> MulAssign<T> for Vector
 where
-    T: Into<Vec2D>,
+    T: Into<Vector>,
 {
     fn mul_assign(&mut self, other: T) {
         let other = other.into();
-        *self = Vec2D {
+        *self = Vector {
             x: self.x * other.x,
             y: self.y * other.y,
         }
@@ -401,25 +401,25 @@ where
 }
 
 #[derive(Clone, Copy, Default)]
-pub struct Rect2D {
-    pub size: Vec2D,
-    pub position: Vec2D,
+pub struct Rect {
+    pub size: Vector,
+    pub position: Vector,
 }
 
-impl Rect2D {
+impl Rect {
     pub fn new<T, U>(position: T, size: U) -> Self
     where
-        T: Into<Vec2D>,
-        U: Into<Vec2D>,
+        T: Into<Vector>,
+        U: Into<Vector>,
     {
-        Rect2D {
+        Rect {
             size: size.into(),
             position: position.into(),
         }
     }
 }
 
-pub fn new() -> impl ContextualGraphics2D {
+pub fn new() -> impl ContextualGraphics {
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
     targets::web::graphics::new()
 }
