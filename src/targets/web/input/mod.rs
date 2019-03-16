@@ -1,5 +1,5 @@
 mod keyboard;
 mod mouse;
 
-pub use keyboard::Keyboard;
-pub use mouse::Mouse;
+pub use crate::targets::web::input::keyboard::Keyboard;
+pub use crate::targets::web::input::mouse::Mouse;

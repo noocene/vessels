@@ -1,7 +1,7 @@
 pub mod keyboard;
-pub use keyboard::Keyboard;
+pub use crate::input::keyboard::Keyboard;
 pub mod mouse;
-pub use mouse::Mouse;
+pub use crate::input::mouse::Mouse;
 
 pub trait Source<T>
 where
