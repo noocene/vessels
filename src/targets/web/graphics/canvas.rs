@@ -334,7 +334,8 @@ impl CanvasFrame {
     }
 }
 
-impl DynamicObject<CanvasImage> for CanvasFrame {
+impl DynamicObject for CanvasFrame {
+    type Image = CanvasImage;
     fn orientation(&self) -> Transform {
         Transform::default()
     }

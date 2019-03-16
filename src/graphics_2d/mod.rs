@@ -170,12 +170,10 @@ impl Default for Transform {
     }
 }
 
-pub trait DynamicObject<T>
-where
-    T: ImageRepresentation,
-{
+pub trait DynamicObject {
+    type Image: ImageRepresentation;
     fn orientation(&self) -> Transform;
-    fn render(&self) -> Cow<[Path<T>]>;
+    fn render(&self) -> Cow<[Path<Self::Image>]>;
 }
 
 pub struct StaticObject<T>
@@ -230,20 +228,20 @@ where
     T: ImageRepresentation,
 {
     Static(StaticObject<T>),
-    Dynamic(Box<DynamicObject<T>>),
+    Dynamic(Box<DynamicObject<Image = T>>),
 }
 
-pub trait Frame: DynamicObject<<Self as Frame>::Image> {
+pub trait Frame: DynamicObject<Image = <Self as Frame>::Image> {
     type Image: ImageRepresentation;
     fn add<U>(&mut self, object: U)
     where
-        U: Into<Object<Self::Image>>;
+        U: Into<Object<<Self as Frame>::Image>>;
     fn resize<U>(&self, size: U)
     where
         U: Into<Vector>;
     fn set_viewport(&self, viewport: Rect);
     fn get_size(&self) -> Vector;
-    fn to_image(&self) -> Box<Self::Image>;
+    fn to_image(&self) -> Box<<Self as Frame>::Image>;
 }
 
 pub enum Rasterizable<'a> {
