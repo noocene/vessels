@@ -10,7 +10,7 @@ extern crate stdweb_derive;
 extern crate failure;
 
 mod errors;
-pub mod graphics;
+pub mod graphics2_d;
 pub mod input;
 mod targets;
 mod util;
