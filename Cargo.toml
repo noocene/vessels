@@ -28,4 +28,3 @@ failure = "0.1.5"
 [profile.release]
 lto = true
 debug = false
-panic = 'abort'
