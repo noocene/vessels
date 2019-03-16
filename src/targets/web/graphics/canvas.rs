@@ -1,8 +1,8 @@
 use crate::graphics_2d::*;
 use crate::input::*;
-use crate::graphics_2d::text::*;
+use crate::text::*;
 use crate::util::ObserverCell;
-use crate::graphics_2d::path::*;
+use crate::path::*;
 use crate::targets::web;
 
 use stdweb::traits::*;

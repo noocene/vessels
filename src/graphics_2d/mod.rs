@@ -1,14 +1,11 @@
-use crate::graphics_2d::path::*;
-use crate::graphics_2d::text::*;
 use crate::input::*;
+use crate::path::*;
 use crate::targets;
+use crate::text::*;
 
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
 use std::borrow::Cow;
-
-pub mod path;
-pub mod text;
 
 pub trait ToHexColor {
     fn to_hex_color(&self) -> Cow<str>;
