@@ -233,19 +233,17 @@ where
     Dynamic(Box<DynamicObject<T>>),
 }
 
-pub trait Frame<T>: DynamicObject<T>
-where
-    T: ImageRepresentation,
-{
+pub trait Frame: DynamicObject<<Self as Frame>::Image> {
+    type Image: ImageRepresentation;
     fn add<U>(&mut self, object: U)
     where
-        U: Into<Object<T>>;
+        U: Into<Object<Self::Image>>;
     fn resize<U>(&self, size: U)
     where
         U: Into<Vector>;
     fn set_viewport(&self, viewport: Rect);
     fn get_size(&self) -> Vector;
-    fn to_image(&self) -> Box<T>;
+    fn to_image(&self) -> Box<Self::Image>;
 }
 
 pub enum Rasterizable<'a> {
@@ -260,7 +258,7 @@ pub trait Rasterizer {
 }
 
 pub trait Graphics: Rasterizer {
-    type Frame: Frame<Self::Image>;
+    type Frame: Frame;
     fn frame(&self) -> Self::Frame;
 }
 

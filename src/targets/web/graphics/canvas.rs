@@ -359,7 +359,8 @@ impl DynamicObject<CanvasImage> for CanvasFrame {
     }
 }
 
-impl Frame<CanvasImage> for CanvasFrame {
+impl Frame for CanvasFrame {
+    type Image = CanvasImage;
     fn add<U>(&mut self, object: U) where U: Into<Object<CanvasImage>> {
         self.contents.push(object.into());
     }
