@@ -19,6 +19,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::borrow::Cow;
 
+use std::any::Any;
+
 use std::slice::Iter;
 
 use std::ops::Deref;
@@ -30,28 +32,10 @@ impl ImageRepresentation for CanvasImage {
         let dpr = window().device_pixel_ratio();
         (f64::from(self.width()) / dpr, f64::from(self.height()) / dpr).into()
     }
-}
-
-impl From<Image<RGBA8, Texture2D>> for CanvasImage {
-    fn from(input: Image<RGBA8, Texture2D>) -> CanvasImage {
-        let canvas: CanvasElement = document()
-            .create_element("canvas")
-            .unwrap()
-            .try_into()
-            .unwrap();
-        canvas.set_width(input.format.width);
-        canvas.set_height(input.format.height);
-        let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
-        let image = context
-            .create_image_data(f64::from(input.format.width), f64::from(input.format.height))
-            .unwrap();
-        context.put_image_data(image, 0., 0.).unwrap();
-        canvas
+    fn box_clone(&self) -> Box<dyn ImageRepresentation> {
+        Box::new(self.clone())
     }
-}
-
-impl Into<Image<RGBA8, Texture2D>> for CanvasImage {
-    fn into(self) -> Image<RGBA8, Texture2D> {
+    fn as_texture(&self) -> Image<RGBA8, Texture2D> {
         Image {
             pixels: vec![],
             format: Texture2D {
@@ -60,12 +44,27 @@ impl Into<Image<RGBA8, Texture2D>> for CanvasImage {
             },
         }
     }
+    fn from_texture(texture: Image<RGBA8, Texture2D>) -> CanvasImage {
+        let canvas: CanvasElement = document()
+            .create_element("canvas")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        canvas.set_width(texture.format.width);
+        canvas.set_height(texture.format.height);
+        let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
+        let image = context
+            .create_image_data(f64::from(texture.format.width), f64::from(texture.format.height))
+            .unwrap();
+        context.put_image_data(image, 0., 0.).unwrap();
+        canvas
+    }
 }
 
 struct CanvasFrame {
     context: CanvasRenderingContext2d,
     canvas: CanvasElement,
-    contents: Vec<Object<CanvasImage>>,
+    contents: Vec<Object>,
     pixel_ratio: f64,
     viewport: Cell<Rect>,
     size: Cell<Vector>,
@@ -123,7 +122,7 @@ impl CanvasFrame {
         );
         self.context.save();
         self.contents.iter().for_each(|object| {
-            let draw = |orientation: Transform, content: Iter<'_, Path<CanvasImage>>| {
+            let draw = |orientation: Transform, content: Iter<'_, Path>| {
                 let matrix = orientation.to_matrix();
                 content.for_each(|entity| {
                     self.context.restore();
@@ -205,11 +204,18 @@ impl CanvasFrame {
                                     self.context.set_stroke_style_gradient(&canvas_gradient);
                                 }
                                 Texture::Image(image) => {
-                                    let pattern: CanvasPattern = js! {
-                                        @{&self.context}.createPattern(@{image.deref()}, "no-repeat");
-                                    }
-                                    .try_into()
-                                    .unwrap();
+                                    let image_any = image as &dyn Any;
+                                    let pattern: CanvasPattern = match image_any.downcast_ref::<CanvasImage>() {
+                                        Some(as_image) => js! {
+                                            return @{&self.context}.createPattern(@{as_image.deref()}, "no-repeat");
+                                        }.try_into().unwrap(),
+                                        None => {
+                                            let as_image = CanvasImage::from_texture(image.box_clone().as_texture());
+                                            return js! {
+                                                return @{&self.context}.createPattern(@{as_image}, "no-repeat");
+                                            }.try_into().unwrap();
+                                        }
+                                    };
                                     self.context.set_stroke_style_pattern(&pattern);
                                     self.context.scale(self.pixel_ratio, self.pixel_ratio)
                                 }
@@ -254,11 +260,18 @@ impl CanvasFrame {
                                     self.context.set_fill_style_color(&color.to_rgba_color());
                                 }
                                 Texture::Image(image) => {
-                                    let pattern: CanvasPattern = js! {
-                                        return @{&self.context}.createPattern(@{image.deref()}, "no-repeat");
-                                    }
-                                    .try_into()
-                                    .unwrap();
+                                    let image_any = image as &dyn Any;
+                                    let pattern: CanvasPattern = match image_any.downcast_ref::<CanvasImage>() {
+                                        Some(as_image) => js! {
+                                            return @{&self.context}.createPattern(@{as_image.deref()}, "no-repeat");
+                                        }.try_into().unwrap(),
+                                        None => {
+                                            let as_image = CanvasImage::from_texture(image.as_texture());
+                                            return js! {
+                                                return @{&self.context}.createPattern(@{as_image}, "no-repeat");
+                                            }.try_into().unwrap();
+                                        }
+                                    };
                                     self.context.scale(1. / self.pixel_ratio, 1. / self.pixel_ratio);
                                     self.context.set_fill_style_pattern(&pattern);
                                     self.context.scale(self.pixel_ratio, self.pixel_ratio);
@@ -316,7 +329,7 @@ impl CanvasFrame {
                 });
             };
             let orientation: Transform;
-            let content: Iter<'_, Path<CanvasImage>>;
+            let content: Iter<'_, Path>;
             match object {
                 Object::Dynamic(object) => {
                     orientation = object.orientation();
@@ -335,11 +348,10 @@ impl CanvasFrame {
 }
 
 impl DynamicObject for CanvasFrame {
-    type Image = CanvasImage;
     fn orientation(&self) -> Transform {
         Transform::default()
     }
-    fn render(&self) -> Cow<'_, [Path<CanvasImage>]> {
+    fn render(&self) -> Cow<'_, [Path]> {
         self.draw();
         let size = self.size.get();
         Cow::from(vec![Path {
@@ -362,7 +374,7 @@ impl DynamicObject for CanvasFrame {
 
 impl Frame for CanvasFrame {
     type Image = CanvasImage;
-    fn add<U>(&mut self, object: U) where U: Into<Object<CanvasImage>> {
+    fn add<U>(&mut self, object: U) where U: Into<Object> {
         self.contents.push(object.into());
     }
     fn set_viewport(&self, viewport: Rect) {

@@ -7,19 +7,39 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
 use std::borrow::Cow;
 
+use std::any::Any;
+
 pub trait ToHexColor {
     fn to_hex_color(&self) -> Cow<'_, str>;
 }
 
-pub trait ImageRepresentation:
-    From<Image<RGBA8, Texture2D>> + Into<Image<RGBA8, Texture2D>> + Clone
-{
+pub trait ImageRepresentation: Any {
+    fn box_clone(&self) -> Box<dyn ImageRepresentation>;
     fn get_size(&self) -> Vector;
+    fn as_texture(&self) -> Image<RGBA8, Texture2D>;
+    fn from_texture(texture: Image<RGBA8, Texture2D>) -> Self
+    where
+        Self: Sized;
+}
+
+impl Clone for Box<dyn ImageRepresentation> {
+    fn clone(&self) -> Box<dyn ImageRepresentation> {
+        self.box_clone()
+    }
 }
 
 impl ImageRepresentation for Image<RGBA8, Texture2D> {
     fn get_size(&self) -> Vector {
         (f64::from(self.format.width), f64::from(self.format.height)).into()
+    }
+    fn box_clone(&self) -> Box<dyn ImageRepresentation> {
+        Box::new(self.clone())
+    }
+    fn as_texture(&self) -> Image<RGBA8, Texture2D> {
+        self.clone()
+    }
+    fn from_texture(texture: Image<RGBA8, Texture2D>) -> Image<RGBA8, Texture2D> {
+        texture
     }
 }
 
@@ -74,11 +94,8 @@ impl ToHexColor for RGBA8 {
     }
 }
 
-impl<T> Into<Texture<T>> for RGBA8
-where
-    T: ImageRepresentation,
-{
-    fn into(self) -> Texture<T> {
+impl Into<Texture> for RGBA8 {
+    fn into(self) -> Texture {
         Texture::Solid(self)
     }
 }
@@ -168,24 +185,17 @@ impl Default for Transform {
 }
 
 pub trait DynamicObject {
-    type Image: ImageRepresentation;
     fn orientation(&self) -> Transform;
-    fn render(&self) -> Cow<'_, [Path<Self::Image>]>;
+    fn render(&self) -> Cow<'_, [Path]>;
 }
 
-pub struct StaticObject<T>
-where
-    T: ImageRepresentation,
-{
+pub struct StaticObject {
     pub orientation: Transform,
-    pub content: Vec<Path<T>>,
+    pub content: Vec<Path>,
 }
 
-impl<T> StaticObject<T>
-where
-    T: ImageRepresentation,
-{
-    pub fn from_entity(entity: Path<T>) -> StaticObject<T> {
+impl StaticObject {
+    pub fn from_entity(entity: Path) -> StaticObject {
         StaticObject {
             content: vec![entity],
             orientation: Transform::default(),
@@ -197,7 +207,7 @@ where
     }
 }
 
-impl<T> From<T> for StaticObject<T>
+impl<T: 'static> From<T> for StaticObject
 where
     T: ImageRepresentation,
 {
@@ -211,28 +221,22 @@ where
     }
 }
 
-impl<T> Into<Object<T>> for StaticObject<T>
-where
-    T: ImageRepresentation,
-{
-    fn into(self) -> Object<T> {
+impl Into<Object> for StaticObject {
+    fn into(self) -> Object {
         Object::Static(self)
     }
 }
 
-pub enum Object<T>
-where
-    T: ImageRepresentation,
-{
-    Static(StaticObject<T>),
-    Dynamic(Box<dyn DynamicObject<Image = T>>),
+pub enum Object {
+    Static(StaticObject),
+    Dynamic(Box<dyn DynamicObject>),
 }
 
-pub trait Frame: DynamicObject<Image = <Self as Frame>::Image> {
+pub trait Frame: DynamicObject {
     type Image: ImageRepresentation;
     fn add<U>(&mut self, object: U)
     where
-        U: Into<Object<<Self as Frame>::Image>>;
+        U: Into<Object>;
     fn resize<U>(&self, size: U)
     where
         U: Into<Vector>;

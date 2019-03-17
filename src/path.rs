@@ -73,17 +73,14 @@ pub struct RadialGradient {
 }
 
 #[derive(Clone)]
-pub enum Texture<T>
-where
-    T: ImageRepresentation,
-{
+pub enum Texture {
     Solid(RGBA8),
     LinearGradient(LinearGradient),
     RadialGradient(RadialGradient),
-    Image(Box<T>),
+    Image(Box<dyn ImageRepresentation>),
 }
 
-impl<T> From<T> for Texture<T>
+impl<T: 'static> From<T> for Texture
 where
     T: ImageRepresentation,
 {
@@ -93,20 +90,14 @@ where
 }
 
 #[derive(Clone)]
-pub struct Stroke<T>
-where
-    T: ImageRepresentation,
-{
-    pub content: Texture<T>,
+pub struct Stroke {
+    pub content: Texture,
     pub width: f32,
     pub cap: StrokeCapType,
     pub join: StrokeJoinType,
 }
 
-impl<T> Default for Stroke<T>
-where
-    T: ImageRepresentation,
-{
+impl Default for Stroke {
     fn default() -> Self {
         Stroke {
             content: RGBA8::black().into(),
@@ -131,17 +122,13 @@ pub enum StrokeJoinType {
 }
 
 #[derive(Clone)]
-pub struct Fill<T>
-where
-    T: ImageRepresentation,
-{
-    pub content: Texture<T>,
+pub struct Fill {
+    pub content: Texture,
 }
 
-impl<T, U> From<T> for Fill<U>
+impl<T> From<T> for Fill
 where
-    T: Into<Texture<U>>,
-    U: ImageRepresentation,
+    T: Into<Texture>,
 {
     fn from(input: T) -> Self {
         Fill {
@@ -151,22 +138,16 @@ where
 }
 
 #[derive(Clone)]
-pub struct Path<T>
-where
-    T: ImageRepresentation,
-{
+pub struct Path {
     pub orientation: Transform,
     pub segments: Vec<Segment>,
-    pub stroke: Option<Stroke<T>>,
-    pub fill: Option<Fill<T>>,
+    pub stroke: Option<Stroke>,
+    pub fill: Option<Fill>,
     pub shadow: Option<Shadow>,
     pub closed: bool,
 }
 
-impl<T> Path<T>
-where
-    T: ImageRepresentation,
-{
+impl Path {
     pub fn with_origin<U>(mut self, offset: U) -> Self
     where
         U: Into<Vector>,
@@ -232,10 +213,7 @@ impl Builder {
         ));
         self
     }
-    pub fn done<T>(self) -> StyleHelper<T>
-    where
-        T: ImageRepresentation,
-    {
+    pub fn done(self) -> StyleHelper {
         StyleHelper::new(self.segments)
     }
 }
@@ -243,10 +221,9 @@ impl Builder {
 pub struct Primitive {}
 
 impl Primitive {
-    pub fn rectangle<T, U>(size: U) -> StyleHelper<T>
+    pub fn rectangle<T>(size: T) -> StyleHelper
     where
-        T: ImageRepresentation,
-        U: Into<Vector>,
+        T: Into<Vector>,
     {
         let size: Vector = size.into();
         Builder::new()
@@ -257,10 +234,9 @@ impl Primitive {
             .line_to((0., 0.))
             .done()
     }
-    pub fn rounded_rectangle<T, U>(size: U, radius: f64) -> StyleHelper<T>
+    pub fn rounded_rectangle<T>(size: T, radius: f64) -> StyleHelper
     where
-        T: ImageRepresentation,
-        U: Into<Vector>,
+        T: Into<Vector>,
     {
         let size = size.into();
         Builder::new()
@@ -309,22 +285,13 @@ impl Primitive {
             )
             .done()
     }
-    pub fn square<T>(side_length: f64) -> StyleHelper<T>
-    where
-        T: ImageRepresentation,
-    {
+    pub fn square(side_length: f64) -> StyleHelper {
         Primitive::rectangle((side_length, side_length))
     }
-    pub fn rounded_square<T>(side_length: f64, radius: f64) -> StyleHelper<T>
-    where
-        T: ImageRepresentation,
-    {
+    pub fn rounded_square(side_length: f64, radius: f64) -> StyleHelper {
         Primitive::rounded_rectangle((side_length, side_length), radius)
     }
-    pub fn circle<T>(radius: f64) -> StyleHelper<T>
-    where
-        T: ImageRepresentation,
-    {
+    pub fn circle(radius: f64) -> StyleHelper {
         Builder::new()
             .move_to((radius, 0.))
             .cubic_to(
@@ -361,10 +328,9 @@ impl Primitive {
             )
             .done()
     }
-    pub fn continuous_curvature_rectangle<T, U>(radii: U, k_factor: f64) -> StyleHelper<T>
+    pub fn continuous_curvature_rectangle<T>(radii: T, k_factor: f64) -> StyleHelper
     where
-        T: ImageRepresentation,
-        U: Into<Vector>,
+        T: Into<Vector>,
     {
         let radii = radii.into();
         Builder::new()
@@ -391,29 +357,20 @@ impl Primitive {
             )
             .done()
     }
-    pub fn continuous_curvature_square<T>(radius: f64, k_factor: f64) -> StyleHelper<T>
-    where
-        T: ImageRepresentation,
-    {
+    pub fn continuous_curvature_square(radius: f64, k_factor: f64) -> StyleHelper {
         Primitive::continuous_curvature_rectangle((radius, radius), k_factor)
     }
 }
 
-pub struct StyleHelper<T>
-where
-    T: ImageRepresentation,
-{
+pub struct StyleHelper {
     closed: bool,
     geometry: Vec<Segment>,
-    fill: Option<Fill<T>>,
-    stroke: Option<Stroke<T>>,
+    fill: Option<Fill>,
+    stroke: Option<Stroke>,
     shadow: Option<Shadow>,
 }
 
-impl<T> StyleHelper<T>
-where
-    T: ImageRepresentation,
-{
+impl StyleHelper {
     pub fn new(geometry: Vec<Segment>) -> Self {
         StyleHelper {
             closed: false,
@@ -427,31 +384,19 @@ where
         self.closed = true;
         self
     }
-    pub fn fill(mut self, fill: Fill<T>) -> Self
-    where
-        T: ImageRepresentation,
-    {
+    pub fn fill(mut self, fill: Fill) -> Self {
         self.fill = Some(fill);
         self
     }
-    pub fn stroke(mut self, stroke: Stroke<T>) -> Self
-    where
-        T: ImageRepresentation,
-    {
+    pub fn stroke(mut self, stroke: Stroke) -> Self {
         self.stroke = Some(stroke);
         self
     }
-    pub fn shadow(mut self, shadow: Shadow) -> Self
-    where
-        T: ImageRepresentation,
-    {
+    pub fn shadow(mut self, shadow: Shadow) -> Self {
         self.shadow = Some(shadow);
         self
     }
-    pub fn finalize(self) -> Path<T>
-    where
-        T: ImageRepresentation,
-    {
+    pub fn finalize(self) -> Path {
         Path {
             closed: self.closed,
             segments: self.geometry,
@@ -463,18 +408,12 @@ where
     }
 }
 
-pub struct StrokeBuilder<T>
-where
-    T: ImageRepresentation,
-{
-    stroke: Stroke<T>,
+pub struct StrokeBuilder {
+    stroke: Stroke,
 }
 
-impl<T> StrokeBuilder<T>
-where
-    T: ImageRepresentation,
-{
-    pub fn new(content: Texture<T>, width: f32) -> Self {
+impl StrokeBuilder {
+    pub fn new(content: Texture, width: f32) -> Self {
         let mut builder = StrokeBuilder {
             stroke: Stroke::default(),
         };
@@ -494,7 +433,7 @@ where
         self.stroke.join = StrokeJoinType::Round;
         self
     }
-    pub fn finalize(self) -> Stroke<T> {
+    pub fn finalize(self) -> Stroke {
         self.stroke
     }
 }
