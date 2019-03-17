@@ -35,7 +35,7 @@ pub struct LinearGradient {
     pub end: Vector,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Shadow {
     pub color: RGBA8,
     pub offset: Vector,
@@ -108,13 +108,13 @@ impl Default for Stroke {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum StrokeCapType {
     Butt,
     Round,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum StrokeJoinType {
     Bevel,
     Round,
@@ -218,6 +218,7 @@ impl Builder {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Primitive {}
 
 impl Primitive {

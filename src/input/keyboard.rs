@@ -148,7 +148,7 @@ pub enum Key {
     Unknown,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum Action {
     Up(Key),
     Down(Key),

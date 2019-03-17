@@ -232,7 +232,7 @@ pub enum Object {
     Dynamic(Box<dyn DynamicObject>),
 }
 
-pub trait Frame: DynamicObject {
+pub trait Frame: DynamicObject + Clone {
     type Image: ImageRepresentation;
     fn add<U>(&mut self, object: U)
     where

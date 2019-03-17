@@ -1,9 +1,11 @@
 use crate::graphics_2d::*;
 
+#[derive(Clone, Copy)]
 pub enum Font {
     SystemFont,
 }
 
+#[derive(Clone, Copy)]
 pub enum Weight {
     Hairline,
     Light,
@@ -13,17 +15,20 @@ pub enum Weight {
     Heavy,
 }
 
+#[derive(Clone, Copy)]
 pub enum Wrap {
     None,
     Normal,
 }
 
+#[derive(Clone, Copy)]
 pub enum Align {
     Center,
     Start,
     End,
 }
 
+#[derive(Clone, Copy)]
 pub struct Text<'a> {
     pub font: Font,
     pub content: &'a str,

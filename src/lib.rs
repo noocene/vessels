@@ -1,3 +1,4 @@
+#![warn(missing_copy_implementations)]
 #![recursion_limit = "128"]
 #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
 extern crate serde_derive;

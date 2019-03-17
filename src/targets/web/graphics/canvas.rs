@@ -61,7 +61,7 @@ impl ImageRepresentation for CanvasImage {
     }
 }
 
-struct CanvasFrame {
+struct CanvasFrameState {
     context: CanvasRenderingContext2d,
     canvas: CanvasElement,
     contents: Vec<Object>,
@@ -70,10 +70,14 @@ struct CanvasFrame {
     size: Cell<Vector>,
 }
 
-impl Drop for CanvasFrame {
+impl Drop for CanvasFrameState {
     fn drop(&mut self) {
         self.canvas.remove();
     }
+}
+
+struct CanvasFrame {
+    state: Rc<RefCell<CanvasFrameState>>
 }
 
 impl CanvasFrame {
@@ -85,7 +89,8 @@ impl CanvasFrame {
             .unwrap();
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
         CanvasFrame {
-            canvas,
+            state: Rc::new(RefCell::new(CanvasFrameState{
+                canvas,
             pixel_ratio: window().device_pixel_ratio(),
             context,
             contents: vec![],
@@ -94,100 +99,103 @@ impl CanvasFrame {
                 size: Vector::default(),
                 position: (0., 0.).into(),
             }),
+            }))
         }
     }
     fn show(&self) {
-        self.canvas.add_event_listener(|event: ContextMenuEvent| {
+        let state = self.state.borrow();
+        state.canvas.add_event_listener(|event: ContextMenuEvent| {
             event.prevent_default();
             event.stop_propagation();
         });
-        document().body().unwrap().append_child(&self.canvas);
+        document().body().unwrap().append_child(&state.canvas);
     }
     fn draw(&self) {
-        let viewport = self.viewport.get();
-        let size = self.size.get();
-        self.context.set_transform(
-            (size.x / viewport.size.x) * self.pixel_ratio,
+        let state = self.state.borrow();
+        let viewport = state.viewport.get();
+        let size = state.size.get();
+        state.context.set_transform(
+            (size.x / viewport.size.x) * state.pixel_ratio,
             0.,
             0.,
-            (size.y / viewport.size.y) * self.pixel_ratio,
-            -viewport.position.x * self.pixel_ratio,
-            -viewport.position.y * self.pixel_ratio,
+            (size.y / viewport.size.y) * state.pixel_ratio,
+            -viewport.position.x * state.pixel_ratio,
+            -viewport.position.y * state.pixel_ratio,
         );
-        self.context.clear_rect(
+        state.context.clear_rect(
             viewport.position.x,
             viewport.position.y,
             viewport.size.x,
             viewport.size.y,
         );
-        self.context.save();
-        self.contents.iter().for_each(|object| {
+        state.context.save();
+        state.contents.iter().for_each(|object| {
             let draw = |orientation: Transform, content: Iter<'_, Path>| {
                 let matrix = orientation.to_matrix();
                 content.for_each(|entity| {
-                    self.context.restore();
-                    self.context.save();
-                    self.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
+                    state.context.restore();
+                    state.context.save();
+                    state.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
                     let matrix = entity.orientation.to_matrix();
-                    self.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
-                    self.context.begin_path();
+                    state.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
+                    state.context.begin_path();
                     match &entity.shadow {
                         Some(shadow) => {
-                            self.context.set_shadow_blur(shadow.blur);
-                            self.context.set_shadow_color(&shadow.color.to_rgba_color());
-                            self.context.set_shadow_offset_x(shadow.offset.x);
-                            self.context.set_shadow_offset_y(shadow.offset.y);
+                            state.context.set_shadow_blur(shadow.blur);
+                            state.context.set_shadow_color(&shadow.color.to_rgba_color());
+                            state.context.set_shadow_offset_x(shadow.offset.x);
+                            state.context.set_shadow_offset_y(shadow.offset.y);
                         }
                         None => {
-                            self.context.set_shadow_color("rgba(0,0,0,0)");
+                            state.context.set_shadow_color("rgba(0,0,0,0)");
                         }
                     }
                     let segments = entity.segments.iter();
-                    self.context.move_to(0., 0.);
+                    state.context.move_to(0., 0.);
                     segments.for_each(|segment| {
                         match segment {
                             Segment::LineTo(point) => {
-                                self.context.line_to(
+                                state.context.line_to(
                                     point.x, point.y
                                 );
                             },
                             Segment::MoveTo(point) => {
-                                self.context.move_to(
+                                state.context.move_to(
                                    point.x, point.y
                                 );
                             },
                             Segment::CubicTo(point, handle_1, handle_2) => {
-                                self.context.bezier_curve_to(
+                                state.context.bezier_curve_to(
                                     handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y 
                                 );
                             }
                             Segment::QuadraticTo(point, handle) => {
-                                self.context.quadratic_curve_to(
+                                state.context.quadratic_curve_to(
                                     handle.x, handle.y, point.x, point.y 
                                 );
                             }
                         }
                     });
                     if entity.closed {
-                        self.context.close_path();
+                        state.context.close_path();
                     }
                     match &entity.stroke {
                         Some(stroke) => {
-                            self.context.set_line_cap(match &stroke.cap {
+                            state.context.set_line_cap(match &stroke.cap {
                                 StrokeCapType::Butt => LineCap::Butt,
                                 StrokeCapType::Round => LineCap::Round,
                             });
-                            self.context.set_line_join(match &stroke.join {
+                            state.context.set_line_join(match &stroke.join {
                                 StrokeJoinType::Miter => LineJoin::Miter,
                                 StrokeJoinType::Round => LineJoin::Round,
                                 StrokeJoinType::Bevel => LineJoin::Bevel,
                             });
                             match &stroke.content {
                                 Texture::Solid(color) => {
-                                    self.context.set_stroke_style_color(&color.to_rgba_color());
+                                    state.context.set_stroke_style_color(&color.to_rgba_color());
                                 }
                                 Texture::LinearGradient(gradient) => {
-                                    let canvas_gradient = self.context.create_linear_gradient(
+                                    let canvas_gradient = state.context.create_linear_gradient(
                                         gradient.start.x,
                                         gradient.start.y,
                                         gradient.end.x,
@@ -201,26 +209,26 @@ impl CanvasFrame {
                                             )
                                             .unwrap();
                                     });
-                                    self.context.set_stroke_style_gradient(&canvas_gradient);
+                                    state.context.set_stroke_style_gradient(&canvas_gradient);
                                 }
                                 Texture::Image(image) => {
                                     let image_any = image as &dyn Any;
                                     let pattern: CanvasPattern = match image_any.downcast_ref::<CanvasImage>() {
                                         Some(as_image) => js! {
-                                            return @{&self.context}.createPattern(@{as_image.deref()}, "no-repeat");
+                                            return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
                                         }.try_into().unwrap(),
                                         None => {
                                             let as_image = CanvasImage::from_texture(image.box_clone().as_texture());
                                             return js! {
-                                                return @{&self.context}.createPattern(@{as_image}, "no-repeat");
+                                                return @{&state.context}.createPattern(@{as_image}, "no-repeat");
                                             }.try_into().unwrap();
                                         }
                                     };
-                                    self.context.set_stroke_style_pattern(&pattern);
-                                    self.context.scale(self.pixel_ratio, self.pixel_ratio)
+                                    state.context.set_stroke_style_pattern(&pattern);
+                                    state.context.scale(state.pixel_ratio, state.pixel_ratio)
                                 }
                                 Texture::RadialGradient(gradient) => {
-                                    let canvas_gradient = self
+                                    let canvas_gradient = state
                                         .context
                                         .create_radial_gradient(
                                             gradient.start.x,
@@ -239,16 +247,16 @@ impl CanvasFrame {
                                             )
                                             .unwrap();
                                     });
-                                    self.context.set_stroke_style_gradient(&canvas_gradient);
+                                    state.context.set_stroke_style_gradient(&canvas_gradient);
                                 }
                             }
-                            self.context.set_line_width(f64::from(stroke.width));
+                            state.context.set_line_width(f64::from(stroke.width));
                             if let Texture::Image(_image) = &stroke.content {
-                                self.context.scale(1. / self.pixel_ratio, 1. / self.pixel_ratio);
+                                state.context.scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
                             }
-                            self.context.stroke();
+                            state.context.stroke();
                             if let Texture::Image(_image) = &stroke.content {
-                                self.context.scale(self.pixel_ratio, self.pixel_ratio);
+                                state.context.scale(state.pixel_ratio, state.pixel_ratio);
                             }
                         }
                         None => {}
@@ -257,27 +265,27 @@ impl CanvasFrame {
                         Some(fill) => {
                             match &fill.content {
                                 Texture::Solid(color) => {
-                                    self.context.set_fill_style_color(&color.to_rgba_color());
+                                    state.context.set_fill_style_color(&color.to_rgba_color());
                                 }
                                 Texture::Image(image) => {
                                     let image_any = image as &dyn Any;
                                     let pattern: CanvasPattern = match image_any.downcast_ref::<CanvasImage>() {
                                         Some(as_image) => js! {
-                                            return @{&self.context}.createPattern(@{as_image.deref()}, "no-repeat");
+                                            return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
                                         }.try_into().unwrap(),
                                         None => {
                                             let as_image = CanvasImage::from_texture(image.as_texture());
                                             return js! {
-                                                return @{&self.context}.createPattern(@{as_image}, "no-repeat");
+                                                return @{&state.context}.createPattern(@{as_image}, "no-repeat");
                                             }.try_into().unwrap();
                                         }
                                     };
-                                    self.context.scale(1. / self.pixel_ratio, 1. / self.pixel_ratio);
-                                    self.context.set_fill_style_pattern(&pattern);
-                                    self.context.scale(self.pixel_ratio, self.pixel_ratio);
+                                    state.context.scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
+                                    state.context.set_fill_style_pattern(&pattern);
+                                    state.context.scale(state.pixel_ratio, state.pixel_ratio);
                                 }
                                 Texture::LinearGradient(gradient) => {
-                                    let canvas_gradient = self.context.create_linear_gradient(
+                                    let canvas_gradient = state.context.create_linear_gradient(
                                         gradient.start.x,
                                         gradient.start.y,
                                         gradient.end.x,
@@ -291,10 +299,10 @@ impl CanvasFrame {
                                             )
                                             .unwrap();
                                     });
-                                    self.context.set_fill_style_gradient(&canvas_gradient);
+                                    state.context.set_fill_style_gradient(&canvas_gradient);
                                 }
                                 Texture::RadialGradient(gradient) => {
-                                    let canvas_gradient = self
+                                    let canvas_gradient = state
                                         .context
                                         .create_radial_gradient(
                                             gradient.start.x,
@@ -313,15 +321,15 @@ impl CanvasFrame {
                                             )
                                             .unwrap();
                                     });
-                                    self.context.set_fill_style_gradient(&canvas_gradient);
+                                    state.context.set_fill_style_gradient(&canvas_gradient);
                                 }
                             }
                             if let Texture::Image(_image) = &fill.content {
-                                self.context.scale(1. / self.pixel_ratio, 1. / self.pixel_ratio);
+                                state.context.scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
                             }
-                            self.context.fill(FillRule::NonZero);
+                            state.context.fill(FillRule::NonZero);
                             if let Texture::Image(_image) = &fill.content {
-                                self.context.scale(self.pixel_ratio, self.pixel_ratio);
+                                state.context.scale(state.pixel_ratio, state.pixel_ratio);
                             }
                         }
                         None => {}
@@ -352,12 +360,13 @@ impl DynamicObject for CanvasFrame {
         Transform::default()
     }
     fn render(&self) -> Cow<'_, [Path]> {
+        let state = self.state.borrow();
         self.draw();
-        let size = self.size.get();
+        let size = state.size.get();
         Cow::from(vec![Path {
             orientation: Transform::default(),
             fill: Some(Fill {
-                content: Texture::Image(Box::new(self.canvas.clone())),
+                content: Texture::Image(Box::new(state.canvas.clone())),
             }),
             shadow: None,
             stroke: None,
@@ -372,28 +381,41 @@ impl DynamicObject for CanvasFrame {
     }
 }
 
+impl Clone for CanvasFrame {
+    fn clone(&self) -> Self {
+        CanvasFrame {
+            state: self.state.clone()
+        }
+    }
+}
+
 impl Frame for CanvasFrame {
     type Image = CanvasImage;
     fn add<U>(&mut self, object: U) where U: Into<Object> {
-        self.contents.push(object.into());
+        let mut state = self.state.borrow_mut();
+        state.contents.push(object.into());
     }
     fn set_viewport(&self, viewport: Rect) {
-        self.viewport.set(viewport);
+        let state = self.state.borrow();
+        state.viewport.set(viewport);
     }
     fn resize<T>(&self, size: T) where T: Into<Vector> {
+        let state = self.state.borrow();
         let size = size.into();
-        self.size.set(size);
-        self.canvas
-            .set_height((size.y * self.pixel_ratio) as u32);
-        self.canvas
-            .set_width((size.x * self.pixel_ratio) as u32);
+        state.size.set(size);
+        state.canvas
+            .set_height((size.y * state.pixel_ratio) as u32);
+        state.canvas
+            .set_width((size.x * state.pixel_ratio) as u32);
     }
     fn get_size(&self) -> Vector {
-        self.size.get()
+        let state = self.state.borrow();
+        state.size.get()
     }
     fn to_image(&self) -> Box<CanvasImage> {
+        let state = self.state.borrow();
         self.draw();
-        Box::new(self.canvas.clone())
+        Box::new(state.canvas.clone())
     }
 }
 
