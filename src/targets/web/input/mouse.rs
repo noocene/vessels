@@ -1,6 +1,5 @@
 use crate::graphics_2d::Vector;
 use crate::input;
-use crate::input::mouse;
 use crate::input::mouse::{Action, Button, Event};
 
 use stdweb::web::event::*;
@@ -9,19 +8,20 @@ use stdweb::web::{document, IEventTarget};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub struct MouseState {
-    handlers: Vec<Box<dyn Fn(input::mouse::Event)>>,
+pub(crate) struct MouseState {
+    handlers: Vec<Box<dyn Fn(Event)>>,
     position: Vector,
 }
 
-pub struct Mouse {
+pub(crate) struct Mouse {
     state: Rc<RefCell<MouseState>>,
 }
 
-impl input::Source<mouse::Event> for Mouse {
+impl input::Source for Mouse {
+    type Event = Event;
     fn bind<F>(&self, handler: F)
     where
-        F: Fn(input::mouse::Event) + 'static,
+        F: Fn(Event) + 'static,
     {
         self.state.borrow_mut().handlers.push(Box::new(handler));
     }
@@ -34,7 +34,7 @@ impl input::Mouse for Mouse {
 }
 
 impl Mouse {
-    pub fn new() -> Mouse {
+    pub(crate) fn new() -> Mouse {
         let mouse = Mouse {
             state: Rc::new(RefCell::new(MouseState {
                 handlers: vec![],

@@ -135,18 +135,19 @@ fn parse_code(code: &str) -> Key {
 }
 
 pub(crate) struct KeyboardState {
-    handlers: Vec<Box<dyn Fn(input::keyboard::Event)>>,
+    handlers: Vec<Box<dyn Fn(Event)>>,
     keys: HashMap<Key, bool>,
 }
 
-pub struct Keyboard {
+pub(crate) struct Keyboard {
     state: Rc<RefCell<KeyboardState>>,
 }
 
-impl input::Source<keyboard::Event> for Keyboard {
+impl input::Source for Keyboard {
+    type Event = Event;
     fn bind<F>(&self, handler: F)
     where
-        F: Fn(input::keyboard::Event) + 'static,
+        F: Fn(Event) + 'static,
     {
         self.state.borrow_mut().handlers.push(Box::new(handler));
     }
@@ -169,7 +170,7 @@ impl keyboard::State for KeyboardState {
 }
 
 impl Keyboard {
-    pub fn new() -> Keyboard {
+    pub(crate) fn new() -> Keyboard {
         let keyboard = Keyboard {
             state: Rc::new(RefCell::new(KeyboardState {
                 handlers: vec![],

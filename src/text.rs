@@ -1,48 +1,76 @@
 use crate::graphics_2d::*;
 
-#[derive(Clone, Copy)]
+/// A font face.
+#[derive(Clone, Copy, Debug)]
 pub enum Font {
+    /// The default system font face used for native UI elements.
     SystemFont,
 }
 
-#[derive(Clone, Copy)]
+/// Specifies the weight of a font.
+#[derive(Clone, Copy, Debug)]
 pub enum Weight {
+    /// Hairline weight.
     Hairline,
+    /// Light weight.
     Light,
+    /// Thin weight.
     Thin,
+    /// Normal font weight.
     Normal,
+    /// Standard bold font weight.
     Bold,
+    /// A heavy/black font weight.
     Heavy,
 }
 
-#[derive(Clone, Copy)]
+/// Specifies the type of text wrap used.
+#[derive(Clone, Copy, Debug)]
 pub enum Wrap {
+    /// No wrap.
     None,
+    /// Standard word-level text wrap.
     Normal,
 }
 
-#[derive(Clone, Copy)]
+/// Specifices the alignment of text.
+#[derive(Clone, Copy, Debug)]
 pub enum Align {
+    /// Center-justification.
     Center,
+    /// Left-justification.
     Start,
+    /// Right-justification.
     End,
 }
 
-#[derive(Clone, Copy)]
+/// Provides an abstraction for representing text content.
+#[derive(Clone, Copy, Debug)]
 pub struct Text<'a> {
+    /// The font face used.
     pub font: Font,
+    /// The actual text content to render.
     pub content: &'a str,
+    /// The font size in pixels.
     pub size: u16,
+    /// The color of the rendered text.
     pub color: RGBA8,
+    /// Whether the text is styled as oblique/italic.
     pub italic: bool,
+    /// The maximum width or wrap width of the text.
     pub max_width: Option<u32>,
+    /// The justification or alignment style of the text.
     pub align: Align,
+    /// The line height in pixels.
     pub line_height: u16,
+    /// The type of text wrap used.
     pub wrap: Wrap,
+    /// The font weight used.
     pub weight: Weight,
 }
 
 impl<'a> Text<'a> {
+    /// Creates a new text abstraction with the given content.
     pub fn new(content: &str) -> Text<'_> {
         Text::default().with_content(content)
     }
@@ -50,38 +78,47 @@ impl<'a> Text<'a> {
         self.content = content;
         self
     }
+    /// Sets the color of the text.
     pub fn with_color(mut self, color: RGBA8) -> Self {
         self.color = color;
         self
     }
+    /// Makes the text italic.
     pub fn italic(mut self) -> Self {
         self.italic = true;
         self
     }
+    /// Sets the font size of the text.
     pub fn with_size(mut self, size: u16) -> Self {
         self.size = size;
         self
     }
+    /// Sets the line height of the text.
     pub fn with_line_height(mut self, line_height: u16) -> Self {
         self.line_height = line_height;
         self
     }
+    /// Sets the max width of the text.
     pub fn with_max_width(mut self, max_width: u32) -> Self {
         self.max_width = Some(max_width);
         self
     }
+    /// Enables text wrapping.
     pub fn wrap(mut self) -> Self {
         self.wrap = Wrap::Normal;
         self
     }
+    /// Sets the text alignment to be centered.
     pub fn center(mut self) -> Self {
         self.align = Align::Center;
         self
     }
+    /// Sets the text alignment to be right-justified.
     pub fn justify_end(mut self) -> Self {
         self.align = Align::End;
         self
     }
+    /// Sets the font weight.
     pub fn with_weight(mut self, weight: Weight) -> Self {
         self.weight = weight;
         self

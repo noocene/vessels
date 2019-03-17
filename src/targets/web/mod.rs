@@ -1,2 +1,2 @@
-pub mod graphics;
-pub mod input;
+pub(crate) mod graphics;
+pub(crate) mod input;

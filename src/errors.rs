@@ -33,7 +33,7 @@ impl fmt::Display for Error {
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum ErrorKind {
     ColorStopOffsetError,
 

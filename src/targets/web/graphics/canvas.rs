@@ -582,7 +582,7 @@ impl Clone for Canvas {
     }
 }
 
-pub fn new() -> impl ContextualGraphics {
+pub(crate) fn new() -> impl ContextualGraphics {
     document()
         .head()
         .unwrap()
