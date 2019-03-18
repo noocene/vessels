@@ -287,6 +287,16 @@ pub enum Object {
     Dynamic(Box<dyn DynamicObject>),
 }
 
+impl Object {
+    /// Renders the underlying content.
+    pub fn render(&self) -> Cow<'_, [Path]> {
+        match self {
+            Object::Dynamic(object) => object.render(),
+            Object::Static(object) => Cow::from(&object.content),
+        }
+    }
+}
+
 impl Debug for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
