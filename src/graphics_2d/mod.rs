@@ -297,6 +297,30 @@ impl Object {
     }
 }
 
+struct ClosureObject<'a> {
+    closure: Box<dyn Fn() -> Cow<'a, [Path]> + 'static>,
+}
+
+impl<'a> DynamicObject for ClosureObject<'a> {
+    fn orientation(&self) -> Transform {
+        Transform::default()
+    }
+    fn render(&self) -> Cow<'_, [Path]> {
+        (self.closure)()
+    }
+}
+
+impl<F> From<F> for Object
+where
+    F: Fn() -> Cow<'static, [Path]> + 'static,
+{
+    fn from(closure: F) -> Object {
+        Object::Dynamic(Box::new(ClosureObject {
+            closure: Box::new(closure),
+        }))
+    }
+}
+
 impl Debug for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
