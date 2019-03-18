@@ -57,7 +57,7 @@ impl ImageRepresentation for Image<RGBA8, Texture2D> {
 pub trait PixelFormat {}
 
 /// A standard 24-bit-depth RGB color with an 8-bit alpha channel.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct RGBA8 {
     /// Red channel data.
     pub r: u8,
