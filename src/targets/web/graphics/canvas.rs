@@ -328,7 +328,7 @@ impl CanvasFrame {
                         Weight::Thin => "200",
                         Weight::Light => "200",
                         Weight::Hairline => "100"
-                    }, (f64::from(input.size) * window().device_pixel_ratio()) as u32)
+                    }, input.size
                 }
             }).as_str());
             context.set_text_align(match input.align {
@@ -389,12 +389,6 @@ impl CanvasFrame {
                             }
                         }
                     }
-                    state.canvas.set_height(
-                        (f64::from(input.line_height) * state.pixel_ratio) as u32
-                            * ((wrapped_lines.len() - 1).max(0) as u32)
-                            + (f64::from(input.size) * state.pixel_ratio) as u32,
-                    );
-                    update_text_style(&state.context, &input);
                     wrapped_lines
                 }
                 _ => lines,
@@ -404,7 +398,7 @@ impl CanvasFrame {
             state.context.fill_text(
                 line,
                 0.,
-                ((f64::from(input.line_height) * state.pixel_ratio) as u32 * index as u32).into(),
+                (u32::from(input.line_height) * index as u32).into(),
                 None,
             );
         }
