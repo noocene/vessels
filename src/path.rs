@@ -1,4 +1,4 @@
-use crate::graphics_2d::*;
+use crate::graphics_2d::{ImageRepresentation, Transform, Vector, RGBA8};
 
 use crate::errors::Error;
 
@@ -543,7 +543,7 @@ impl StrokeBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{GradientStop, RGBA8};
 
     #[test]
     fn gradient_stop_fail() {

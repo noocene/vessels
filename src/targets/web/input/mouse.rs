@@ -2,7 +2,9 @@ use crate::graphics_2d::Vector;
 use crate::input;
 use crate::input::mouse::{Action, Button, Event};
 
-use stdweb::web::event::*;
+use stdweb::web::event::{
+    IEvent, IMouseEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+};
 use stdweb::web::{document, IEventTarget};
 
 use std::cell::RefCell;

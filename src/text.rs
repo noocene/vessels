@@ -1,4 +1,4 @@
-use crate::graphics_2d::*;
+use crate::graphics_2d::RGBA8;
 
 /// A font face.
 #[derive(Clone, Copy, Debug)]

@@ -1,11 +1,11 @@
-use crate::graphics_2d::*;
-use crate::input::*;
-use crate::path::*;
+use crate::graphics_2d::{ContextGraphics, ContextualGraphics, DynamicObject, Frame, Graphics, Image, ImageRepresentation, Object, Rasterizable, Rasterizer, Rect, Texture2D, Transform, Vector, RGBA8};
+use crate::input::Context;
+use crate::path::{Fill, Path, Segment, StrokeCapType, StrokeJoinType, Texture};
 use crate::targets::web;
-use crate::text::*;
+use crate::text::{Text, Font, Weight, Align, Wrap};
 use crate::util::ObserverCell;
 
-use stdweb::traits::*;
+use stdweb::traits::{IChildNode, IElement, IEvent, IEventTarget, IHtmlElement, INode};
 use stdweb::unstable::TryInto;
 use stdweb::web::{
     document, window, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap, LineJoin,

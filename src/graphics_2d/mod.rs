@@ -1,7 +1,7 @@
-use crate::input::*;
-use crate::path::*;
+use crate::input::Context;
+use crate::path::{Path, Primitive, Texture};
 use crate::targets;
-use crate::text::*;
+use crate::text::Text;
 
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
