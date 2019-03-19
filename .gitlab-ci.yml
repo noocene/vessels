@@ -17,7 +17,7 @@ check:
   script:
     - cargo check --target wasm32-unknown-emscripten
 
-pages:
+docs:
   stage: deploy
   only:
     - master
