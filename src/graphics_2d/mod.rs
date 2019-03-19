@@ -243,8 +243,7 @@ pub struct StaticObject {
 }
 
 impl StaticObject {
-    /// Creates a [StaticObject] from a [Path].
-    pub fn from_entity(entity: Rasterizable) -> StaticObject {
+    fn from_entity(entity: Rasterizable) -> StaticObject {
         StaticObject {
             content: vec![entity],
             orientation: Transform::default(),
@@ -256,6 +255,18 @@ impl StaticObject {
     pub fn with_transform(mut self, closure: impl Fn(&mut Transform)) -> Self {
         closure(&mut self.orientation);
         self
+    }
+}
+
+impl From<Rasterizable> for StaticObject {
+    fn from(input: Rasterizable) -> StaticObject {
+        StaticObject::from_entity(input)
+    }
+}
+
+impl From<Rasterizable> for Object {
+    fn from(input: Rasterizable) -> Object {
+        Object::Static(Box::new(input.into()))
     }
 }
 

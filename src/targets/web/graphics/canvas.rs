@@ -447,6 +447,10 @@ impl CanvasFrame {
             }
         });
     }
+    fn element(&self) -> CanvasElement {
+        let state = self.state.borrow();
+        state.canvas.clone()
+    }
 }
 
 impl DynamicObject for CanvasFrame {
@@ -533,125 +537,11 @@ impl Rasterizer for Canvas {
     where
         T: Into<Rasterizable>,
     {
-        let update_text_style = |context: &CanvasRenderingContext2d, input: &Text| {
-            context.set_font((match input.font {
-                Font::SystemFont => {
-                    format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
-                        Weight::Normal => "400",
-                        Weight::Bold => "500",
-                        Weight::Heavy => "700",
-                        Weight::Thin => "200",
-                        Weight::Light => "200",
-                        Weight::Hairline => "100"
-                    }, (f64::from(input.size) * window().device_pixel_ratio()) as u32)
-                }
-            }).as_str());
-            context.set_text_align(match input.align {
-                Align::Center => TextAlign::Center,
-                Align::End => TextAlign::End,
-                Align::Start => TextAlign::Start,
-            });
-            context.set_text_baseline(TextBaseline::Hanging);
-            context.set_fill_style_color(&input.color.to_rgba_color());
-        };
-        let input = input.into();
-        let canvas: CanvasElement = document()
-            .create_element("canvas")
-            .unwrap()
-            .try_into()
-            .unwrap();
-        let dpr = window().device_pixel_ratio();
-        let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
-        match input {
-            Rasterizable::Text(input) => {
-                let mut lines: Vec<String> = input
-                    .content
-                    .split('\n')
-                    .map(std::borrow::ToOwned::to_owned)
-                    .collect();
-                canvas.set_height(
-                    (f64::from(input.line_height) * dpr) as u32 * ((lines.len() - 1).max(0) as u32)
-                        + (f64::from(input.size) * dpr) as u32,
-                );
-                match input.max_width {
-                    None => {
-                        update_text_style(&context, &input);
-                        canvas.set_width(
-                            context.measure_text(&input.content).unwrap().get_width() as u32
-                        );
-                    }
-                    Some(max_width) => {
-                        canvas.set_width((f64::from(max_width) * dpr) as u32);
-                    }
-                }
-                update_text_style(&context, &input);
-                if let Some(max_width) = input.max_width {
-                    lines = match input.wrap {
-                        Wrap::Normal => {
-                            let mut test_string = "".to_owned();
-                            lines.reverse();
-                            let mut wrapped_lines: Vec<String> = vec![];
-                            loop {
-                                let line = lines.pop();
-                                match line {
-                                    None => {
-                                        break;
-                                    }
-                                    Some(line) => {
-                                        let words = line.split(' ').collect::<Vec<&str>>();
-                                        for (index, word) in words.iter().cloned().enumerate() {
-                                            if context
-                                                .measure_text(&(test_string.clone() + word))
-                                                .unwrap()
-                                                .get_width()
-                                                <= f64::from(max_width) * dpr
-                                            {
-                                                test_string += &format!(" {}", word);
-                                            } else {
-                                                test_string = test_string.trim().to_owned();
-                                                wrapped_lines.push(test_string);
-                                                lines.push(
-                                                    words
-                                                        .iter()
-                                                        .cloned()
-                                                        .skip(index)
-                                                        .collect::<Vec<&str>>()
-                                                        .join(" "),
-                                                );
-                                                test_string = "".to_owned();
-                                                break;
-                                            }
-                                        }
-                                        if test_string != "" {
-                                            wrapped_lines
-                                                .push(test_string.clone().trim().to_owned());
-                                        }
-                                    }
-                                }
-                            }
-                            canvas.set_height(
-                                (f64::from(input.line_height) * dpr) as u32
-                                    * ((wrapped_lines.len() - 1).max(0) as u32)
-                                    + (f64::from(input.size) * dpr) as u32,
-                            );
-                            update_text_style(&context, &input);
-                            wrapped_lines
-                        }
-                        _ => lines,
-                    }
-                }
-                for (index, line) in lines.iter().enumerate() {
-                    context.fill_text(
-                        line,
-                        0.,
-                        ((f64::from(input.line_height) * dpr) as u32 * index as u32).into(),
-                        None,
-                    );
-                }
-            }
-            Rasterizable::Path(_) => {}
-        }
-        canvas
+        let input: Rasterizable = input.into();
+        let mut frame = CanvasFrame::new();
+        frame.add(input);
+        frame.draw();
+        frame.element()
     }
 }
 
