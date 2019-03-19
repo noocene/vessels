@@ -1,0 +1,28 @@
+before_script:
+  - sudo apt-get install python2.7 nodejs cmake
+  - curl https://sh.rustup.rs -sSf | sh
+  - git clone https://github.com/emscripten-core/emsdk.git
+  - cd emsdk
+  - git pull
+  - ./emsdk install latest
+  - ./emsdk activate latest
+  - source ./emsdk_env.sh
+  - cd ..
+  - rustup default stable
+  - rustup target add wasm32-unknown-emscripten
+
+check:
+  script:
+    - cargo check --all --target wasm32-unknown-emscripten
+
+pages:
+  stage: deploy
+  only:
+    - master
+  script:
+    - cargo --target wasm32-unknown-emscripten
+    - rm -rf public
+    - mv target/doc/ public
+  artifacts:
+    paths:
+      - public
