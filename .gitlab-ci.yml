@@ -2,7 +2,7 @@ image: rust
 
 before_script:
   - apt-get update -y
-  - apt-get install python2.7 nodejs cmake
+  - apt-get install -y python2.7 nodejs cmake
   - git clone https://github.com/emscripten-core/emsdk.git
   - cd emsdk
   - git pull
