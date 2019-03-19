@@ -241,11 +241,6 @@ impl Path {
             .collect();
         self
     }
-    /// Transforms the path.
-    pub fn with_orientation(mut self, transform: Transform) -> Self {
-        self.orientation = transform;
-        self
-    }
 }
 
 /// Provides an interface for ergonomically building paths.

@@ -213,6 +213,13 @@ impl Transform {
         self.scale *= scale.into();
         self
     }
+    /// Composes the transform with another provided transform.
+    pub fn transform(&mut self, transform: Transform) -> &mut Self {
+        self.scale *= transform.scale;
+        self.rotation += transform.rotation;
+        self.position += transform.position;
+        self
+    }
 }
 
 impl Default for Transform {
@@ -380,10 +387,10 @@ impl Rasterizable {
     pub fn transform(&mut self, transform: Transform) {
         match self {
             Rasterizable::Text(text) => {
-                text.orientation = transform;
+                text.orientation.transform(transform);
             }
             Rasterizable::Path(path) => {
-                path.orientation = transform;
+                path.orientation.transform(transform);
             }
         }
     }
