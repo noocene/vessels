@@ -285,9 +285,9 @@ where
     }
 }
 
-impl Into<Object> for StaticObject {
-    fn into(self) -> Object {
-        Object::Static(Box::new(self))
+impl From<StaticObject> for Object {
+    fn from(input: StaticObject) -> Object {
+        Object::Static(Box::new(input))
     }
 }
 
