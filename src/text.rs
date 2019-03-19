@@ -1,4 +1,4 @@
-use crate::graphics_2d::RGBA8;
+use crate::graphics_2d::{Transform, RGBA8};
 
 /// A font face.
 #[derive(Clone, Copy, Debug)]
@@ -67,6 +67,8 @@ pub struct Text {
     pub wrap: Wrap,
     /// The font weight used.
     pub weight: Weight,
+    /// The orientation of the text.
+    pub orientation: Transform,
 }
 
 impl Text {
@@ -128,6 +130,7 @@ impl Text {
 impl Default for Text {
     fn default() -> Text {
         Text {
+            orientation: Transform::default(),
             font: Font::SystemFont,
             content: "".to_owned(),
             size: 15,

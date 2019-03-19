@@ -375,6 +375,20 @@ pub enum Rasterizable {
     Path(Box<Path>),
 }
 
+impl Rasterizable {
+    /// Transforms the contents of the rasterizable type.
+    pub fn transform(&mut self, transform: Transform) {
+        match self {
+            Rasterizable::Text(text) => {
+                text.orientation = transform;
+            }
+            Rasterizable::Path(path) => {
+                path.orientation = transform;
+            }
+        }
+    }
+}
+
 impl From<Path> for Rasterizable {
     fn from(input: Path) -> Rasterizable {
         Rasterizable::Path(Box::new(input))

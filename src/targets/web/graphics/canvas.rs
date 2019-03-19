@@ -316,8 +316,17 @@ impl CanvasFrame {
             None => {}
         }
     }
-    fn draw_text(&self, input: &Text) {
+    fn draw_text(&self, matrix: [f64; 6], input: &Text) {
         let state = self.state.borrow();
+        state.context.restore();
+        state.context.save();
+        state.context.transform(
+            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+        );
+        let matrix = input.orientation.to_matrix();
+        state.context.transform(
+            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+        );
         let update_text_style = |context: &CanvasRenderingContext2d, input: &Text| {
             context.set_font((match input.font {
                 Font::SystemFont => {
@@ -427,7 +436,7 @@ impl CanvasFrame {
                 let matrix = orientation.to_matrix();
                 content.for_each(|entity| match entity {
                     Rasterizable::Path(path) => self.draw_path(matrix, path),
-                    Rasterizable::Text(input) => self.draw_text(input),
+                    Rasterizable::Text(input) => self.draw_text(matrix, input),
                 });
             };
             let orientation: Transform;
