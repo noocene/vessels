@@ -387,6 +387,12 @@ impl From<Text> for Rasterizable {
     }
 }
 
+impl From<Text> for Object {
+    fn from(input: Text) -> Object {
+        Object::from(Rasterizable::from(input))
+    }
+}
+
 /// Provides an interface for the rasterization of content.
 pub trait Rasterizer {
     /// The image representation type used.
