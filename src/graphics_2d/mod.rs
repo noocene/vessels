@@ -230,7 +230,7 @@ pub trait DynamicObject {
     /// Returns the absolute orientation of the object within the space of its parent frame.
     fn orientation(&self) -> Transform;
     /// Returns the styled paths comprising the object.
-    fn render(&self) -> Cow<'_, [Path]>;
+    fn render(&self) -> Cow<'_, [Rasterizable]>;
 }
 
 /// An object with static contents.
@@ -239,12 +239,12 @@ pub struct StaticObject {
     /// The absolute orientation of the object within the space of its parent frame.
     pub orientation: Transform,
     /// The styled paths comprising the object.
-    pub content: Vec<Path>,
+    pub content: Vec<Rasterizable>,
 }
 
 impl StaticObject {
     /// Creates a [StaticObject] from a [Path].
-    pub fn from_entity(entity: Path) -> StaticObject {
+    pub fn from_entity(entity: Rasterizable) -> StaticObject {
         StaticObject {
             content: vec![entity],
             orientation: Transform::default(),
@@ -268,7 +268,8 @@ where
             orientation: Transform::default(),
             content: vec![Primitive::rectangle(input.get_size())
                 .fill(Texture::Image(Box::new(input)).into())
-                .finalize()],
+                .finalize()
+                .into()],
         }
     }
 }
@@ -289,7 +290,7 @@ pub enum Object {
 
 impl Object {
     /// Renders the underlying content.
-    pub fn render(&self) -> Cow<'_, [Path]> {
+    pub fn render(&self) -> Cow<'_, [Rasterizable]> {
         match self {
             Object::Dynamic(object) => object.render(),
             Object::Static(object) => Cow::from(&object.content),
@@ -298,21 +299,21 @@ impl Object {
 }
 
 struct ClosureObject<'a> {
-    closure: Box<dyn Fn() -> Cow<'a, [Path]> + 'static>,
+    closure: Box<dyn Fn() -> Cow<'a, [Rasterizable]> + 'static>,
 }
 
 impl<'a> DynamicObject for ClosureObject<'a> {
     fn orientation(&self) -> Transform {
         Transform::default()
     }
-    fn render(&self) -> Cow<'_, [Path]> {
+    fn render(&self) -> Cow<'_, [Rasterizable]> {
         (self.closure)()
     }
 }
 
 impl<F> From<F> for Object
 where
-    F: Fn() -> Cow<'static, [Path]> + 'static,
+    F: Fn() -> Cow<'static, [Rasterizable]> + 'static,
 {
     fn from(closure: F) -> Object {
         Object::Dynamic(Box::new(ClosureObject {
@@ -355,10 +356,24 @@ pub trait Frame: DynamicObject + Clone {
 }
 
 /// A type that can rasterized.
-#[derive(Debug)]
-pub enum Rasterizable<'a> {
+#[derive(Debug, Clone)]
+pub enum Rasterizable {
     /// Some [Text].
-    Text(Text<'a>),
+    Text(Text),
+    /// Some [Path].
+    Path(Box<Path>),
+}
+
+impl From<Path> for Rasterizable {
+    fn from(input: Path) -> Rasterizable {
+        Rasterizable::Path(Box::new(input))
+    }
+}
+
+impl From<Text> for Rasterizable {
+    fn from(input: Text) -> Rasterizable {
+        Rasterizable::Text(input)
+    }
 }
 
 /// Provides an interface for the rasterization of content.
@@ -366,9 +381,9 @@ pub trait Rasterizer {
     /// The image representation type used.
     type Image: ImageRepresentation;
     /// Returns a rasterization of the input.
-    fn rasterize<'a, T>(&self, input: T) -> Self::Image
+    fn rasterize<T>(&self, input: T) -> Self::Image
     where
-        T: Into<Rasterizable<'a>>;
+        T: Into<Rasterizable>;
 }
 
 /// Provides 2-dimensional euclidean rendering capabilities.

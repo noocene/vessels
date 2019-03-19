@@ -45,12 +45,12 @@ pub enum Align {
 }
 
 /// Provides an abstraction for representing text content.
-#[derive(Clone, Copy, Debug)]
-pub struct Text<'a> {
+#[derive(Clone, Debug)]
+pub struct Text {
     /// The font face used.
     pub font: Font,
     /// The actual text content to render.
-    pub content: &'a str,
+    pub content: String,
     /// The font size in pixels.
     pub size: u16,
     /// The color of the rendered text.
@@ -69,13 +69,13 @@ pub struct Text<'a> {
     pub weight: Weight,
 }
 
-impl<'a> Text<'a> {
+impl Text {
     /// Creates a new text abstraction with the given content.
-    pub fn new(content: &str) -> Text<'_> {
+    pub fn new(content: &str) -> Text {
         Text::default().with_content(content)
     }
-    fn with_content(mut self, content: &'a str) -> Self {
-        self.content = content;
+    fn with_content(mut self, content: &'_ str) -> Self {
+        self.content = content.to_owned();
         self
     }
     /// Sets the color of the text.
@@ -125,11 +125,11 @@ impl<'a> Text<'a> {
     }
 }
 
-impl<'a> Default for Text<'a> {
-    fn default() -> Text<'a> {
+impl Default for Text {
+    fn default() -> Text {
         Text {
             font: Font::SystemFont,
-            content: "",
+            content: "".to_owned(),
             size: 15,
             color: RGBA8::black(),
             italic: false,
@@ -139,11 +139,5 @@ impl<'a> Default for Text<'a> {
             wrap: Wrap::None,
             weight: Weight::Normal,
         }
-    }
-}
-
-impl<'a> Into<Rasterizable<'a>> for Text<'a> {
-    fn into(self) -> Rasterizable<'a> {
-        Rasterizable::Text(self)
     }
 }

@@ -1,23 +1,24 @@
 use crate::graphics_2d::*;
 use crate::input::*;
-use crate::text::*;
-use crate::util::ObserverCell;
 use crate::path::*;
 use crate::targets::web;
+use crate::text::*;
+use crate::util::ObserverCell;
 
 use stdweb::traits::*;
 use stdweb::unstable::TryInto;
 use stdweb::web::{
-    document, window, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap, LineJoin, TextAlign, TextBaseline,
+    document, window, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap, LineJoin,
+    TextAlign, TextBaseline,
 };
 
-use stdweb::web::event::{ResizeEvent, ContextMenuEvent};
+use stdweb::web::event::{ContextMenuEvent, ResizeEvent};
 
 use stdweb::web::html_element::CanvasElement;
 
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::borrow::Cow;
 
 use std::any::Any;
 
@@ -30,7 +31,11 @@ type CanvasImage = CanvasElement;
 impl ImageRepresentation for CanvasImage {
     fn get_size(&self) -> Vector {
         let dpr = window().device_pixel_ratio();
-        (f64::from(self.width()) / dpr, f64::from(self.height()) / dpr).into()
+        (
+            f64::from(self.width()) / dpr,
+            f64::from(self.height()) / dpr,
+        )
+            .into()
     }
     fn box_clone(&self) -> Box<dyn ImageRepresentation> {
         Box::new(self.clone())
@@ -54,7 +59,10 @@ impl ImageRepresentation for CanvasImage {
         canvas.set_height(texture.format.height);
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
         let image = context
-            .create_image_data(f64::from(texture.format.width), f64::from(texture.format.height))
+            .create_image_data(
+                f64::from(texture.format.width),
+                f64::from(texture.format.height),
+            )
             .unwrap();
         context.put_image_data(image, 0., 0.).unwrap();
         canvas
@@ -77,7 +85,7 @@ impl Drop for CanvasFrameState {
 }
 
 struct CanvasFrame {
-    state: Rc<RefCell<CanvasFrameState>>
+    state: Rc<RefCell<CanvasFrameState>>,
 }
 
 impl CanvasFrame {
@@ -89,17 +97,17 @@ impl CanvasFrame {
             .unwrap();
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
         CanvasFrame {
-            state: Rc::new(RefCell::new(CanvasFrameState{
+            state: Rc::new(RefCell::new(CanvasFrameState {
                 canvas,
-            pixel_ratio: window().device_pixel_ratio(),
-            context,
-            contents: vec![],
-            size: Cell::from(Vector::default()),
-            viewport: Cell::from(Rect {
-                size: Vector::default(),
-                position: (0., 0.).into(),
-            }),
-            }))
+                pixel_ratio: window().device_pixel_ratio(),
+                context,
+                contents: vec![],
+                size: Cell::from(Vector::default()),
+                viewport: Cell::from(Rect {
+                    size: Vector::default(),
+                    position: (0., 0.).into(),
+                }),
+            })),
         }
     }
     fn show(&self) {
@@ -109,6 +117,297 @@ impl CanvasFrame {
             event.stop_propagation();
         });
         document().body().unwrap().append_child(&state.canvas);
+    }
+    fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
+        let state = self.state.borrow();
+        state.context.restore();
+        state.context.save();
+        state.context.transform(
+            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+        );
+        let matrix = entity.orientation.to_matrix();
+        state.context.transform(
+            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+        );
+        state.context.begin_path();
+        match &entity.shadow {
+            Some(shadow) => {
+                state.context.set_shadow_blur(shadow.blur);
+                state
+                    .context
+                    .set_shadow_color(&shadow.color.to_rgba_color());
+                state.context.set_shadow_offset_x(shadow.offset.x);
+                state.context.set_shadow_offset_y(shadow.offset.y);
+            }
+            None => {
+                state.context.set_shadow_color("rgba(0,0,0,0)");
+            }
+        }
+        let segments = entity.segments.iter();
+        state.context.move_to(0., 0.);
+        segments.for_each(|segment| match segment {
+            Segment::LineTo(point) => {
+                state.context.line_to(point.x, point.y);
+            }
+            Segment::MoveTo(point) => {
+                state.context.move_to(point.x, point.y);
+            }
+            Segment::CubicTo(point, handle_1, handle_2) => {
+                state.context.bezier_curve_to(
+                    handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
+                );
+            }
+            Segment::QuadraticTo(point, handle) => {
+                state
+                    .context
+                    .quadratic_curve_to(handle.x, handle.y, point.x, point.y);
+            }
+        });
+        if entity.closed {
+            state.context.close_path();
+        }
+        match &entity.stroke {
+            Some(stroke) => {
+                state.context.set_line_cap(match &stroke.cap {
+                    StrokeCapType::Butt => LineCap::Butt,
+                    StrokeCapType::Round => LineCap::Round,
+                });
+                state.context.set_line_join(match &stroke.join {
+                    StrokeJoinType::Miter => LineJoin::Miter,
+                    StrokeJoinType::Round => LineJoin::Round,
+                    StrokeJoinType::Bevel => LineJoin::Bevel,
+                });
+                match &stroke.content {
+                    Texture::Solid(color) => {
+                        state.context.set_stroke_style_color(&color.to_rgba_color());
+                    }
+                    Texture::LinearGradient(gradient) => {
+                        let canvas_gradient = state.context.create_linear_gradient(
+                            gradient.start.x,
+                            gradient.start.y,
+                            gradient.end.x,
+                            gradient.end.y,
+                        );
+                        gradient.stops.iter().for_each(|stop| {
+                            canvas_gradient
+                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
+                                .unwrap();
+                        });
+                        state.context.set_stroke_style_gradient(&canvas_gradient);
+                    }
+                    Texture::Image(image) => {
+                        let image_any = image as &dyn Any;
+                        let pattern: CanvasPattern = match image_any.downcast_ref::<CanvasImage>() {
+                                        Some(as_image) => js! {
+                                            return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
+                                        }.try_into().unwrap(),
+                                        None => {
+                                            let as_image = CanvasImage::from_texture(image.box_clone().as_texture());
+                                            return js! {
+                                                return @{&state.context}.createPattern(@{as_image}, "no-repeat");
+                                            }.try_into().unwrap();
+                                        }
+                                    };
+                        state.context.set_stroke_style_pattern(&pattern);
+                        state.context.scale(state.pixel_ratio, state.pixel_ratio)
+                    }
+                    Texture::RadialGradient(gradient) => {
+                        let canvas_gradient = state
+                            .context
+                            .create_radial_gradient(
+                                gradient.start.x,
+                                gradient.start.y,
+                                gradient.start_radius,
+                                gradient.end.x,
+                                gradient.end.y,
+                                gradient.end_radius,
+                            )
+                            .unwrap();
+                        gradient.stops.iter().for_each(|stop| {
+                            canvas_gradient
+                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
+                                .unwrap();
+                        });
+                        state.context.set_stroke_style_gradient(&canvas_gradient);
+                    }
+                }
+                state.context.set_line_width(f64::from(stroke.width));
+                if let Texture::Image(_image) = &stroke.content {
+                    state
+                        .context
+                        .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
+                }
+                state.context.stroke();
+                if let Texture::Image(_image) = &stroke.content {
+                    state.context.scale(state.pixel_ratio, state.pixel_ratio);
+                }
+            }
+            None => {}
+        }
+        match &entity.fill {
+            Some(fill) => {
+                match &fill.content {
+                    Texture::Solid(color) => {
+                        state.context.set_fill_style_color(&color.to_rgba_color());
+                    }
+                    Texture::Image(image) => {
+                        let image_any = image as &dyn Any;
+                        let pattern: CanvasPattern = match image_any.downcast_ref::<CanvasImage>() {
+                                        Some(as_image) => js! {
+                                            return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
+                                        }.try_into().unwrap(),
+                                        None => {
+                                            let as_image = CanvasImage::from_texture(image.as_texture());
+                                            return js! {
+                                                return @{&state.context}.createPattern(@{as_image}, "no-repeat");
+                                            }.try_into().unwrap();
+                                        }
+                                    };
+                        state
+                            .context
+                            .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
+                        state.context.set_fill_style_pattern(&pattern);
+                        state.context.scale(state.pixel_ratio, state.pixel_ratio);
+                    }
+                    Texture::LinearGradient(gradient) => {
+                        let canvas_gradient = state.context.create_linear_gradient(
+                            gradient.start.x,
+                            gradient.start.y,
+                            gradient.end.x,
+                            gradient.end.y,
+                        );
+                        gradient.stops.iter().for_each(|stop| {
+                            canvas_gradient
+                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
+                                .unwrap();
+                        });
+                        state.context.set_fill_style_gradient(&canvas_gradient);
+                    }
+                    Texture::RadialGradient(gradient) => {
+                        let canvas_gradient = state
+                            .context
+                            .create_radial_gradient(
+                                gradient.start.x,
+                                gradient.start.y,
+                                gradient.start_radius,
+                                gradient.end.x,
+                                gradient.end.y,
+                                gradient.end_radius,
+                            )
+                            .unwrap();
+                        gradient.stops.iter().for_each(|stop| {
+                            canvas_gradient
+                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
+                                .unwrap();
+                        });
+                        state.context.set_fill_style_gradient(&canvas_gradient);
+                    }
+                }
+                if let Texture::Image(_image) = &fill.content {
+                    state
+                        .context
+                        .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
+                }
+                state.context.fill(FillRule::NonZero);
+                if let Texture::Image(_image) = &fill.content {
+                    state.context.scale(state.pixel_ratio, state.pixel_ratio);
+                }
+            }
+            None => {}
+        }
+    }
+    fn draw_text(&self, input: &Text) {
+        let state = self.state.borrow();
+        let update_text_style = |context: &CanvasRenderingContext2d, input: &Text| {
+            context.set_font((match input.font {
+                Font::SystemFont => {
+                    format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
+                        Weight::Normal => "400",
+                        Weight::Bold => "500",
+                        Weight::Heavy => "700",
+                        Weight::Thin => "200",
+                        Weight::Light => "200",
+                        Weight::Hairline => "100"
+                    }, (f64::from(input.size) * window().device_pixel_ratio()) as u32)
+                }
+            }).as_str());
+            context.set_text_align(match input.align {
+                Align::Center => TextAlign::Center,
+                Align::End => TextAlign::End,
+                Align::Start => TextAlign::Start,
+            });
+            context.set_text_baseline(TextBaseline::Hanging);
+            context.set_fill_style_color(&input.color.to_rgba_color());
+        };
+        let mut lines: Vec<String> = input
+            .content
+            .split('\n')
+            .map(std::borrow::ToOwned::to_owned)
+            .collect();
+        update_text_style(&state.context, &input);
+        if let Some(max_width) = input.max_width {
+            lines = match input.wrap {
+                Wrap::Normal => {
+                    let mut test_string = "".to_owned();
+                    lines.reverse();
+                    let mut wrapped_lines: Vec<String> = vec![];
+                    loop {
+                        let line = lines.pop();
+                        match line {
+                            None => {
+                                break;
+                            }
+                            Some(line) => {
+                                let words = line.split(' ').collect::<Vec<&str>>();
+                                for (index, word) in words.iter().cloned().enumerate() {
+                                    if state
+                                        .context
+                                        .measure_text(&(test_string.clone() + word))
+                                        .unwrap()
+                                        .get_width()
+                                        <= f64::from(max_width) * state.pixel_ratio
+                                    {
+                                        test_string += &format!(" {}", word);
+                                    } else {
+                                        test_string = test_string.trim().to_owned();
+                                        wrapped_lines.push(test_string);
+                                        lines.push(
+                                            words
+                                                .iter()
+                                                .cloned()
+                                                .skip(index)
+                                                .collect::<Vec<&str>>()
+                                                .join(" "),
+                                        );
+                                        test_string = "".to_owned();
+                                        break;
+                                    }
+                                }
+                                if test_string != "" {
+                                    wrapped_lines.push(test_string.clone().trim().to_owned());
+                                }
+                            }
+                        }
+                    }
+                    state.canvas.set_height(
+                        (f64::from(input.line_height) * state.pixel_ratio) as u32
+                            * ((wrapped_lines.len() - 1).max(0) as u32)
+                            + (f64::from(input.size) * state.pixel_ratio) as u32,
+                    );
+                    update_text_style(&state.context, &input);
+                    wrapped_lines
+                }
+                _ => lines,
+            }
+        }
+        for (index, line) in lines.iter().enumerate() {
+            state.context.fill_text(
+                line,
+                0.,
+                ((f64::from(input.line_height) * state.pixel_ratio) as u32 * index as u32).into(),
+                None,
+            );
+        }
     }
     fn draw(&self) {
         let state = self.state.borrow();
@@ -130,214 +429,15 @@ impl CanvasFrame {
         );
         state.context.save();
         state.contents.iter().for_each(|object| {
-            let draw = |orientation: Transform, content: Iter<'_, Path>| {
+            let draw = |orientation: Transform, content: Iter<'_, Rasterizable>| {
                 let matrix = orientation.to_matrix();
-                content.for_each(|entity| {
-                    state.context.restore();
-                    state.context.save();
-                    state.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
-                    let matrix = entity.orientation.to_matrix();
-                    state.context.transform(matrix[0],matrix[1],matrix[2],matrix[3],matrix[4],matrix[5]);
-                    state.context.begin_path();
-                    match &entity.shadow {
-                        Some(shadow) => {
-                            state.context.set_shadow_blur(shadow.blur);
-                            state.context.set_shadow_color(&shadow.color.to_rgba_color());
-                            state.context.set_shadow_offset_x(shadow.offset.x);
-                            state.context.set_shadow_offset_y(shadow.offset.y);
-                        }
-                        None => {
-                            state.context.set_shadow_color("rgba(0,0,0,0)");
-                        }
-                    }
-                    let segments = entity.segments.iter();
-                    state.context.move_to(0., 0.);
-                    segments.for_each(|segment| {
-                        match segment {
-                            Segment::LineTo(point) => {
-                                state.context.line_to(
-                                    point.x, point.y
-                                );
-                            },
-                            Segment::MoveTo(point) => {
-                                state.context.move_to(
-                                   point.x, point.y
-                                );
-                            },
-                            Segment::CubicTo(point, handle_1, handle_2) => {
-                                state.context.bezier_curve_to(
-                                    handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y 
-                                );
-                            }
-                            Segment::QuadraticTo(point, handle) => {
-                                state.context.quadratic_curve_to(
-                                    handle.x, handle.y, point.x, point.y 
-                                );
-                            }
-                        }
-                    });
-                    if entity.closed {
-                        state.context.close_path();
-                    }
-                    match &entity.stroke {
-                        Some(stroke) => {
-                            state.context.set_line_cap(match &stroke.cap {
-                                StrokeCapType::Butt => LineCap::Butt,
-                                StrokeCapType::Round => LineCap::Round,
-                            });
-                            state.context.set_line_join(match &stroke.join {
-                                StrokeJoinType::Miter => LineJoin::Miter,
-                                StrokeJoinType::Round => LineJoin::Round,
-                                StrokeJoinType::Bevel => LineJoin::Bevel,
-                            });
-                            match &stroke.content {
-                                Texture::Solid(color) => {
-                                    state.context.set_stroke_style_color(&color.to_rgba_color());
-                                }
-                                Texture::LinearGradient(gradient) => {
-                                    let canvas_gradient = state.context.create_linear_gradient(
-                                        gradient.start.x,
-                                        gradient.start.y,
-                                        gradient.end.x,
-                                        gradient.end.y,
-                                    );
-                                    gradient.stops.iter().for_each(|stop| {
-                                        canvas_gradient
-                                            .add_color_stop(
-                                                stop.offset,
-                                                &stop.color.to_rgba_color(),
-                                            )
-                                            .unwrap();
-                                    });
-                                    state.context.set_stroke_style_gradient(&canvas_gradient);
-                                }
-                                Texture::Image(image) => {
-                                    let image_any = image as &dyn Any;
-                                    let pattern: CanvasPattern = match image_any.downcast_ref::<CanvasImage>() {
-                                        Some(as_image) => js! {
-                                            return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
-                                        }.try_into().unwrap(),
-                                        None => {
-                                            let as_image = CanvasImage::from_texture(image.box_clone().as_texture());
-                                            return js! {
-                                                return @{&state.context}.createPattern(@{as_image}, "no-repeat");
-                                            }.try_into().unwrap();
-                                        }
-                                    };
-                                    state.context.set_stroke_style_pattern(&pattern);
-                                    state.context.scale(state.pixel_ratio, state.pixel_ratio)
-                                }
-                                Texture::RadialGradient(gradient) => {
-                                    let canvas_gradient = state
-                                        .context
-                                        .create_radial_gradient(
-                                            gradient.start.x,
-                                            gradient.start.y,
-                                            gradient.start_radius,
-                                            gradient.end.x,
-                                            gradient.end.y,
-                                            gradient.end_radius,
-                                        )
-                                        .unwrap();
-                                    gradient.stops.iter().for_each(|stop| {
-                                        canvas_gradient
-                                            .add_color_stop(
-                                                stop.offset,
-                                                &stop.color.to_rgba_color(),
-                                            )
-                                            .unwrap();
-                                    });
-                                    state.context.set_stroke_style_gradient(&canvas_gradient);
-                                }
-                            }
-                            state.context.set_line_width(f64::from(stroke.width));
-                            if let Texture::Image(_image) = &stroke.content {
-                                state.context.scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
-                            }
-                            state.context.stroke();
-                            if let Texture::Image(_image) = &stroke.content {
-                                state.context.scale(state.pixel_ratio, state.pixel_ratio);
-                            }
-                        }
-                        None => {}
-                    }
-                    match &entity.fill {
-                        Some(fill) => {
-                            match &fill.content {
-                                Texture::Solid(color) => {
-                                    state.context.set_fill_style_color(&color.to_rgba_color());
-                                }
-                                Texture::Image(image) => {
-                                    let image_any = image as &dyn Any;
-                                    let pattern: CanvasPattern = match image_any.downcast_ref::<CanvasImage>() {
-                                        Some(as_image) => js! {
-                                            return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
-                                        }.try_into().unwrap(),
-                                        None => {
-                                            let as_image = CanvasImage::from_texture(image.as_texture());
-                                            return js! {
-                                                return @{&state.context}.createPattern(@{as_image}, "no-repeat");
-                                            }.try_into().unwrap();
-                                        }
-                                    };
-                                    state.context.scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
-                                    state.context.set_fill_style_pattern(&pattern);
-                                    state.context.scale(state.pixel_ratio, state.pixel_ratio);
-                                }
-                                Texture::LinearGradient(gradient) => {
-                                    let canvas_gradient = state.context.create_linear_gradient(
-                                        gradient.start.x,
-                                        gradient.start.y,
-                                        gradient.end.x,
-                                        gradient.end.y,
-                                    );
-                                    gradient.stops.iter().for_each(|stop| {
-                                        canvas_gradient
-                                            .add_color_stop(
-                                                stop.offset,
-                                                &stop.color.to_rgba_color(),
-                                            )
-                                            .unwrap();
-                                    });
-                                    state.context.set_fill_style_gradient(&canvas_gradient);
-                                }
-                                Texture::RadialGradient(gradient) => {
-                                    let canvas_gradient = state
-                                        .context
-                                        .create_radial_gradient(
-                                            gradient.start.x,
-                                            gradient.start.y,
-                                            gradient.start_radius,
-                                            gradient.end.x,
-                                            gradient.end.y,
-                                            gradient.end_radius,
-                                        )
-                                        .unwrap();
-                                    gradient.stops.iter().for_each(|stop| {
-                                        canvas_gradient
-                                            .add_color_stop(
-                                                stop.offset,
-                                                &stop.color.to_rgba_color(),
-                                            )
-                                            .unwrap();
-                                    });
-                                    state.context.set_fill_style_gradient(&canvas_gradient);
-                                }
-                            }
-                            if let Texture::Image(_image) = &fill.content {
-                                state.context.scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
-                            }
-                            state.context.fill(FillRule::NonZero);
-                            if let Texture::Image(_image) = &fill.content {
-                                state.context.scale(state.pixel_ratio, state.pixel_ratio);
-                            }
-                        }
-                        None => {}
-                    }
+                content.for_each(|entity| match entity {
+                    Rasterizable::Path(path) => self.draw_path(matrix, path),
+                    Rasterizable::Text(input) => self.draw_text(input),
                 });
             };
             let orientation: Transform;
-            let content: Iter<'_, Path>;
+            let content: Iter<'_, Rasterizable>;
             match object {
                 Object::Dynamic(object) => {
                     orientation = object.orientation();
@@ -359,7 +459,7 @@ impl DynamicObject for CanvasFrame {
     fn orientation(&self) -> Transform {
         Transform::default()
     }
-    fn render(&self) -> Cow<'_, [Path]> {
+    fn render(&self) -> Cow<'_, [Rasterizable]> {
         let state = self.state.borrow();
         self.draw();
         let size = state.size.get();
@@ -377,21 +477,25 @@ impl DynamicObject for CanvasFrame {
                 Segment::LineTo(size),
                 Segment::LineTo((size.x, 0.).into()),
             ],
-        }])
+        }
+        .into()])
     }
 }
 
 impl Clone for CanvasFrame {
     fn clone(&self) -> Self {
         CanvasFrame {
-            state: self.state.clone()
+            state: self.state.clone(),
         }
     }
 }
 
 impl Frame for CanvasFrame {
     type Image = CanvasImage;
-    fn add<U>(&mut self, object: U) where U: Into<Object> {
+    fn add<U>(&mut self, object: U)
+    where
+        U: Into<Object>,
+    {
         let mut state = self.state.borrow_mut();
         state.contents.push(object.into());
     }
@@ -399,14 +503,15 @@ impl Frame for CanvasFrame {
         let state = self.state.borrow();
         state.viewport.set(viewport);
     }
-    fn resize<T>(&self, size: T) where T: Into<Vector> {
+    fn resize<T>(&self, size: T)
+    where
+        T: Into<Vector>,
+    {
         let state = self.state.borrow();
         let size = size.into();
         state.size.set(size);
-        state.canvas
-            .set_height((size.y * state.pixel_ratio) as u32);
-        state.canvas
-            .set_width((size.x * state.pixel_ratio) as u32);
+        state.canvas.set_height((size.y * state.pixel_ratio) as u32);
+        state.canvas.set_width((size.x * state.pixel_ratio) as u32);
     }
     fn get_size(&self) -> Vector {
         let state = self.state.borrow();
@@ -430,8 +535,11 @@ struct CanvasState {
 
 impl Rasterizer for Canvas {
     type Image = CanvasImage;
-    fn rasterize<'a, T>(&self, input: T) -> Self::Image where T: Into<Rasterizable<'a>> {
-        let update_text_style = |context: &CanvasRenderingContext2d, input: &Text<'_>| {
+    fn rasterize<T>(&self, input: T) -> Self::Image
+    where
+        T: Into<Rasterizable>,
+    {
+        let update_text_style = |context: &CanvasRenderingContext2d, input: &Text| {
             context.set_font((match input.font {
                 Font::SystemFont => {
                     format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
@@ -453,17 +561,30 @@ impl Rasterizer for Canvas {
             context.set_fill_style_color(&input.color.to_rgba_color());
         };
         let input = input.into();
-        let canvas: CanvasElement = document().create_element("canvas").unwrap().try_into().unwrap();
+        let canvas: CanvasElement = document()
+            .create_element("canvas")
+            .unwrap()
+            .try_into()
+            .unwrap();
         let dpr = window().device_pixel_ratio();
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
         match input {
             Rasterizable::Text(input) => {
-                let mut lines: Vec<String> = input.content.split('\n').map(std::borrow::ToOwned::to_owned).collect();
-                canvas.set_height((f64::from(input.line_height) * dpr) as u32 * ((lines.len() - 1).max(0) as u32) + (f64::from(input.size) * dpr) as u32);
+                let mut lines: Vec<String> = input
+                    .content
+                    .split('\n')
+                    .map(std::borrow::ToOwned::to_owned)
+                    .collect();
+                canvas.set_height(
+                    (f64::from(input.line_height) * dpr) as u32 * ((lines.len() - 1).max(0) as u32)
+                        + (f64::from(input.size) * dpr) as u32,
+                );
                 match input.max_width {
                     None => {
                         update_text_style(&context, &input);
-                        canvas.set_width(context.measure_text(input.content).unwrap().get_width() as u32);
+                        canvas.set_width(
+                            context.measure_text(&input.content).unwrap().get_width() as u32
+                        );
                     }
                     Some(max_width) => {
                         canvas.set_width((f64::from(max_width) * dpr) as u32);
@@ -485,33 +606,56 @@ impl Rasterizer for Canvas {
                                     Some(line) => {
                                         let words = line.split(' ').collect::<Vec<&str>>();
                                         for (index, word) in words.iter().cloned().enumerate() {
-                                            if context.measure_text(&(test_string.clone() + word)).unwrap().get_width() <= f64::from(max_width) * dpr {
+                                            if context
+                                                .measure_text(&(test_string.clone() + word))
+                                                .unwrap()
+                                                .get_width()
+                                                <= f64::from(max_width) * dpr
+                                            {
                                                 test_string += &format!(" {}", word);
                                             } else {
                                                 test_string = test_string.trim().to_owned();
                                                 wrapped_lines.push(test_string);
-                                                lines.push(words.iter().cloned().skip(index).collect::<Vec<&str>>().join(" "));
+                                                lines.push(
+                                                    words
+                                                        .iter()
+                                                        .cloned()
+                                                        .skip(index)
+                                                        .collect::<Vec<&str>>()
+                                                        .join(" "),
+                                                );
                                                 test_string = "".to_owned();
                                                 break;
                                             }
                                         }
                                         if test_string != "" {
-                                            wrapped_lines.push(test_string.clone().trim().to_owned());
+                                            wrapped_lines
+                                                .push(test_string.clone().trim().to_owned());
                                         }
                                     }
                                 }
                             }
-                            canvas.set_height((f64::from(input.line_height) * dpr) as u32 * ((wrapped_lines.len() - 1).max(0) as u32) + (f64::from(input.size) * dpr) as u32);
+                            canvas.set_height(
+                                (f64::from(input.line_height) * dpr) as u32
+                                    * ((wrapped_lines.len() - 1).max(0) as u32)
+                                    + (f64::from(input.size) * dpr) as u32,
+                            );
                             update_text_style(&context, &input);
                             wrapped_lines
                         }
-                        _ => lines
+                        _ => lines,
                     }
                 }
                 for (index, line) in lines.iter().enumerate() {
-                    context.fill_text(line, 0., ((f64::from(input.line_height) * dpr) as u32 * index as u32).into(), None);
+                    context.fill_text(
+                        line,
+                        0.,
+                        ((f64::from(input.line_height) * dpr) as u32 * index as u32).into(),
+                        None,
+                    );
                 }
             }
+            Rasterizable::Path(_) => {}
         }
         canvas
     }
@@ -608,7 +752,9 @@ canvas {
 
     let gfx = Canvas {
         state: Rc::new(RefCell::new(CanvasState {
-            size: ObserverCell::new((body.offset_width().into(), body.offset_height().into()).into()),
+            size: ObserverCell::new(
+                (body.offset_width().into(), body.offset_height().into()).into(),
+            ),
             root_frame: None,
         })),
     };
@@ -618,7 +764,9 @@ canvas {
     window().add_event_listener(move |_: ResizeEvent| {
         let state = gfx_resize.state.borrow();
         let body = document().body().unwrap();
-        state.size.set((body.offset_width().into(), body.offset_height().into()).into());
+        state
+            .size
+            .set((body.offset_width().into(), body.offset_height().into()).into());
     });
 
     gfx
