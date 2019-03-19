@@ -1,8 +1,12 @@
-use crate::graphics_2d::{ContextGraphics, ContextualGraphics, DynamicObject, Frame, Graphics, Image, ImageRepresentation, Object, Rasterizable, Rasterizer, Rect, Texture2D, Transform, Vector, RGBA8};
+use crate::graphics_2d::{
+    ContextGraphics, ContextualGraphics, DynamicObject, Frame, Graphics, Image,
+    ImageRepresentation, Object, Rasterizable, Rasterizer, Rect, Texture2D, Transform, Vector,
+    RGBA8,
+};
 use crate::input::Context;
 use crate::path::{Fill, Path, Segment, StrokeCapType, StrokeJoinType, Texture};
 use crate::targets::web;
-use crate::text::{Text, Font, Weight, Align, Wrap};
+use crate::text::{Align, Font, Text, Weight, Wrap};
 use crate::util::ObserverCell;
 
 use stdweb::traits::{IChildNode, IElement, IEvent, IEventTarget, IHtmlElement, INode};
@@ -337,7 +341,7 @@ impl CanvasFrame {
                         Weight::Thin => "200",
                         Weight::Light => "200",
                         Weight::Hairline => "100"
-                    }, input.size
+                    }, input.size)
                 }
             }).as_str());
             context.set_text_align(match input.align {
