@@ -381,7 +381,7 @@ impl CanvasFrame {
                                         .measure_text(&(test_string.clone() + word))
                                         .unwrap()
                                         .get_width()
-                                        <= f64::from(max_width) * state.pixel_ratio
+                                        <= f64::from(max_width)
                                     {
                                         test_string += &format!(" {}", word);
                                     } else {
@@ -565,7 +565,7 @@ impl Frame for CanvasFrame {
                                         .measure_text(&(test_string.clone() + word))
                                         .unwrap()
                                         .get_width()
-                                        <= f64::from(max_width) * state.pixel_ratio
+                                        <= f64::from(max_width)
                                     {
                                         test_string += &format!(" {}", word);
                                     } else {
