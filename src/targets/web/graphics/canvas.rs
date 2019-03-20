@@ -536,11 +536,80 @@ impl Frame for CanvasFrame {
         self.draw();
         Box::new(state.canvas.clone())
     }
-    fn measure(&self, text: Text) -> Vector {
-        self.update_text_style(&text);
+    fn measure(&self, input: Text) -> Vector {
+        self.update_text_style(&input);
         let state = self.state.borrow();
-        let measurement = state.context.measure_text(&text.content).unwrap();
-        (measurement.get_width(), f64::from(text.size)).into()
+        let measurement: Vector;
+        if let Some(max_width) = input.max_width {
+            let mut lines: Vec<String> = input
+                .content
+                .split('\n')
+                .map(std::borrow::ToOwned::to_owned)
+                .collect();
+            lines = match input.wrap {
+                Wrap::Normal => {
+                    let mut test_string = "".to_owned();
+                    lines.reverse();
+                    let mut wrapped_lines: Vec<String> = vec![];
+                    loop {
+                        let line = lines.pop();
+                        match line {
+                            None => {
+                                break;
+                            }
+                            Some(line) => {
+                                let words = line.split(' ').collect::<Vec<&str>>();
+                                for (index, word) in words.iter().cloned().enumerate() {
+                                    if state
+                                        .context
+                                        .measure_text(&(test_string.clone() + word))
+                                        .unwrap()
+                                        .get_width()
+                                        <= f64::from(max_width) * state.pixel_ratio
+                                    {
+                                        test_string += &format!(" {}", word);
+                                    } else {
+                                        test_string = test_string.trim().to_owned();
+                                        wrapped_lines.push(test_string);
+                                        lines.push(
+                                            words
+                                                .iter()
+                                                .cloned()
+                                                .skip(index)
+                                                .collect::<Vec<&str>>()
+                                                .join(" "),
+                                        );
+                                        test_string = "".to_owned();
+                                        break;
+                                    }
+                                }
+                                if test_string != "" {
+                                    wrapped_lines.push(test_string.clone().trim().to_owned());
+                                }
+                            }
+                        }
+                    }
+                    wrapped_lines
+                }
+                _ => lines,
+            };
+            measurement = (
+                f64::from(input.max_width.unwrap()),
+                (f64::from(lines.len() as u32) * f64::from(input.size)),
+            )
+                .into();
+        } else {
+            measurement = (
+                state
+                    .context
+                    .measure_text(&input.content)
+                    .unwrap()
+                    .get_width(),
+                f64::from(input.size),
+            )
+                .into();
+        }
+        measurement
     }
 }
 
