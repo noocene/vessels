@@ -320,19 +320,9 @@ impl CanvasFrame {
             None => {}
         }
     }
-    fn draw_text(&self, matrix: [f64; 6], input: &Text) {
+    fn update_text_style(&self, input: &Text) {
         let state = self.state.borrow();
-        state.context.restore();
-        state.context.save();
-        state.context.transform(
-            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
-        );
-        let matrix = input.orientation.to_matrix();
-        state.context.transform(
-            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
-        );
-        let update_text_style = |context: &CanvasRenderingContext2d, input: &Text| {
-            context.set_font((match input.font {
+        state.context.set_font((match input.font {
                 Font::SystemFont => {
                     format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
                         Weight::Normal => "400",
@@ -344,20 +334,33 @@ impl CanvasFrame {
                     }, input.size)
                 }
             }).as_str());
-            context.set_text_align(match input.align {
-                Align::Center => TextAlign::Center,
-                Align::End => TextAlign::End,
-                Align::Start => TextAlign::Start,
-            });
-            context.set_text_baseline(TextBaseline::Hanging);
-            context.set_fill_style_color(&input.color.to_rgba_color());
-        };
+        state.context.set_text_align(match input.align {
+            Align::Center => TextAlign::Center,
+            Align::End => TextAlign::End,
+            Align::Start => TextAlign::Start,
+        });
+        state.context.set_text_baseline(TextBaseline::Hanging);
+        state
+            .context
+            .set_fill_style_color(&input.color.to_rgba_color());
+    }
+    fn draw_text(&self, matrix: [f64; 6], input: &Text) {
+        let state = self.state.borrow();
+        state.context.restore();
+        state.context.save();
+        state.context.transform(
+            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+        );
+        let matrix = input.orientation.to_matrix();
+        state.context.transform(
+            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+        );
         let mut lines: Vec<String> = input
             .content
             .split('\n')
             .map(std::borrow::ToOwned::to_owned)
             .collect();
-        update_text_style(&state.context, &input);
+        self.update_text_style(&input);
         if let Some(max_width) = input.max_width {
             lines = match input.wrap {
                 Wrap::Normal => {
@@ -532,6 +535,12 @@ impl Frame for CanvasFrame {
         let state = self.state.borrow();
         self.draw();
         Box::new(state.canvas.clone())
+    }
+    fn measure(&self, text: Text) -> Vector {
+        self.update_text_style(&text);
+        let state = self.state.borrow();
+        let measurement = state.context.measure_text(&text.content).unwrap();
+        (measurement.get_width(), f64::from(text.size)).into()
     }
 }
 

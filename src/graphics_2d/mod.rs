@@ -371,6 +371,8 @@ pub trait Frame: DynamicObject + Clone {
     fn get_size(&self) -> Vector;
     /// Returns an image that is a still rasterization of any rendered content.
     fn to_image(&self) -> Box<<Self as Frame>::Image>;
+    /// Returns the measured dimensions of some provided text.
+    fn measure(&self, input: Text) -> Vector;
 }
 
 /// A type that can rasterized.
