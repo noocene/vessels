@@ -595,7 +595,8 @@ impl Frame for CanvasFrame {
             };
             measurement = (
                 f64::from(input.max_width.unwrap()),
-                (f64::from(lines.len() as u32) * f64::from(input.size)),
+                (f64::from((lines.len() - 1).max(0) as u32) * f64::from(input.line_height))
+                    + f64::from(input.size),
             )
                 .into();
         } else {
