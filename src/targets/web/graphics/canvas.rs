@@ -361,54 +361,8 @@ impl CanvasFrame {
             .map(std::borrow::ToOwned::to_owned)
             .collect();
         self.update_text_style(&input);
-        if let Some(max_width) = input.max_width {
-            lines = match input.wrap {
-                Wrap::Normal => {
-                    let mut test_string = "".to_owned();
-                    lines.reverse();
-                    let mut wrapped_lines: Vec<String> = vec![];
-                    loop {
-                        let line = lines.pop();
-                        match line {
-                            None => {
-                                break;
-                            }
-                            Some(line) => {
-                                let words = line.split(' ').collect::<Vec<&str>>();
-                                for (index, word) in words.iter().cloned().enumerate() {
-                                    if state
-                                        .context
-                                        .measure_text(&(test_string.clone() + word))
-                                        .unwrap()
-                                        .get_width()
-                                        <= f64::from(max_width)
-                                    {
-                                        test_string += &format!(" {}", word);
-                                    } else {
-                                        test_string = test_string.trim().to_owned();
-                                        wrapped_lines.push(test_string);
-                                        lines.push(
-                                            words
-                                                .iter()
-                                                .cloned()
-                                                .skip(index)
-                                                .collect::<Vec<&str>>()
-                                                .join(" "),
-                                        );
-                                        test_string = "".to_owned();
-                                        break;
-                                    }
-                                }
-                                if test_string != "" {
-                                    wrapped_lines.push(test_string.clone().trim().to_owned());
-                                }
-                            }
-                        }
-                    }
-                    wrapped_lines
-                }
-                _ => lines,
-            }
+        if input.max_width.is_some() {
+            lines = self.wrap_text(&input);
         }
         for (index, line) in lines.iter().enumerate() {
             state.context.fill_text(
@@ -466,6 +420,61 @@ impl CanvasFrame {
     fn element(&self) -> CanvasElement {
         let state = self.state.borrow();
         state.canvas.clone()
+    }
+    fn wrap_text(&self, input: &Text) -> Vec<String> {
+        let state = self.state.borrow();
+        let mut lines: Vec<String> = input
+            .content
+            .split('\n')
+            .map(std::borrow::ToOwned::to_owned)
+            .collect();
+        match input.wrap {
+            Wrap::Normal => {
+                let mut test_string = "".to_owned();
+                lines.reverse();
+                let mut wrapped_lines: Vec<String> = vec![];
+                loop {
+                    let line = lines.pop();
+                    match line {
+                        None => {
+                            break;
+                        }
+                        Some(line) => {
+                            let words = line.split(' ').collect::<Vec<&str>>();
+                            for (index, word) in words.iter().cloned().enumerate() {
+                                if state
+                                    .context
+                                    .measure_text(&(test_string.clone() + word))
+                                    .unwrap()
+                                    .get_width()
+                                    <= f64::from(input.max_width.unwrap())
+                                {
+                                    test_string += &format!(" {}", word);
+                                } else {
+                                    test_string = test_string.trim().to_owned();
+                                    wrapped_lines.push(test_string);
+                                    lines.push(
+                                        words
+                                            .iter()
+                                            .cloned()
+                                            .skip(index)
+                                            .collect::<Vec<&str>>()
+                                            .join(" "),
+                                    );
+                                    test_string = "".to_owned();
+                                    break;
+                                }
+                            }
+                            if test_string != "" {
+                                wrapped_lines.push(test_string.clone().trim().to_owned());
+                            }
+                        }
+                    }
+                }
+                wrapped_lines
+            }
+            _ => lines,
+        }
     }
 }
 
@@ -539,68 +548,16 @@ impl Frame for CanvasFrame {
     fn measure(&self, input: Text) -> Vector {
         self.update_text_style(&input);
         let state = self.state.borrow();
-        let measurement: Vector;
-        if let Some(max_width) = input.max_width {
-            let mut lines: Vec<String> = input
-                .content
-                .split('\n')
-                .map(std::borrow::ToOwned::to_owned)
-                .collect();
-            lines = match input.wrap {
-                Wrap::Normal => {
-                    let mut test_string = "".to_owned();
-                    lines.reverse();
-                    let mut wrapped_lines: Vec<String> = vec![];
-                    loop {
-                        let line = lines.pop();
-                        match line {
-                            None => {
-                                break;
-                            }
-                            Some(line) => {
-                                let words = line.split(' ').collect::<Vec<&str>>();
-                                for (index, word) in words.iter().cloned().enumerate() {
-                                    if state
-                                        .context
-                                        .measure_text(&(test_string.clone() + word))
-                                        .unwrap()
-                                        .get_width()
-                                        <= f64::from(max_width)
-                                    {
-                                        test_string += &format!(" {}", word);
-                                    } else {
-                                        test_string = test_string.trim().to_owned();
-                                        wrapped_lines.push(test_string);
-                                        lines.push(
-                                            words
-                                                .iter()
-                                                .cloned()
-                                                .skip(index)
-                                                .collect::<Vec<&str>>()
-                                                .join(" "),
-                                        );
-                                        test_string = "".to_owned();
-                                        break;
-                                    }
-                                }
-                                if test_string != "" {
-                                    wrapped_lines.push(test_string.clone().trim().to_owned());
-                                }
-                            }
-                        }
-                    }
-                    wrapped_lines
-                }
-                _ => lines,
-            };
-            measurement = (
+        if input.max_width.is_some() {
+            let lines = self.wrap_text(&input);
+            (
                 f64::from(input.max_width.unwrap()),
                 (f64::from((lines.len() - 1).max(0) as u32) * f64::from(input.line_height))
                     + f64::from(input.size),
             )
-                .into();
+                .into()
         } else {
-            measurement = (
+            (
                 state
                     .context
                     .measure_text(&input.content)
@@ -608,9 +565,8 @@ impl Frame for CanvasFrame {
                     .get_width(),
                 f64::from(input.size),
             )
-                .into();
+                .into()
         }
-        measurement
     }
 }
 
