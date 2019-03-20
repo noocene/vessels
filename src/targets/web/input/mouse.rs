@@ -3,7 +3,7 @@ use crate::input;
 use crate::input::mouse::{Action, Button, Event};
 
 use stdweb::web::event::{
-    IEvent, IMouseEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    IEvent, IMouseEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, MouseWheelEvent,
 };
 use stdweb::web::{document, IEventTarget};
 
@@ -50,6 +50,7 @@ impl Mouse {
         let state = self.state.clone();
         let up_state = state.clone();
         let move_state = up_state.clone();
+        let scroll_state = move_state.clone();
         let body = document().body().unwrap();
         body.add_event_listener(move |event: MouseDownEvent| {
             event.prevent_default();
@@ -91,6 +92,18 @@ impl Mouse {
                 handler(Event {
                     action: Action::Move(
                         (f64::from(event.movement_x()), f64::from(event.movement_y())).into(),
+                    ),
+                    position: state.position,
+                })
+            })
+        });
+        body.add_event_listener(move |event: MouseWheelEvent| {
+            let state = scroll_state.borrow();
+            event.prevent_default();
+            state.handlers.iter().for_each(|handler| {
+                handler(Event {
+                    action: Action::Scroll(
+                        (event.delta_x(), event.delta_y()).into(),
                     ),
                     position: state.position,
                 })
