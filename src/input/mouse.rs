@@ -29,6 +29,8 @@ pub enum Action {
     Down(Button),
     /// A mouse movement.
     Move(Vector),
+    /// A mouse scroll input.
+    Scroll(Vector),
 }
 
 /// A mouse event.
