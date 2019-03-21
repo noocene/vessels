@@ -267,7 +267,6 @@ impl CanvasFrame {
                                     };
                         state.context.scale(state.pixel_ratio, state.pixel_ratio);
                         state.context.set_fill_style_pattern(&pattern);
-                        state.context.scale(state.pixel_ratio, state.pixel_ratio);
                     }
                     Texture::LinearGradient(gradient) => {
                         let canvas_gradient = state.context.create_linear_gradient(
