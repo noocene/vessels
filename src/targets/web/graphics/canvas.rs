@@ -257,13 +257,12 @@ impl CanvasFrame {
                         state.context.set_fill_style_color(&color.to_rgba_color());
                     }
                     Texture::Image(image) => {
-                        let image_any = image as &dyn Any;
-                        let pattern: CanvasPattern = match image_any.downcast_ref::<CanvasImage>() {
-                                        Some(as_image) => js! {
+                        let pattern: CanvasPattern = match image.as_any().downcast::<CanvasImage>() {
+                                        Ok(as_image) => js! {
                                             return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
                                         }.try_into().unwrap(),
-                                        None => {
-                                            let as_image = CanvasImage::from_texture(image.as_texture());
+                                        Err(_) => {
+                                            let as_image = CanvasImage::from_texture(image.box_clone().as_texture());
                                             return js! {
                                                 return @{&state.context}.createPattern(@{as_image}, "no-repeat");
                                             }.try_into().unwrap();
