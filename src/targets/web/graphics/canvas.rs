@@ -214,6 +214,9 @@ impl CanvasFrame {
                                             }.try_into().unwrap();
                                         }
                                     };
+                        state
+                            .context
+                            .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
                         state.context.set_stroke_style_pattern(&pattern);
                     }
                     Texture::RadialGradient(gradient) => {
@@ -238,6 +241,9 @@ impl CanvasFrame {
                 }
                 state.context.set_line_width(f64::from(stroke.width));
                 state.context.stroke();
+                if let Texture::Image(_image) = &stroke.content {
+                    state.context.scale(state.pixel_ratio, state.pixel_ratio);
+                }
             }
             None => {}
         }
@@ -259,6 +265,9 @@ impl CanvasFrame {
                                             }.try_into().unwrap();
                                         }
                                     };
+                        state
+                            .context
+                            .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
                         state.context.set_fill_style_pattern(&pattern);
                     }
                     Texture::LinearGradient(gradient) => {
@@ -296,6 +305,9 @@ impl CanvasFrame {
                     }
                 }
                 state.context.fill(FillRule::NonZero);
+                if let Texture::Image(_image) = &fill.content {
+                    state.context.scale(state.pixel_ratio, state.pixel_ratio);
+                }
             }
             None => {}
         }
