@@ -10,6 +10,29 @@ use std::rc::Rc;
 
 use glutin::ContextTrait;
 
+type CairoImage = cairo::Context;
+
+/*
+impl ImageRepresentation for CairoImage {
+    fn get_size(&self) -> Vector {
+    }
+    fn box_clone(&self) -> Box<dyn ImageRepresentation> {
+        Box::new(self.clone())
+    }
+    fn as_texture(&self) -> Image<RGBA8, Texture2D> {
+        Image {
+            pixels: vec![],
+            format: Texture2D {
+                height: 0,
+                width: 0,
+            },
+        }
+    }
+    fn from_texture(texture: Image<RGBA8, Texture2D>) -> CairoImage {
+    }
+}
+*/
+
 struct CairoFrameState {
     cairo_context: cairo::Context,
     contents: Vec<Object>,
@@ -19,7 +42,6 @@ struct CairoFrameState {
 
 impl Drop for CairoFrameState {
     fn drop(&mut self) {
-        self.canvas.remove();
     }
 }
 
@@ -34,7 +56,7 @@ impl Clone for CairoFrame {
         }
     }
 }
-
+/*
 impl DynamicObject for CairoFrame {
 
 }
@@ -42,7 +64,7 @@ impl DynamicObject for CairoFrame {
 impl Frame for CairoFrame {
 
 }
-
+*/
 struct Window {
     state: Rc<RefCell<WindowState>>,
 }
@@ -50,13 +72,15 @@ struct Window {
 struct WindowState {
     root_frame: Option<CairoFrame>,
     windowed_context: glutin::WindowedContext,
-    event_loop: glutin::EventsLoop,
+    event_loop: RefCell<glutin::EventsLoop>,
     size: ObserverCell<Vector>,
 }
 
+/*
 impl Rasterizer for Window {
-
+    type Image = CairoImage;
 }
+*/
 
 impl Context for Window {
     type Mouse = native::input::Mouse;
@@ -68,7 +92,7 @@ impl Context for Window {
         native::input::Keyboard::new()
     }
 }
-
+/*
 impl ContextGraphics for Window {}
 
 impl ContextualGraphics for Window {
@@ -84,7 +108,7 @@ impl Graphics for Window {
         CairoFrame::new()
     }
 }
-
+*/
 impl Clone for Window {
     fn clone(&self) -> Window {
         Window {
@@ -93,8 +117,8 @@ impl Clone for Window {
     }
 }
 
-pub(crate) fn new() -> impl ContextualGraphics {
-    let mut el = glutin::EventsLoop::new();
+pub(crate) fn new() { // -> Window {
+    let el = glutin::EventsLoop::new();
     let wb = glutin::WindowBuilder::new();
     let windowed_context = glutin::ContextBuilder::new()
         .build_windowed(wb, &el)
@@ -104,9 +128,31 @@ pub(crate) fn new() -> impl ContextualGraphics {
 
     let window = Window {
         state: Rc::new(RefCell::new(WindowState {
-            size: ObserverCell::new(),
+            size: ObserverCell::new((5.0, 10.0).into()),
+            windowed_context,
+            event_loop: RefCell::new(el),
             root_frame: None,
         })),
     };
-    window
+
+    let mut running = true;
+    while running {
+        let state = window.state.borrow();
+        state.event_loop.borrow_mut().poll_events(|event| {
+            println!("{:?}", event);
+            match event {
+                glutin::Event::WindowEvent { event, .. } => match event {
+                    glutin::WindowEvent::CloseRequested => running = false,
+                    glutin::WindowEvent::Resized(logical_size) => {
+                        let dpi_factor = state.windowed_context.get_hidpi_factor();
+                        state.windowed_context
+                            .resize(logical_size.to_physical(dpi_factor));
+                    }
+                    _ => (),
+                },
+                _ => (),
+            }
+        });
+    }
+    //window
 }
