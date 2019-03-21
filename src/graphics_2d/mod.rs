@@ -499,11 +499,13 @@ impl Rect {
     }
 }
 
+
 /// Initializes a new graphics context.
-pub fn new() -> impl ContextualGraphics {
+pub fn new() { // -> impl ContextualGraphics {
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
     return targets::web::graphics::new();
 
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     return targets::native::graphics::new();
 }
+
