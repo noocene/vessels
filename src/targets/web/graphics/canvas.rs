@@ -666,12 +666,15 @@ pub(crate) fn new() -> impl ContextualGraphics {
         .append_html(
             r#"
 <style>
-body, html {
+body, html, canvas {
     height: 100%;
 }
 body {
     margin: 0;
     overflow: hidden;
+}
+canvas {
+    width: 100%;
 }
 </style>
             "#,
