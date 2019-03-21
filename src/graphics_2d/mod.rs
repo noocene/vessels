@@ -292,6 +292,18 @@ where
     }
 }
 
+impl From<Box<dyn ImageRepresentation>> for StaticObject {
+    fn from(input: Box<dyn ImageRepresentation>) -> Self {
+        StaticObject {
+            orientation: Transform::default(),
+            content: vec![Primitive::rectangle(input.get_size())
+                .fill(Texture::Image(input).into())
+                .finalize()
+                .into()],
+        }
+    }
+}
+
 impl From<StaticObject> for Object {
     fn from(input: StaticObject) -> Object {
         Object::Static(Box::new(input))
