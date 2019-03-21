@@ -561,12 +561,14 @@ struct CanvasState {
 
 impl Rasterizer for Canvas {
     type Image = CanvasImage;
-    fn rasterize<T>(&self, input: T) -> Box<dyn ImageRepresentation>
+    fn rasterize<T>(&self, input: T, size: Vector) -> Box<dyn ImageRepresentation>
     where
         T: Into<Rasterizable>,
     {
         let input: Rasterizable = input.into();
         let mut frame = CanvasFrame::new();
+        frame.resize(size);
+        frame.set_viewport(Rect::new(Vector::default(), size));
         frame.add(input);
         frame.draw();
         Box::new(frame.element())

@@ -438,7 +438,7 @@ pub trait Rasterizer {
     /// The image representation type used.
     type Image: ImageRepresentation;
     /// Returns a rasterization of the input.
-    fn rasterize<T>(&self, input: T) -> Box<dyn ImageRepresentation>
+    fn rasterize<T>(&self, input: T, vector: Vector) -> Box<dyn ImageRepresentation>
     where
         T: Into<Rasterizable>;
 }
