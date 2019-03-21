@@ -427,7 +427,7 @@ pub trait Rasterizer {
 }
 
 /// Provides 2-dimensional euclidean rendering capabilities.
-pub trait Graphics: Rasterizer {
+pub trait Graphics: Rasterizer + Clone {
     /// The internal concrete type of the [Frame]s used.
     type Frame: Frame;
     /// Returns a new [Frame].
