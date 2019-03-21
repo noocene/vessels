@@ -5,9 +5,6 @@ name = "vitruvia"
 version = "0.1.0"
 [dependencies]
 failure = "0.1.5"
-glutin = "0.20.0"
-cairo-rs = "0.6.0"
-gl = "0.11.0"
 
 [profile]
 [profile.release]
@@ -35,3 +32,8 @@ serde = "1.0.84"
 serde_derive = "1.0.84"
 stdweb = "0.4.13"
 stdweb-derive = "0.5.1"
+
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
+glutin = "0.20.0"
+cairo-rs = "0.6.0"
+gl = "0.11.0"

@@ -513,7 +513,7 @@ impl Rect {
 
 
 /// Initializes a new graphics context.
-pub fn new() { // -> impl ContextualGraphics {
+pub fn new() -> impl ContextualGraphics {
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
     return targets::web::graphics::new();
 

@@ -366,7 +366,7 @@ impl DynamicObject for CanvasFrame {
         Cow::from(vec![Path {
             orientation: Transform::default(),
             fill: Some(Fill {
-                content: Texture::Image(Box::new(state.canvas.clone())),
+                content: Texture::Image(Box::new(state.surface.clone())),
             }),
             shadow: None,
             stroke: None,
