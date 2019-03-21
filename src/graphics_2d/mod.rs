@@ -22,6 +22,8 @@ pub trait ToHexColor {
 pub trait ImageRepresentation: Any {
     #[doc(hidden)]
     fn box_clone(&self) -> Box<dyn ImageRepresentation>;
+    #[doc(hidden)]
+    fn as_any(&self) -> Box<dyn Any>;
     /// Returns the 2-d cartesian pixel size of the image.
     fn get_size(&self) -> Vector;
     /// Returns a conversion of the image to [Image<RGBA8, Texture2D>]. This operation may be expensive.
@@ -39,6 +41,9 @@ impl Clone for Box<dyn ImageRepresentation> {
 }
 
 impl ImageRepresentation for Image<RGBA8, Texture2D> {
+    fn as_any(&self) -> Box<dyn Any> {
+        Box::new(self.clone())
+    }
     fn get_size(&self) -> Vector {
         (f64::from(self.format.width), f64::from(self.format.height)).into()
     }
@@ -433,7 +438,7 @@ pub trait Rasterizer {
     /// The image representation type used.
     type Image: ImageRepresentation;
     /// Returns a rasterization of the input.
-    fn rasterize<T>(&self, input: T) -> Self::Image
+    fn rasterize<T>(&self, input: T) -> Box<dyn ImageRepresentation>
     where
         T: Into<Rasterizable>;
 }

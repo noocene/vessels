@@ -44,6 +44,9 @@ impl ImageRepresentation for CanvasImage {
     fn box_clone(&self) -> Box<dyn ImageRepresentation> {
         Box::new(self.clone())
     }
+    fn as_any(&self) -> Box<dyn Any> {
+        Box::new(self.clone())
+    }
     fn as_texture(&self) -> Image<RGBA8, Texture2D> {
         Image {
             pixels: vec![],
@@ -200,12 +203,11 @@ impl CanvasFrame {
                         state.context.set_stroke_style_gradient(&canvas_gradient);
                     }
                     Texture::Image(image) => {
-                        let image_any = image as &dyn Any;
-                        let pattern: CanvasPattern = match image_any.downcast_ref::<CanvasImage>() {
-                                        Some(as_image) => js! {
+                        let pattern: CanvasPattern = match image.as_any().downcast::<CanvasImage>() {
+                                        Ok(as_image) => js! {
                                             return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
                                         }.try_into().unwrap(),
-                                        None => {
+                                        Err(_) => {
                                             let as_image = CanvasImage::from_texture(image.box_clone().as_texture());
                                             return js! {
                                                 return @{&state.context}.createPattern(@{as_image}, "no-repeat");
@@ -581,7 +583,7 @@ struct CanvasState {
 
 impl Rasterizer for Canvas {
     type Image = CanvasImage;
-    fn rasterize<T>(&self, input: T) -> Self::Image
+    fn rasterize<T>(&self, input: T) -> Box<dyn ImageRepresentation>
     where
         T: Into<Rasterizable>,
     {
@@ -589,7 +591,7 @@ impl Rasterizer for Canvas {
         let mut frame = CanvasFrame::new();
         frame.add(input);
         frame.draw();
-        frame.element()
+        Box::new(frame.element())
     }
 }
 
