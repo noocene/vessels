@@ -268,7 +268,10 @@ impl ContextualGraphics for Window {
     type Context = Window;
 
     fn run(self, root: CairoFrame) -> Self::Context {
-       self
+        thread::spawn(|| {
+            
+        });
+        self        
     }
 }
 
@@ -292,15 +295,32 @@ pub(crate) fn new() -> impl ContextualGraphics {
     let (out_tx, out_rx) = mpsc::channel();
 
     thread::spawn(move || {
-        let el = glutin::EventsLoop::new();
+        let mut el = glutin::EventsLoop::new();
         let wb = glutin::WindowBuilder::new();
         let windowed_context = glutin::ContextBuilder::new()
             .build_windowed(wb, &el)
             .unwrap();
         let window_wrapper = GlutinWindowDummy::new(windowed_context.window(), out_tx, command_rx);
         unsafe { windowed_context.make_current().unwrap() }
-        loop {
-            //do events and rendering here
+
+        let mut running = true;
+        while running {
+            el.poll_events(|event| {
+                //temporary event handling
+                println!("{:?}", event);
+                match event {
+                    glutin::Event::WindowEvent { event, .. } => match event {
+                        glutin::WindowEvent::CloseRequested => running = false,
+                        glutin::WindowEvent::Resized(logical_size) => {
+                            let dpi_factor = windowed_context.get_hidpi_factor();
+                            windowed_context
+                                .resize(logical_size.to_physical(dpi_factor));
+                        }
+                        _ => (),
+                    },
+                    _ => (),
+                }
+            });
         }
     });
     let window_master = GlutinWindowMaster::new(command_tx, out_rx);
