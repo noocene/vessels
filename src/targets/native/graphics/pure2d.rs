@@ -7,10 +7,9 @@ use crate::targets::native;
 
 use std::cell::{RefCell, Cell};
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::mpsc;
 use std::borrow::Cow;
 use std::thread;
-use std::collections::VecDeque;
 
 use glutin::{ContextTrait, ControlFlow};
 
@@ -144,22 +143,16 @@ impl Frame for CairoFrame {
 
 struct EventHandler {
     handlers: Vec<Box<dyn Fn(glutin::Event) + Send + Sync>>,
-    event_queue: Arc<VecDeque<glutin::Event>>,
 }
 
 impl EventHandler {
     fn new() -> EventHandler {
         EventHandler {
             handlers: vec![],
-            event_queue: Arc::new(VecDeque::new()),
         }
     }
 
-    fn event_queue_new(&self) -> Arc<VecDeque<glutin::Event>> {
-        self.event_queue.clone()
-    }
-
-    fn bind_event_handler<F>(&self, handler: F)
+    fn bind_event_handler<F>(&mut self, handler: F)
     where
         F: Fn(glutin::Event) + Send + Sync + 'static,
     {
@@ -173,9 +166,8 @@ struct Window {
 
 struct WindowState {
     root_frame: Option<CairoFrame>,
-    windowed_context: glutin::WindowedContext,
+    window: &'static glutin::Window,
     event_handler: EventHandler,
-    event_loop: glutin::EventsLoop,
     size: ObserverCell<Vector>,
 }
 
@@ -222,17 +214,7 @@ impl ContextualGraphics for Window {
     type Context = Window;
 
     fn run(self, root: CairoFrame) -> Self::Context {
-        {
-            let state = self.state.borrow();
-            let event_queue = state.event_handler.event_queue_new();
-            thread::spawn(move || {
-                state.event_loop.run_forever(move |event| {
-                    event_queue.push_back(event);
-                    ControlFlow::Continue
-                });
-            });
-        }
-        self
+       self
     }
 }
 
@@ -252,20 +234,29 @@ impl Clone for Window {
 }
 
 pub(crate) fn new() -> impl ContextualGraphics {
-    let el = glutin::EventsLoop::new();
-    let wb = glutin::WindowBuilder::new();
-    let windowed_context = glutin::ContextBuilder::new()
-        .build_windowed(wb, &el)
-        .unwrap();
+    let (tx, rx) = mpsc::channel();
 
-    unsafe { windowed_context.make_current().unwrap() }
+    thread::spawn(move || {
+        let el = glutin::EventsLoop::new();
+        let wb = glutin::WindowBuilder::new();
+        let windowed_context = glutin::ContextBuilder::new()
+            .build_windowed(wb, &el)
+            .unwrap();
+        tx.send(windowed_context.window()).unwrap();
+        unsafe { windowed_context.make_current().unwrap() }
+        loop {
+            //do events and rendering here
+        }
+    });
+    let window = rx.recv().unwrap();
+
+    let event_handler = EventHandler::new();
 
     let window = Window {
         state: Rc::new(RefCell::new(WindowState {
             size: ObserverCell::new((5.0, 10.0).into()),
-            windowed_context,
-            event_handler: EventHandler::new(),
-            event_loop: el,
+            window,
+            event_handler,
             root_frame: None,
         })),
     };
