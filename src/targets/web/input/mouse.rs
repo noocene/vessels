@@ -102,9 +102,7 @@ impl Mouse {
             event.prevent_default();
             state.handlers.iter().for_each(|handler| {
                 handler(Event {
-                    action: Action::Scroll(
-                        (event.delta_x(), event.delta_y()).into(),
-                    ),
+                    action: Action::Scroll((event.delta_x(), event.delta_y()).into()),
                     position: state.position,
                 })
             })

@@ -237,147 +237,25 @@ impl Default for Transform {
     }
 }
 
-/// An object with characteristics that may change dynamically in real-time
-pub trait DynamicObject {
-    /// Returns the absolute orientation of the object within the space of its parent frame.
-    fn orientation(&self) -> Transform;
-    /// Returns the styled paths comprising the object.
-    fn render(&self) -> Cow<'_, [Rasterizable]>;
-}
-
-/// An object with static contents.
-#[derive(Debug)]
-pub struct StaticObject {
-    /// The absolute orientation of the object within the space of its parent frame.
-    pub orientation: Transform,
-    /// The styled paths comprising the object.
-    pub content: Vec<Rasterizable>,
-}
-
-impl StaticObject {
-    fn from_entity(entity: Rasterizable) -> StaticObject {
-        StaticObject {
-            content: vec![entity],
-            orientation: Transform::default(),
-        }
-    }
-    /// Passes a mutable reference to the orientation of the object
-    /// to the provided closure to permit ergonomic inline
-    /// transformation of static objects.
-    pub fn with_transform(mut self, closure: impl Fn(&mut Transform)) -> Self {
-        closure(&mut self.orientation);
-        self
-    }
-}
-
-impl From<Rasterizable> for StaticObject {
-    fn from(input: Rasterizable) -> StaticObject {
-        StaticObject::from_entity(input)
-    }
-}
-
-impl From<Rasterizable> for Object {
-    fn from(input: Rasterizable) -> Object {
-        Object::Static(Box::new(input.into()))
-    }
-}
-
-impl<T: 'static> From<T> for StaticObject
-where
-    T: ImageRepresentation,
-{
-    fn from(input: T) -> Self {
-        StaticObject {
-            orientation: Transform::default(),
-            content: vec![Primitive::rectangle(input.get_size())
-                .fill(Texture::Image(Box::new(input)).into())
-                .finalize()
-                .into()],
-        }
-    }
-}
-
-impl From<Box<dyn ImageRepresentation>> for StaticObject {
-    fn from(input: Box<dyn ImageRepresentation>) -> Self {
-        StaticObject {
-            orientation: Transform::default(),
-            content: vec![Primitive::rectangle(input.get_size())
-                .fill(Texture::Image(input).into())
-                .finalize()
-                .into()],
-        }
-    }
-}
-
-impl From<StaticObject> for Object {
-    fn from(input: StaticObject) -> Object {
-        Object::Static(Box::new(input))
-    }
-}
-
-/// An object suitable for rendering.
-pub enum Object {
-    /// A [StaticObject].
-    Static(Box<StaticObject>),
-    /// A [DynamicObject].
-    Dynamic(Box<dyn DynamicObject>),
-}
-
-impl Object {
-    /// Renders the underlying content.
-    pub fn render(&self) -> Cow<'_, [Rasterizable]> {
-        match self {
-            Object::Dynamic(object) => object.render(),
-            Object::Static(object) => Cow::from(&object.content),
-        }
-    }
-}
-
-struct ClosureObject<'a> {
-    closure: Box<dyn Fn() -> Cow<'a, [Rasterizable]> + 'static>,
-}
-
-impl<'a> DynamicObject for ClosureObject<'a> {
-    fn orientation(&self) -> Transform {
-        Transform::default()
-    }
-    fn render(&self) -> Cow<'_, [Rasterizable]> {
-        (self.closure)()
-    }
-}
-
-impl<F> From<F> for Object
-where
-    F: Fn() -> Cow<'static, [Rasterizable]> + 'static,
-{
-    fn from(closure: F) -> Object {
-        Object::Dynamic(Box::new(ClosureObject {
-            closure: Box::new(closure),
-        }))
-    }
-}
-
-impl Debug for Object {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Object ( {} )",
-            match self {
-                Object::Static(object) => format!("Static {:?}", object),
-                Object::Dynamic(_) => "Dynamic".to_owned(),
-            }
-        )
-    }
+/// An object reference.
+pub trait Object {
+    type Inner: Into<Rasterizable>;
+    fn transform(&mut self, transform: Transform);
+    fn get_transform(&self) -> Transform;
+    fn set_transform(&mut self, transform: Transform);
+    fn set_inner(&mut self, new_inner: Self::Inner);
+    fn inner(&mut self) -> &mut Self::Inner;
 }
 
 /// An isolated rendering context.
-pub trait Frame: DynamicObject + Clone {
+pub trait Frame: Clone {
     /// The [ImageRepresentation] used internally by the [Frame].
     type Image: ImageRepresentation;
     /// Adds content to the [Frame].
-    fn add<U>(&mut self, object: U)
+    fn object<T, U>(&mut self, rasterizable: T, position: U) -> Box<dyn Object<Inner = T>>
     where
-        U: Into<Object>;
+        T: Into<Rasterizable>,
+        U: Into<Vector>;
     /// Resizes the [Frame]. This does not resize the viewport.
     fn resize<U>(&self, size: U)
     where
@@ -396,7 +274,7 @@ pub trait Frame: DynamicObject + Clone {
 #[derive(Debug, Clone)]
 pub enum Rasterizable {
     /// Some [Text].
-    Text(Text),
+    Text(Box<Text>),
     /// Some [Path].
     Path(Box<Path>),
 }
@@ -423,13 +301,7 @@ impl From<Path> for Rasterizable {
 
 impl From<Text> for Rasterizable {
     fn from(input: Text) -> Rasterizable {
-        Rasterizable::Text(input)
-    }
-}
-
-impl From<Text> for Object {
-    fn from(input: Text) -> Object {
-        Object::from(Rasterizable::from(input))
+        Rasterizable::Text(Box::new(input))
     }
 }
 

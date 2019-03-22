@@ -67,8 +67,6 @@ pub struct Text {
     pub wrap: Wrap,
     /// The font weight used.
     pub weight: Weight,
-    /// The orientation of the text.
-    pub orientation: Transform,
 }
 
 impl Text {

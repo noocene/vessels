@@ -204,8 +204,6 @@ where
 /// A vector graphics path in 2-dimensional euclidean space.
 #[derive(Clone, Debug)]
 pub struct Path {
-    /// A transformation applied to the path on rendering.
-    pub orientation: Transform,
     /// The segments comprising the path.
     pub segments: Vec<Segment>,
     /// The exterior stroke styling.
