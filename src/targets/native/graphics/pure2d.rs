@@ -160,13 +160,67 @@ impl EventHandler {
     }
 }
 
+enum GlutinWindowCommand {
+    GetHiDPIFactor,
+}
+
+enum GlutinWindowOutput {
+    HiDPIFactor(f64),
+}
+
+struct GlutinWindowDummy<'a> {
+    window: &'a glutin::Window,    
+    tx: mpsc::Sender<GlutinWindowOutput>,
+    rx: mpsc::Receiver<GlutinWindowCommand>,
+}
+
+impl<'a> GlutinWindowDummy<'a> {
+    fn new(window: &'a glutin::Window, tx: mpsc::Sender<GlutinWindowOutput>, rx: mpsc::Receiver<GlutinWindowCommand>) -> GlutinWindowDummy<'a> {
+        GlutinWindowDummy {
+            window,
+            tx,
+            rx,
+        }
+    }
+
+    fn take_command(&self) {
+        let command = self.rx.try_iter();
+        match command {
+            GetHiDPIFactor => self.tx.send(GlutinWindowOutput::HiDPIFactor(self.window.get_hidpi_factor())).unwrap(),
+            _ => ()
+        }
+    }
+}
+
+struct GlutinWindowMaster {
+    tx: mpsc::Sender<GlutinWindowCommand>,
+    rx: mpsc::Receiver<GlutinWindowOutput>,
+}
+
+impl GlutinWindowMaster {
+    fn new(tx: mpsc::Sender<GlutinWindowCommand>, rx: mpsc::Receiver<GlutinWindowOutput>) -> GlutinWindowMaster {
+        GlutinWindowMaster {
+            tx,
+            rx,
+        }
+    }
+
+    fn get_hidpi_factor(&self) -> f64 {
+        self.tx.send(GlutinWindowCommand::GetHiDPIFactor).unwrap();
+        match self.rx.recv().unwrap() {
+            GlutinWindowOutput::HiDPIFactor(x) => x,
+            _ => panic!("get_hipi_factor got wrong answer"),
+        }
+    }
+}
+
 struct Window {
     state: Rc<RefCell<WindowState>>,
 }
 
 struct WindowState {
     root_frame: Option<CairoFrame>,
-    window: &'static glutin::Window,
+    window_master: GlutinWindowMaster,
     event_handler: EventHandler,
     size: ObserverCell<Vector>,
 }
@@ -234,7 +288,8 @@ impl Clone for Window {
 }
 
 pub(crate) fn new() -> impl ContextualGraphics {
-    let (tx, rx) = mpsc::channel();
+    let (command_tx, command_rx) = mpsc::channel();
+    let (out_tx, out_rx) = mpsc::channel();
 
     thread::spawn(move || {
         let el = glutin::EventsLoop::new();
@@ -242,20 +297,20 @@ pub(crate) fn new() -> impl ContextualGraphics {
         let windowed_context = glutin::ContextBuilder::new()
             .build_windowed(wb, &el)
             .unwrap();
-        tx.send(windowed_context.window()).unwrap();
+        let window_wrapper = GlutinWindowDummy::new(windowed_context.window(), out_tx, command_rx);
         unsafe { windowed_context.make_current().unwrap() }
         loop {
             //do events and rendering here
         }
     });
-    let window = rx.recv().unwrap();
+    let window_master = GlutinWindowMaster::new(command_tx, out_rx);
 
     let event_handler = EventHandler::new();
 
     let window = Window {
         state: Rc::new(RefCell::new(WindowState {
             size: ObserverCell::new((5.0, 10.0).into()),
-            window,
+            window_master,
             event_handler,
             root_frame: None,
         })),
