@@ -509,7 +509,7 @@ impl Frame for CanvasFrame {
     type Image = CanvasImage;
     fn add<U>(&mut self, object: U)
     where
-        U: Into<Object>,
+        U: Into<dyn Object>,
     {
         let mut state = self.state.borrow_mut();
         state.contents.push(object.into());

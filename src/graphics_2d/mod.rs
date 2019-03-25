@@ -238,10 +238,9 @@ impl Default for Transform {
 }
 
 /// An object reference.
-pub trait Object {
-    type Inner: Into<Rasterizable>;
-    fn transform(&mut self) -> &mut Transform;
-    fn inner(&mut self) -> &mut Self::Inner;
+pub struct Object<T> {
+    inner: T,
+    transform: Transform,
 }
 
 /// An isolated rendering context.
@@ -249,7 +248,7 @@ pub trait Frame: Clone {
     /// The [ImageRepresentation] used internally by the [Frame].
     type Image: ImageRepresentation;
     /// Adds content to the [Frame].
-    fn object<T, U>(&mut self, rasterizable: T, position: U) -> Box<dyn Object<Inner = T>>
+    fn object<T, U>(&mut self, rasterizable: T, position: U) -> Box<Object<T>>
     where
         T: Into<Rasterizable>,
         U: Into<Vector>;
