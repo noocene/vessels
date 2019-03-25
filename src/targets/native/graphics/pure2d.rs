@@ -271,6 +271,7 @@ impl ContextualGraphics for Window {
         thread::spawn(|| {
             
         });
+        loop{}
         self        
     }
 }
