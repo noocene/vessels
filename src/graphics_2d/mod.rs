@@ -321,9 +321,19 @@ pub trait Graphics: Rasterizer + Clone {
 }
 
 /// An active [ContextualGraphics] context.
-pub trait ContextGraphics: Graphics + Context {
+pub trait ContextGraphics: Graphics + Context + Ticker {
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
     fn run(self);
+}
+
+pub trait Tickable {
+    fn tick(&mut self, delta: f64);
+}
+
+pub trait Ticker {
+    fn bind<T>(&mut self, tickable: T)
+    where
+        T: Tickable;
 }
 
 /// A graphics context that can provide input and windowing.
