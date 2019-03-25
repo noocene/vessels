@@ -321,14 +321,17 @@ pub trait Graphics: Rasterizer + Clone {
 }
 
 /// An active [ContextualGraphics] context.
-pub trait ContextGraphics: Graphics + Context {}
+pub trait ContextGraphics: Graphics + Context {
+    /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
+    fn run(self);
+}
 
 /// A graphics context that can provide input and windowing.
 pub trait ContextualGraphics: Graphics {
     /// The internal concrete type of the [Context] returned upon activation.
     type Context: ContextGraphics;
     /// Starts a windowed context using the provided [Frame] as the document root.
-    fn run(self, root: Self::Frame) -> Self::Context;
+    fn start(self, root: Self::Frame) -> Self::Context;
 }
 
 /// A 2-dimensional cartesian vector or point
