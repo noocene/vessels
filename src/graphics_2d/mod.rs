@@ -240,10 +240,7 @@ impl Default for Transform {
 /// An object reference.
 pub trait Object {
     type Inner: Into<Rasterizable>;
-    fn transform(&mut self, transform: Transform);
-    fn get_transform(&self) -> Transform;
-    fn set_transform(&mut self, transform: Transform);
-    fn set_inner(&mut self, new_inner: Self::Inner);
+    fn transform(&mut self) -> &mut Transform;
     fn inner(&mut self) -> &mut Self::Inner;
 }
 
