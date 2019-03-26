@@ -1,4 +1,4 @@
-use crate::graphics_2d::{ImageRepresentation, Transform, Vector, RGBA8};
+use crate::graphics_2d::{Color, ImageRepresentation, Vector};
 
 use crate::errors::Error;
 
@@ -27,12 +27,12 @@ pub struct GradientStop {
     /// Zero represents the start of the gradient; one represents the end.
     pub offset: f64,
     /// The color of the stop.
-    pub color: RGBA8,
+    pub color: Color,
 }
 
 impl GradientStop {
     /// Creates a new gradient stop with the provided offset and color data.
-    pub fn new(offset: f64, color: RGBA8) -> Result<Self, Error> {
+    pub fn new(offset: f64, color: Color) -> Result<Self, Error> {
         if offset > 1.0 || offset < 0.0 {
             return Err(Error::color_stop());
         }
@@ -56,7 +56,7 @@ pub struct LinearGradient {
 #[derive(Clone, Copy, Debug)]
 pub struct Shadow {
     /// The color of the shadow.
-    pub color: RGBA8,
+    pub color: Color,
     /// The offset of the shadow.
     pub offset: Vector,
     /// The blur radius, in fractional pixels, of the shadow.
@@ -65,7 +65,7 @@ pub struct Shadow {
 
 impl Shadow {
     /// Creates a new shadow.
-    pub fn new(color: RGBA8) -> Self {
+    pub fn new(color: Color) -> Self {
         Shadow {
             color,
             offset: Vector::default(),
@@ -106,7 +106,7 @@ pub struct RadialGradient {
 #[derive(Clone)]
 pub enum Texture {
     /// A solid color texture.
-    Solid(RGBA8),
+    Solid(Color),
     /// A linear gradient texture.
     LinearGradient(LinearGradient),
     /// A radial gradient texture.
@@ -155,7 +155,7 @@ pub struct Stroke {
 impl Default for Stroke {
     fn default() -> Self {
         Stroke {
-            content: RGBA8::black().into(),
+            content: Color::black().into(),
             cap: StrokeCapType::Butt,
             join: StrokeJoinType::Miter,
             width: 1.,
@@ -494,7 +494,6 @@ impl StyleHelper {
         Path {
             closed: self.closed,
             segments: self.geometry,
-            orientation: Transform::default(),
             fill: self.fill,
             shadow: self.shadow,
             stroke: self.stroke,
@@ -541,11 +540,11 @@ impl StrokeBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::{GradientStop, RGBA8};
+    use super::{Color, GradientStop};
 
     #[test]
     fn gradient_stop_fail() {
-        assert!(GradientStop::new(5.0, RGBA8::white()).is_err());
-        assert!(GradientStop::new(-5.0, RGBA8::white()).is_err());
+        assert!(GradientStop::new(5.0, Color::white()).is_err());
+        assert!(GradientStop::new(-5.0, Color::white()).is_err());
     }
 }

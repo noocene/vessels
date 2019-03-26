@@ -1,5 +1,5 @@
 use crate::input::Context;
-use crate::path::{Path, Primitive, Texture};
+use crate::path::{Path, Texture};
 use crate::targets;
 use crate::text::Text;
 
@@ -8,9 +8,6 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 use std::borrow::Cow;
 
 use std::any::Any;
-
-use std::fmt;
-use std::fmt::{Debug, Formatter};
 
 /// A conversion to an eight-character hex color string.
 pub trait ToHexColor {
@@ -26,10 +23,10 @@ pub trait ImageRepresentation: Any {
     fn as_any(&self) -> Box<dyn Any>;
     /// Returns the 2-d cartesian pixel size of the image.
     fn get_size(&self) -> Vector;
-    /// Returns a conversion of the image to [Image<RGBA8, Texture2D>]. This operation may be expensive.
-    fn as_texture(&self) -> Image<RGBA8, Texture2D>;
-    /// Creates an image in the associated format from an [Image<RGBA8, Texture2D>]. This operation may be expensive.
-    fn from_texture(texture: Image<RGBA8, Texture2D>) -> Self
+    /// Returns a conversion of the image to [Image<Color, Texture2D>]. This operation may be expensive.
+    fn as_texture(&self) -> Image<Color, Texture2D>;
+    /// Creates an image in the associated format from an [Image<Color, Texture2D>]. This operation may be expensive.
+    fn from_texture(texture: Image<Color, Texture2D>) -> Self
     where
         Self: Sized;
 }
@@ -40,7 +37,7 @@ impl Clone for Box<dyn ImageRepresentation> {
     }
 }
 
-impl ImageRepresentation for Image<RGBA8, Texture2D> {
+impl ImageRepresentation for Image<Color, Texture2D> {
     fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
@@ -50,10 +47,10 @@ impl ImageRepresentation for Image<RGBA8, Texture2D> {
     fn box_clone(&self) -> Box<dyn ImageRepresentation> {
         Box::new(self.clone())
     }
-    fn as_texture(&self) -> Image<RGBA8, Texture2D> {
+    fn as_texture(&self) -> Image<Color, Texture2D> {
         self.clone()
     }
-    fn from_texture(texture: Image<RGBA8, Texture2D>) -> Image<RGBA8, Texture2D> {
+    fn from_texture(texture: Image<Color, Texture2D>) -> Image<Color, Texture2D> {
         texture
     }
 }
@@ -63,7 +60,7 @@ pub trait PixelFormat {}
 
 /// A standard 24-bit-depth RGB color with an 8-bit alpha channel.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct RGBA8 {
+pub struct Color {
     /// Red channel data.
     pub r: u8,
     /// Green channel data.
@@ -74,7 +71,7 @@ pub struct RGBA8 {
     pub a: u8,
 }
 
-impl RGBA8 {
+impl Color {
     /// Returns a CSS-compatible rgba color string in form `rgba(r, g, b, a)` where `r`, `g`, and `b`
     /// are integers between 0 and 255 and `a` is the alpha channel represented as a floating point value between
     /// 0 and 1.
@@ -94,7 +91,7 @@ impl RGBA8 {
     }
     /// Returns a fully opaque black color.
     pub fn black() -> Self {
-        RGBA8 {
+        Color {
             r: 0,
             g: 0,
             b: 0,
@@ -103,7 +100,7 @@ impl RGBA8 {
     }
     /// Returns a fully opaque white color.
     pub fn white() -> Self {
-        RGBA8 {
+        Color {
             r: 255,
             g: 255,
             b: 255,
@@ -112,7 +109,7 @@ impl RGBA8 {
     }
 }
 
-impl ToHexColor for RGBA8 {
+impl ToHexColor for Color {
     fn to_hex_color(&self) -> Cow<'_, str> {
         Cow::from(format!(
             "#{:x?}{:x?}{:x?}{:x?}",
@@ -121,13 +118,13 @@ impl ToHexColor for RGBA8 {
     }
 }
 
-impl Into<Texture> for RGBA8 {
+impl Into<Texture> for Color {
     fn into(self) -> Texture {
         Texture::Solid(self)
     }
 }
 
-impl PixelFormat for RGBA8 {}
+impl PixelFormat for Color {}
 
 /// Indicates that a type is an organizational format for image data.
 pub trait ImageFormat {}
@@ -237,21 +234,35 @@ impl Default for Transform {
     }
 }
 
-/// An object reference.
-pub struct Object<T> {
-    inner: T,
-    transform: Transform,
+impl From<Vector> for Transform {
+    fn from(input: Vector) -> Transform {
+        Transform::default().with_position(input)
+    }
+}
+
+/// Represents content optimized and cached for rendering.
+pub trait Object {
+    /// Composes a transformation with the existing transformation of the [Object].
+    fn apply_transform(&mut self, transform: Transform);
+    /// Gets the current trasnformation of the [Object].
+    fn get_transform(&self) -> Transform;
+    /// Sets the current transfomration of the [Object].
+    fn set_transform(&mut self, transform: Transform);
+    /// Replaces the contents of the [Object] with new Rasterizable content. This may be costly.
+    fn update(&mut self, content: Rasterizable);
 }
 
 /// An isolated rendering context.
 pub trait Frame: Clone {
+    /// The [Object] representation used internally by the [Frame].
+    type Object: Object;
     /// The [ImageRepresentation] used internally by the [Frame].
     type Image: ImageRepresentation;
     /// Adds content to the [Frame].
-    fn object<T, U>(&mut self, rasterizable: T, position: U) -> Box<Object<T>>
+    fn add<T, U>(&mut self, rasterizable: T, orientation: U) -> Box<dyn Object>
     where
         T: Into<Rasterizable>,
-        U: Into<Vector>;
+        U: Into<Transform>;
     /// Resizes the [Frame]. This does not resize the viewport.
     fn resize<U>(&self, size: U)
     where
@@ -273,20 +284,6 @@ pub enum Rasterizable {
     Text(Box<Text>),
     /// Some [Path].
     Path(Box<Path>),
-}
-
-impl Rasterizable {
-    /// Transforms the contents of the rasterizable type.
-    pub fn transform(&mut self, transform: Transform) {
-        match self {
-            Rasterizable::Text(text) => {
-                text.orientation.transform(transform);
-            }
-            Rasterizable::Path(path) => {
-                path.orientation.transform(transform);
-            }
-        }
-    }
 }
 
 impl From<Path> for Rasterizable {
@@ -325,11 +322,15 @@ pub trait ContextGraphics: Graphics + Context + Ticker {
     fn run(self);
 }
 
+/// A type that takes a periodic delta-tick.
 pub trait Tickable {
+    /// This function is called per-frame with a number that should approximate the delta since the last call.
     fn tick(&mut self, delta: f64);
 }
 
+/// A type that permits the binding of [Tickable] types.
 pub trait Ticker {
+    /// Binds a [Tickable] to receive ticks.
     fn bind<T>(&mut self, tickable: T)
     where
         T: Tickable;
