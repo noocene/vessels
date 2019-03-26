@@ -16,7 +16,7 @@ pub trait ToHexColor {
 }
 
 /// A representation type of some target-specific image format.
-pub trait ImageRepresentation: Any {
+pub trait ImageRepresentation: Any + Sync + Send {
     #[doc(hidden)]
     fn box_clone(&self) -> Box<dyn ImageRepresentation>;
     #[doc(hidden)]
@@ -247,7 +247,7 @@ impl From<(f64, f64)> for Transform {
 }
 
 /// Represents content optimized and cached for rendering.
-pub trait Object {
+pub trait Object: Sync + Send {
     /// Composes a transformation with the existing transformation of the [Object].
     fn apply_transform(&mut self, transform: Transform);
     /// Gets the current trasnformation of the [Object].

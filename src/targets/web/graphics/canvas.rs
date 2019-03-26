@@ -19,6 +19,8 @@ use stdweb::web::event::{ContextMenuEvent, ResizeEvent};
 
 use stdweb::web::html_element::CanvasElement;
 
+use std::sync::{Arc, RwLock};
+
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -79,13 +81,13 @@ struct CanvasObjectState {
 
 #[derive(Clone)]
 struct CanvasObject {
-    state: Rc<RefCell<CanvasObjectState>>,
+    state: Arc<RwLock<CanvasObjectState>>,
 }
 
 impl CanvasObject {
     fn new(content: Rasterizable, orientation: Transform) -> CanvasObject {
         CanvasObject {
-            state: Rc::new(RefCell::new(CanvasObjectState {
+            state: Arc::new(RwLock::new(CanvasObjectState {
                 orientation,
                 content,
             })),
@@ -95,16 +97,16 @@ impl CanvasObject {
 
 impl Object for CanvasObject {
     fn get_transform(&self) -> Transform {
-        self.state.borrow().orientation
+        self.state.read().unwrap().orientation
     }
     fn apply_transform(&mut self, transform: Transform) {
-        self.state.borrow_mut().orientation.transform(transform);
+        self.state.write().unwrap().orientation.transform(transform);
     }
     fn set_transform(&mut self, transform: Transform) {
-        self.state.borrow_mut().orientation = transform;
+        self.state.write().unwrap().orientation = transform;
     }
     fn update(&mut self, input: Rasterizable) {
-        self.state.borrow_mut().content = input;
+        self.state.write().unwrap().content = input;
     }
 }
 
@@ -409,7 +411,7 @@ impl CanvasFrame {
         );
         state.context.save();
         state.contents.iter().for_each(|object| {
-            let object = object.state.borrow();
+            let object = object.state.read().unwrap();
             let matrix = object.orientation.to_matrix();
             match &object.content {
                 Rasterizable::Path(path) => self.draw_path(matrix, &path),
