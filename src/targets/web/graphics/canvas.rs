@@ -601,8 +601,8 @@ impl ContextGraphics for Canvas {
         let state = self.state.borrow();
         state.root_frame.as_ref().unwrap().show();
         let cloned = self.clone();
-        window().request_animation_frame(move |delta| {
-            cloned.animate(delta);
+        window().request_animation_frame(move |start_time| {
+            cloned.animate(start_time, start_time);
         });
     }
 }
@@ -613,10 +613,6 @@ impl ContextualGraphics for Canvas {
         {
             let mut state = self.state.borrow_mut();
             state.root_frame = Some(root);
-            let cloned = self.clone();
-            window().request_animation_frame(move |delta| {
-                cloned.animate(delta);
-            });
         }
         self
     }
@@ -630,8 +626,12 @@ impl Graphics for Canvas {
 }
 
 impl Canvas {
-    fn animate(&self, _delta: f64) {
-        let state = self.state.borrow_mut();
+    fn animate(&self, start_time: f64, last_start_time: f64) {
+        let mut state = self.state.borrow_mut();
+        state
+            .tick_handlers
+            .iter_mut()
+            .for_each(|handler| (handler)(start_time - last_start_time));
         match &state.root_frame {
             Some(frame) => {
                 if state.size.is_dirty() {
@@ -644,8 +644,8 @@ impl Canvas {
             None => {}
         }
         let cloned = self.clone();
-        window().request_animation_frame(move |delta| {
-            cloned.animate(delta);
+        window().request_animation_frame(move |new_start_time| {
+            cloned.animate(new_start_time, start_time);
         });
     }
 }
