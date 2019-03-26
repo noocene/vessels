@@ -240,6 +240,12 @@ impl From<Vector> for Transform {
     }
 }
 
+impl From<(f64, f64)> for Transform {
+    fn from(input: (f64, f64)) -> Transform {
+        Vector::from(input).into()
+    }
+}
+
 /// Represents content optimized and cached for rendering.
 pub trait Object {
     /// Composes a transformation with the existing transformation of the [Object].
