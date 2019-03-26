@@ -1,6 +1,6 @@
 use crate::graphics_2d::{
     Color, ContextGraphics, ContextualGraphics, Frame, Graphics, Image, ImageRepresentation,
-    Object, Rasterizable, Rasterizer, Rect, Texture2D, Tickable, Ticker, Transform, Vector,
+    Object, Rasterizable, Rasterizer, Rect, Texture2D, Ticker, Transform, Vector,
 };
 use crate::input::Context;
 use crate::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
@@ -554,6 +554,7 @@ struct Canvas {
 struct CanvasState {
     root_frame: Option<CanvasFrame>,
     size: ObserverCell<Vector>,
+    tick_handlers: Vec<Box<dyn FnMut(f64)>>,
 }
 
 impl Rasterizer for Canvas {
@@ -584,11 +585,14 @@ impl Context for Canvas {
 }
 
 impl Ticker for Canvas {
-    fn bind<T>(&mut self, _tickable: T)
+    fn bind<F>(&mut self, handler: F)
     where
-        T: Tickable,
+        F: FnMut(f64) + 'static,
     {
-        // TODO
+        self.state
+            .borrow_mut()
+            .tick_handlers
+            .push(Box::new(handler));
     }
 }
 
@@ -684,6 +688,7 @@ canvas {
                 (body.offset_width().into(), body.offset_height().into()).into(),
             ),
             root_frame: None,
+            tick_handlers: vec![],
         })),
     };
 

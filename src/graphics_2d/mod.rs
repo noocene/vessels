@@ -328,18 +328,12 @@ pub trait ContextGraphics: Graphics + Context + Ticker {
     fn run(self);
 }
 
-/// A type that takes a periodic delta-tick.
-pub trait Tickable {
-    /// This function is called per-frame with a number that should approximate the delta since the last call.
-    fn tick(&mut self, delta: f64);
-}
-
-/// A type that permits the binding of [Tickable] types.
+/// A type that permits the binding of tick handlers.
 pub trait Ticker {
-    /// Binds a [Tickable] to receive ticks.
-    fn bind<T>(&mut self, tickable: T)
+    /// Binds a handler to receive ticks.
+    fn bind<F>(&mut self, handler: F)
     where
-        T: Tickable;
+        F: FnMut(f64) + 'static;
 }
 
 /// A graphics context that can provide input and windowing.
