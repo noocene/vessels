@@ -259,7 +259,7 @@ pub trait Object: Sync + Send {
 }
 
 /// An isolated rendering context.
-pub trait Frame: Clone {
+pub trait Frame: Clone + Sync + Send {
     /// The [Object] representation used internally by the [Frame].
     type Object: Object;
     /// The [ImageRepresentation] used internally by the [Frame].
