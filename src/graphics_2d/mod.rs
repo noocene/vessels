@@ -305,7 +305,7 @@ impl From<Text> for Rasterizable {
 }
 
 /// Provides an interface for the rasterization of content.
-pub trait Rasterizer {
+pub trait Rasterizer: Sync + Send {
     /// The image representation type used.
     type Image: ImageRepresentation;
     /// Returns a rasterization of the input.
@@ -333,7 +333,7 @@ pub trait Ticker {
     /// Binds a handler to receive ticks.
     fn bind<F>(&mut self, handler: F)
     where
-        F: FnMut(f64) + 'static;
+        F: FnMut(f64) + 'static + Send + Sync;
 }
 
 /// A graphics context that can provide input and windowing.

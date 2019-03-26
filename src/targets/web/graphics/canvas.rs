@@ -21,9 +21,6 @@ use stdweb::web::html_element::CanvasElement;
 
 use std::sync::{Arc, RwLock};
 
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-
 use std::ops::Deref;
 
 use std::any::Any;
@@ -115,8 +112,8 @@ struct CanvasFrameState {
     canvas: CanvasElement,
     contents: Vec<CanvasObject>,
     pixel_ratio: f64,
-    viewport: Cell<Rect>,
-    size: Cell<Vector>,
+    viewport: Rect,
+    size: Vector,
 }
 
 impl Drop for CanvasFrameState {
@@ -126,7 +123,7 @@ impl Drop for CanvasFrameState {
 }
 
 struct CanvasFrame {
-    state: Rc<RefCell<CanvasFrameState>>,
+    state: Arc<RwLock<CanvasFrameState>>,
 }
 
 impl CanvasFrame {
@@ -138,21 +135,18 @@ impl CanvasFrame {
             .unwrap();
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
         CanvasFrame {
-            state: Rc::new(RefCell::new(CanvasFrameState {
+            state: Arc::new(RwLock::new(CanvasFrameState {
                 canvas,
                 pixel_ratio: window().device_pixel_ratio(),
                 context,
                 contents: vec![],
-                size: Cell::from(Vector::default()),
-                viewport: Cell::from(Rect {
-                    size: Vector::default(),
-                    position: (0., 0.).into(),
-                }),
+                size: Vector::default(),
+                viewport: Rect::default(),
             })),
         }
     }
     fn show(&self) {
-        let state = self.state.borrow();
+        let state = self.state.read().unwrap();
         state.canvas.add_event_listener(|event: ContextMenuEvent| {
             event.prevent_default();
             event.stop_propagation();
@@ -160,7 +154,7 @@ impl CanvasFrame {
         document().body().unwrap().append_child(&state.canvas);
     }
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
-        let state = self.state.borrow();
+        let state = self.state.read().unwrap();
         state.context.restore();
         state.context.save();
         state.context.transform(
@@ -343,7 +337,7 @@ impl CanvasFrame {
         }
     }
     fn update_text_style(&self, input: &Text) {
-        let state = self.state.borrow();
+        let state = self.state.read().unwrap();
         state.context.set_font((match input.font {
                 Font::SystemFont => {
                     format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
@@ -367,7 +361,7 @@ impl CanvasFrame {
             .set_fill_style_color(&input.color.to_rgba_color());
     }
     fn draw_text(&self, matrix: [f64; 6], input: &Text) {
-        let state = self.state.borrow();
+        let state = self.state.read().unwrap();
         state.context.restore();
         state.context.save();
         state.context.transform(
@@ -392,9 +386,9 @@ impl CanvasFrame {
         }
     }
     fn draw(&self) {
-        let state = self.state.borrow();
-        let viewport = state.viewport.get();
-        let size = state.size.get();
+        let state = self.state.read().unwrap();
+        let viewport = state.viewport;
+        let size = state.size;
         state.context.set_transform(
             (size.x / viewport.size.x) * state.pixel_ratio,
             0.,
@@ -420,11 +414,11 @@ impl CanvasFrame {
         });
     }
     fn element(&self) -> CanvasElement {
-        let state = self.state.borrow();
+        let state = self.state.read().unwrap();
         state.canvas.clone()
     }
     fn wrap_text(&self, input: &Text) -> Vec<String> {
-        let state = self.state.borrow();
+        let state = self.state.read().unwrap();
         let mut lines: Vec<String> = input
             .content
             .split('\n')
@@ -497,36 +491,36 @@ impl Frame for CanvasFrame {
         U: Into<Transform>,
     {
         let object = CanvasObject::new(rasterizable.into(), orientation.into());
-        let mut state = self.state.borrow_mut();
+        let mut state = self.state.write().unwrap();
         state.contents.push(object.clone());
         Box::new(object)
     }
     fn set_viewport(&self, viewport: Rect) {
-        let state = self.state.borrow();
-        state.viewport.set(viewport);
+        let mut state = self.state.write().unwrap();
+        state.viewport = viewport;
     }
     fn resize<T>(&self, size: T)
     where
         T: Into<Vector>,
     {
-        let state = self.state.borrow();
+        let mut state = self.state.write().unwrap();
         let size = size.into();
-        state.size.set(size);
+        state.size = size;
         state.canvas.set_height((size.y * state.pixel_ratio) as u32);
         state.canvas.set_width((size.x * state.pixel_ratio) as u32);
     }
     fn get_size(&self) -> Vector {
-        let state = self.state.borrow();
-        state.size.get()
+        let state = self.state.read().unwrap();
+        state.size
     }
     fn to_image(&self) -> Box<CanvasImage> {
-        let state = self.state.borrow();
+        let state = self.state.read().unwrap();
         self.draw();
         Box::new(state.canvas.clone())
     }
     fn measure(&self, input: Text) -> Vector {
         self.update_text_style(&input);
-        let state = self.state.borrow();
+        let state = self.state.read().unwrap();
         if input.max_width.is_some() {
             let lines = self.wrap_text(&input);
             (
@@ -550,13 +544,13 @@ impl Frame for CanvasFrame {
 }
 
 struct Canvas {
-    state: Rc<RefCell<CanvasState>>,
+    state: Arc<RwLock<CanvasState>>,
 }
 
 struct CanvasState {
     root_frame: Option<CanvasFrame>,
     size: ObserverCell<Vector>,
-    tick_handlers: Vec<Box<dyn FnMut(f64)>>,
+    tick_handlers: Vec<Box<dyn FnMut(f64) + Send + Sync>>,
 }
 
 impl Rasterizer for Canvas {
@@ -589,10 +583,11 @@ impl Context for Canvas {
 impl Ticker for Canvas {
     fn bind<F>(&mut self, handler: F)
     where
-        F: FnMut(f64) + 'static,
+        F: FnMut(f64) + 'static + Send + Sync,
     {
         self.state
-            .borrow_mut()
+            .write()
+            .unwrap()
             .tick_handlers
             .push(Box::new(handler));
     }
@@ -600,7 +595,7 @@ impl Ticker for Canvas {
 
 impl ContextGraphics for Canvas {
     fn run(self) {
-        let state = self.state.borrow();
+        let state = self.state.read().unwrap();
         state.root_frame.as_ref().unwrap().show();
         let cloned = self.clone();
         window().request_animation_frame(move |start_time| {
@@ -613,7 +608,7 @@ impl ContextualGraphics for Canvas {
     type Context = Canvas;
     fn start(self, root: CanvasFrame) -> Self::Context {
         {
-            let mut state = self.state.borrow_mut();
+            let mut state = self.state.write().unwrap();
             state.root_frame = Some(root);
         }
         self
@@ -629,7 +624,7 @@ impl Graphics for Canvas {
 
 impl Canvas {
     fn animate(&self, start_time: f64, last_start_time: f64) {
-        let mut state = self.state.borrow_mut();
+        let mut state = self.state.write().unwrap();
         state
             .tick_handlers
             .iter_mut()
@@ -685,7 +680,7 @@ canvas {
     let body = document().body().unwrap();
 
     let gfx = Canvas {
-        state: Rc::new(RefCell::new(CanvasState {
+        state: Arc::new(RwLock::new(CanvasState {
             size: ObserverCell::new(
                 (body.offset_width().into(), body.offset_height().into()).into(),
             ),
@@ -697,7 +692,7 @@ canvas {
     let gfx_resize = gfx.clone();
 
     window().add_event_listener(move |_: ResizeEvent| {
-        let state = gfx_resize.state.borrow();
+        let state = gfx_resize.state.read().unwrap();
         let body = document().body().unwrap();
         state
             .size

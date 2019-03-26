@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::sync::RwLock;
 
 trait TryFrom<T>: Sized {
     type Error;
@@ -19,12 +19,16 @@ where
     }
 }
 
+struct ObserverCellState<T> {
+    content: T,
+    dirty: bool,
+}
+
 pub(crate) struct ObserverCell<T>
 where
     T: Copy,
 {
-    cell: Cell<T>,
-    dirty: Cell<bool>,
+    state: RwLock<ObserverCellState<T>>,
 }
 
 impl<T> ObserverCell<T>
@@ -33,19 +37,24 @@ where
 {
     pub(crate) fn new(value: T) -> Self {
         ObserverCell {
-            cell: Cell::new(value),
-            dirty: Cell::new(true),
+            state: RwLock::new(ObserverCellState {
+                content: value,
+                dirty: true,
+            }),
         }
     }
     pub(crate) fn is_dirty(&self) -> bool {
-        self.dirty.get()
+        self.state.read().unwrap().dirty
     }
     pub(crate) fn get(&self) -> T {
-        self.dirty.set(false);
-        self.cell.get()
+        {
+            self.state.write().unwrap().dirty = false;
+        }
+        self.state.read().unwrap().content
     }
     pub(crate) fn set(&self, value: T) {
-        self.cell.set(value);
-        self.dirty.set(true);
+        let mut state = self.state.write().unwrap();
+        state.content = value;
+        state.dirty = true;
     }
 }
