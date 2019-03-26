@@ -1,4 +1,4 @@
-use crate::graphics_2d::{Transform, RGBA8};
+use crate::graphics_2d::Color;
 
 /// A font face.
 #[derive(Clone, Copy, Debug)]
@@ -54,7 +54,7 @@ pub struct Text {
     /// The font size in pixels.
     pub size: u16,
     /// The color of the rendered text.
-    pub color: RGBA8,
+    pub color: Color,
     /// Whether the text is styled as oblique/italic.
     pub italic: bool,
     /// The maximum width or wrap width of the text.
@@ -67,8 +67,6 @@ pub struct Text {
     pub wrap: Wrap,
     /// The font weight used.
     pub weight: Weight,
-    /// The orientation of the text.
-    pub orientation: Transform,
 }
 
 impl Text {
@@ -81,7 +79,7 @@ impl Text {
         self
     }
     /// Sets the color of the text.
-    pub fn with_color(mut self, color: RGBA8) -> Self {
+    pub fn with_color(mut self, color: Color) -> Self {
         self.color = color;
         self
     }
@@ -130,11 +128,10 @@ impl Text {
 impl Default for Text {
     fn default() -> Text {
         Text {
-            orientation: Transform::default(),
             font: Font::SystemFont,
             content: "".to_owned(),
             size: 15,
-            color: RGBA8::black(),
+            color: Color::black(),
             italic: false,
             max_width: None,
             align: Align::Start,

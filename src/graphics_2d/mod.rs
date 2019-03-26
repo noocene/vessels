@@ -1,5 +1,5 @@
 use crate::input::Context;
-use crate::path::{Path, Primitive, Texture};
+use crate::path::{Path, Texture};
 use crate::targets;
 use crate::text::Text;
 
@@ -9,9 +9,6 @@ use std::borrow::Cow;
 
 use std::any::Any;
 
-use std::fmt;
-use std::fmt::{Debug, Formatter};
-
 /// A conversion to an eight-character hex color string.
 pub trait ToHexColor {
     /// Performs the conversion.
@@ -19,17 +16,17 @@ pub trait ToHexColor {
 }
 
 /// A representation type of some target-specific image format.
-pub trait ImageRepresentation: Any {
+pub trait ImageRepresentation: Any + Sync + Send {
     #[doc(hidden)]
     fn box_clone(&self) -> Box<dyn ImageRepresentation>;
     #[doc(hidden)]
     fn as_any(&self) -> Box<dyn Any>;
     /// Returns the 2-d cartesian pixel size of the image.
     fn get_size(&self) -> Vector;
-    /// Returns a conversion of the image to [Image<RGBA8, Texture2D>]. This operation may be expensive.
-    fn as_texture(&self) -> Image<RGBA8, Texture2D>;
-    /// Creates an image in the associated format from an [Image<RGBA8, Texture2D>]. This operation may be expensive.
-    fn from_texture(texture: Image<RGBA8, Texture2D>) -> Self
+    /// Returns a conversion of the image to [Image<Color, Texture2D>]. This operation may be expensive.
+    fn as_texture(&self) -> Image<Color, Texture2D>;
+    /// Creates an image in the associated format from an [Image<Color, Texture2D>]. This operation may be expensive.
+    fn from_texture(texture: Image<Color, Texture2D>) -> Self
     where
         Self: Sized;
 }
@@ -40,7 +37,7 @@ impl Clone for Box<dyn ImageRepresentation> {
     }
 }
 
-impl ImageRepresentation for Image<RGBA8, Texture2D> {
+impl ImageRepresentation for Image<Color, Texture2D> {
     fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
@@ -50,10 +47,10 @@ impl ImageRepresentation for Image<RGBA8, Texture2D> {
     fn box_clone(&self) -> Box<dyn ImageRepresentation> {
         Box::new(self.clone())
     }
-    fn as_texture(&self) -> Image<RGBA8, Texture2D> {
+    fn as_texture(&self) -> Image<Color, Texture2D> {
         self.clone()
     }
-    fn from_texture(texture: Image<RGBA8, Texture2D>) -> Image<RGBA8, Texture2D> {
+    fn from_texture(texture: Image<Color, Texture2D>) -> Image<Color, Texture2D> {
         texture
     }
 }
@@ -63,7 +60,7 @@ pub trait PixelFormat {}
 
 /// A standard 24-bit-depth RGB color with an 8-bit alpha channel.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct RGBA8 {
+pub struct Color {
     /// Red channel data.
     pub r: u8,
     /// Green channel data.
@@ -74,7 +71,7 @@ pub struct RGBA8 {
     pub a: u8,
 }
 
-impl RGBA8 {
+impl Color {
     /// Returns a CSS-compatible rgba color string in form `rgba(r, g, b, a)` where `r`, `g`, and `b`
     /// are integers between 0 and 255 and `a` is the alpha channel represented as a floating point value between
     /// 0 and 1.
@@ -94,7 +91,7 @@ impl RGBA8 {
     }
     /// Returns a fully opaque black color.
     pub fn black() -> Self {
-        RGBA8 {
+        Color {
             r: 0,
             g: 0,
             b: 0,
@@ -103,7 +100,7 @@ impl RGBA8 {
     }
     /// Returns a fully opaque white color.
     pub fn white() -> Self {
-        RGBA8 {
+        Color {
             r: 255,
             g: 255,
             b: 255,
@@ -112,7 +109,7 @@ impl RGBA8 {
     }
 }
 
-impl ToHexColor for RGBA8 {
+impl ToHexColor for Color {
     fn to_hex_color(&self) -> Cow<'_, str> {
         Cow::from(format!(
             "#{:x?}{:x?}{:x?}{:x?}",
@@ -121,13 +118,13 @@ impl ToHexColor for RGBA8 {
     }
 }
 
-impl Into<Texture> for RGBA8 {
+impl Into<Texture> for Color {
     fn into(self) -> Texture {
         Texture::Solid(self)
     }
 }
 
-impl PixelFormat for RGBA8 {}
+impl PixelFormat for Color {}
 
 /// Indicates that a type is an organizational format for image data.
 pub trait ImageFormat {}
@@ -237,147 +234,41 @@ impl Default for Transform {
     }
 }
 
-/// An object with characteristics that may change dynamically in real-time
-pub trait DynamicObject {
-    /// Returns the absolute orientation of the object within the space of its parent frame.
-    fn orientation(&self) -> Transform;
-    /// Returns the styled paths comprising the object.
-    fn render(&self) -> Cow<'_, [Rasterizable]>;
-}
-
-/// An object with static contents.
-#[derive(Debug)]
-pub struct StaticObject {
-    /// The absolute orientation of the object within the space of its parent frame.
-    pub orientation: Transform,
-    /// The styled paths comprising the object.
-    pub content: Vec<Rasterizable>,
-}
-
-impl StaticObject {
-    fn from_entity(entity: Rasterizable) -> StaticObject {
-        StaticObject {
-            content: vec![entity],
-            orientation: Transform::default(),
-        }
-    }
-    /// Passes a mutable reference to the orientation of the object
-    /// to the provided closure to permit ergonomic inline
-    /// transformation of static objects.
-    pub fn with_transform(mut self, closure: impl Fn(&mut Transform)) -> Self {
-        closure(&mut self.orientation);
-        self
+impl From<Vector> for Transform {
+    fn from(input: Vector) -> Transform {
+        Transform::default().with_position(input)
     }
 }
 
-impl From<Rasterizable> for StaticObject {
-    fn from(input: Rasterizable) -> StaticObject {
-        StaticObject::from_entity(input)
+impl From<(f64, f64)> for Transform {
+    fn from(input: (f64, f64)) -> Transform {
+        Vector::from(input).into()
     }
 }
 
-impl From<Rasterizable> for Object {
-    fn from(input: Rasterizable) -> Object {
-        Object::Static(Box::new(input.into()))
-    }
-}
-
-impl<T: 'static> From<T> for StaticObject
-where
-    T: ImageRepresentation,
-{
-    fn from(input: T) -> Self {
-        StaticObject {
-            orientation: Transform::default(),
-            content: vec![Primitive::rectangle(input.get_size())
-                .fill(Texture::Image(Box::new(input)).into())
-                .finalize()
-                .into()],
-        }
-    }
-}
-
-impl From<Box<dyn ImageRepresentation>> for StaticObject {
-    fn from(input: Box<dyn ImageRepresentation>) -> Self {
-        StaticObject {
-            orientation: Transform::default(),
-            content: vec![Primitive::rectangle(input.get_size())
-                .fill(Texture::Image(input).into())
-                .finalize()
-                .into()],
-        }
-    }
-}
-
-impl From<StaticObject> for Object {
-    fn from(input: StaticObject) -> Object {
-        Object::Static(Box::new(input))
-    }
-}
-
-/// An object suitable for rendering.
-pub enum Object {
-    /// A [StaticObject].
-    Static(Box<StaticObject>),
-    /// A [DynamicObject].
-    Dynamic(Box<dyn DynamicObject>),
-}
-
-impl Object {
-    /// Renders the underlying content.
-    pub fn render(&self) -> Cow<'_, [Rasterizable]> {
-        match self {
-            Object::Dynamic(object) => object.render(),
-            Object::Static(object) => Cow::from(&object.content),
-        }
-    }
-}
-
-struct ClosureObject<'a> {
-    closure: Box<dyn Fn() -> Cow<'a, [Rasterizable]> + 'static>,
-}
-
-impl<'a> DynamicObject for ClosureObject<'a> {
-    fn orientation(&self) -> Transform {
-        Transform::default()
-    }
-    fn render(&self) -> Cow<'_, [Rasterizable]> {
-        (self.closure)()
-    }
-}
-
-impl<F> From<F> for Object
-where
-    F: Fn() -> Cow<'static, [Rasterizable]> + 'static,
-{
-    fn from(closure: F) -> Object {
-        Object::Dynamic(Box::new(ClosureObject {
-            closure: Box::new(closure),
-        }))
-    }
-}
-
-impl Debug for Object {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Object ( {} )",
-            match self {
-                Object::Static(object) => format!("Static {:?}", object),
-                Object::Dynamic(_) => "Dynamic".to_owned(),
-            }
-        )
-    }
+/// Represents content optimized and cached for rendering.
+pub trait Object: Sync + Send {
+    /// Composes a transformation with the existing transformation of the [Object].
+    fn apply_transform(&mut self, transform: Transform);
+    /// Gets the current trasnformation of the [Object].
+    fn get_transform(&self) -> Transform;
+    /// Sets the current transfomration of the [Object].
+    fn set_transform(&mut self, transform: Transform);
+    /// Replaces the contents of the [Object] with new Rasterizable content. This may be costly.
+    fn update(&mut self, content: Rasterizable);
 }
 
 /// An isolated rendering context.
-pub trait Frame: DynamicObject + Clone {
+pub trait Frame: Clone + Sync + Send {
+    /// The [Object] representation used internally by the [Frame].
+    type Object: Object;
     /// The [ImageRepresentation] used internally by the [Frame].
     type Image: ImageRepresentation;
     /// Adds content to the [Frame].
-    fn add<U>(&mut self, object: U)
+    fn add<T, U>(&mut self, rasterizable: T, orientation: U) -> Box<dyn Object>
     where
-        U: Into<Object>;
+        T: Into<Rasterizable>,
+        U: Into<Transform>;
     /// Resizes the [Frame]. This does not resize the viewport.
     fn resize<U>(&self, size: U)
     where
@@ -396,23 +287,9 @@ pub trait Frame: DynamicObject + Clone {
 #[derive(Debug, Clone)]
 pub enum Rasterizable {
     /// Some [Text].
-    Text(Text),
+    Text(Box<Text>),
     /// Some [Path].
     Path(Box<Path>),
-}
-
-impl Rasterizable {
-    /// Transforms the contents of the rasterizable type.
-    pub fn transform(&mut self, transform: Transform) {
-        match self {
-            Rasterizable::Text(text) => {
-                text.orientation.transform(transform);
-            }
-            Rasterizable::Path(path) => {
-                path.orientation.transform(transform);
-            }
-        }
-    }
 }
 
 impl From<Path> for Rasterizable {
@@ -423,18 +300,12 @@ impl From<Path> for Rasterizable {
 
 impl From<Text> for Rasterizable {
     fn from(input: Text) -> Rasterizable {
-        Rasterizable::Text(input)
-    }
-}
-
-impl From<Text> for Object {
-    fn from(input: Text) -> Object {
-        Object::from(Rasterizable::from(input))
+        Rasterizable::Text(Box::new(input))
     }
 }
 
 /// Provides an interface for the rasterization of content.
-pub trait Rasterizer {
+pub trait Rasterizer: Sync + Send {
     /// The image representation type used.
     type Image: ImageRepresentation;
     /// Returns a rasterization of the input.
@@ -452,14 +323,25 @@ pub trait Graphics: Rasterizer + Clone {
 }
 
 /// An active [ContextualGraphics] context.
-pub trait ContextGraphics: Graphics + Context {}
+pub trait ContextGraphics: Graphics + Context + Ticker {
+    /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
+    fn run(self);
+}
+
+/// A type that permits the binding of tick handlers.
+pub trait Ticker {
+    /// Binds a handler to receive ticks.
+    fn bind<F>(&mut self, handler: F)
+    where
+        F: FnMut(f64) + 'static + Send + Sync;
+}
 
 /// A graphics context that can provide input and windowing.
 pub trait ContextualGraphics: Graphics {
     /// The internal concrete type of the [Context] returned upon activation.
     type Context: ContextGraphics;
     /// Starts a windowed context using the provided [Frame] as the document root.
-    fn run(self, root: Self::Frame) -> Self::Context;
+    fn start(self, root: Self::Frame) -> Self::Context;
 }
 
 /// A 2-dimensional cartesian vector or point
