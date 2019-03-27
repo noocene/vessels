@@ -259,28 +259,31 @@ pub trait Object: Sync + Send {
 }
 
 /// An isolated rendering context.
-pub trait Frame: Clone + Sync + Send {
-    /// The [Object] representation used internally by the [Frame].
-    type Object: Object;
-    /// The [ImageRepresentation] used internally by the [Frame].
-    type Image: ImageRepresentation;
+pub trait Frame: Sync + Send {
     /// Adds content to the [Frame].
-    fn add<T, U>(&mut self, rasterizable: T, orientation: U) -> Box<dyn Object>
-    where
-        T: Into<Rasterizable>,
-        U: Into<Transform>;
+    fn add(&mut self, rasterizable: Rasterizable, orientation: Transform) -> Box<dyn Object>;
     /// Resizes the [Frame]. This does not resize the viewport.
-    fn resize<U>(&self, size: U)
-    where
-        U: Into<Vector>;
+    fn resize(&self, size: Vector);
     /// Sets the viewport.
     fn set_viewport(&self, viewport: Rect);
     /// Returns the size of the [Frame].
     fn get_size(&self) -> Vector;
     /// Returns an image that is a still rasterization of any rendered content.
-    fn to_image(&self) -> Box<<Self as Frame>::Image>;
+    fn to_image(&self) -> Box<dyn ImageRepresentation>;
     /// Returns the measured dimensions of some provided text.
     fn measure(&self, input: Text) -> Vector;
+    #[doc(hidden)]
+    fn box_clone(&self) -> Box<dyn Frame>;
+    #[doc(hidden)]
+    fn show(&self);
+    #[doc(hidden)]
+    fn draw(&self);
+}
+
+impl Clone for Box<dyn Frame> {
+    fn clone(&self) -> Self {
+        self.box_clone()
+    }
 }
 
 /// A type that can rasterized.
@@ -306,20 +309,14 @@ impl From<Text> for Rasterizable {
 
 /// Provides an interface for the rasterization of content.
 pub trait Rasterizer: Sync + Send {
-    /// The image representation type used.
-    type Image: ImageRepresentation;
     /// Returns a rasterization of the input.
-    fn rasterize<T>(&self, input: T, vector: Vector) -> Box<dyn ImageRepresentation>
-    where
-        T: Into<Rasterizable>;
+    fn rasterize(&self, input: Rasterizable, vector: Vector) -> Box<dyn ImageRepresentation>;
 }
 
 /// Provides 2-dimensional euclidean rendering capabilities.
-pub trait Graphics: Rasterizer + Clone {
-    /// The internal concrete type of the [Frame]s used.
-    type Frame: Frame;
+pub trait Graphics: Rasterizer {
     /// Returns a new [Frame].
-    fn frame(&self) -> Self::Frame;
+    fn frame(&self) -> Box<dyn Frame>;
 }
 
 /// A post-activation graphics context.
@@ -327,28 +324,20 @@ pub trait ContextGraphics: Graphics + Context + Ticker {}
 
 /// An inactive [ContextualGraphics] context.
 pub trait InactiveContextGraphics: ContextGraphics {
-    /// The reference type provided by the context to a callback on run.
-    type ReferenceContext: ContextGraphics;
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
-    fn run<F>(self, cb: F)
-    where
-        F: FnMut(Self::ReferenceContext) + 'static;
+    fn run(self, cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>);
 }
 
 /// A type that permits the binding of tick handlers.
 pub trait Ticker {
     /// Binds a handler to receive ticks.
-    fn bind<F>(&mut self, handler: F)
-    where
-        F: FnMut(f64) + 'static + Send + Sync;
+    fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>);
 }
 
 /// A graphics context that can provide input and windowing.
 pub trait ContextualGraphics: Graphics {
-    /// The internal concrete type of the [Context] returned upon activation.
-    type Context: InactiveContextGraphics;
     /// Starts a windowed context using the provided [Frame] as the document root.
-    fn start(self, root: Self::Frame) -> Self::Context;
+    fn start(self, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics>;
 }
 
 /// A 2-dimensional cartesian vector or point
