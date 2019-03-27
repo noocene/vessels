@@ -633,7 +633,7 @@ impl Canvas {
     }
 }
 
-pub(crate) fn new() -> impl ContextualGraphics {
+pub(crate) fn new() -> Box<dyn ContextualGraphics> {
     document()
         .head()
         .unwrap()
@@ -677,5 +677,5 @@ canvas {
             .set((body.offset_width().into(), body.offset_height().into()).into());
     });
 
-    gfx
+    Box::new(gfx)
 }

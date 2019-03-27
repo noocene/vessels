@@ -496,7 +496,7 @@ impl Rect {
 }
 
 /// Initializes a new graphics context.
-pub fn new() -> impl ContextualGraphics {
+pub fn new() -> Box<dyn ContextualGraphics> {
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
     targets::web::graphics::new()
 }
