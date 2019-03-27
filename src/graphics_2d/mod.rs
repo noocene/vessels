@@ -322,10 +322,17 @@ pub trait Graphics: Rasterizer + Clone {
     fn frame(&self) -> Self::Frame;
 }
 
-/// An active [ContextualGraphics] context.
-pub trait ContextGraphics: Graphics + Context + Ticker {
+/// A post-activation graphics context.
+pub trait ContextGraphics: Graphics + Context + Ticker {}
+
+/// An inactive [ContextualGraphics] context.
+pub trait InactiveContextGraphics: ContextGraphics {
+    /// The reference type provided by the context to a callback on run.
+    type ReferenceContext: ContextGraphics;
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
-    fn run(self);
+    fn run<F>(self, cb: F)
+    where
+        F: FnMut(Self::ReferenceContext) + 'static;
 }
 
 /// A type that permits the binding of tick handlers.
@@ -339,7 +346,7 @@ pub trait Ticker {
 /// A graphics context that can provide input and windowing.
 pub trait ContextualGraphics: Graphics {
     /// The internal concrete type of the [Context] returned upon activation.
-    type Context: ContextGraphics;
+    type Context: InactiveContextGraphics;
     /// Starts a windowed context using the provided [Frame] as the document root.
     fn start(self, root: Self::Frame) -> Self::Context;
 }

@@ -1,6 +1,7 @@
 use crate::graphics_2d::{
     Color, ContextGraphics, ContextualGraphics, Frame, Graphics, Image, ImageRepresentation,
-    Object, Rasterizable, Rasterizer, Rect, Texture2D, Ticker, Transform, Vector,
+    InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect, Texture2D, Ticker, Transform,
+    Vector,
 };
 use crate::input::Context;
 use crate::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
@@ -593,14 +594,23 @@ impl Ticker for Canvas {
     }
 }
 
-impl ContextGraphics for Canvas {
-    fn run(self) {
-        let state = self.state.read().unwrap();
-        state.root_frame.as_ref().unwrap().show();
-        let cloned = self.clone();
-        window().request_animation_frame(move |start_time| {
-            cloned.animate(start_time, start_time);
-        });
+impl ContextGraphics for Canvas {}
+
+impl InactiveContextGraphics for Canvas {
+    type ReferenceContext = Canvas;
+    fn run<F>(self, mut cb: F)
+    where
+        F: FnMut(Self::ReferenceContext) + 'static,
+    {
+        {
+            let state = self.state.read().unwrap();
+            state.root_frame.as_ref().unwrap().show();
+            let cloned = self.clone();
+            window().request_animation_frame(move |start_time| {
+                cloned.animate(start_time, start_time);
+            });
+        }
+        (cb)(self);
     }
 }
 
