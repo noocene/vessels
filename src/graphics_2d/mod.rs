@@ -1,5 +1,5 @@
 use crate::input::Context;
-use crate::path::{Path, Texture};
+use crate::path::{Path, Primitive, Texture};
 use crate::targets;
 use crate::text::Text;
 
@@ -304,6 +304,16 @@ impl From<Path> for Rasterizable {
 impl From<Text> for Rasterizable {
     fn from(input: Text) -> Rasterizable {
         Rasterizable::Text(Box::new(input))
+    }
+}
+
+impl From<Box<dyn ImageRepresentation>> for Rasterizable {
+    fn from(input: Box<dyn ImageRepresentation>) -> Rasterizable {
+        Rasterizable::Path(Box::new(
+            Primitive::rectangle(input.get_size())
+                .fill(input.into())
+                .finalize(),
+        ))
     }
 }
 

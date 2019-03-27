@@ -130,12 +130,9 @@ impl Debug for Texture {
     }
 }
 
-impl<T: 'static> From<T> for Texture
-where
-    T: ImageRepresentation,
-{
-    fn from(input: T) -> Self {
-        Texture::Image(Box::new(input))
+impl From<Box<dyn ImageRepresentation>> for Texture {
+    fn from(input: Box<dyn ImageRepresentation>) -> Self {
+        Texture::Image(input)
     }
 }
 
