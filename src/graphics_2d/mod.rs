@@ -325,7 +325,7 @@ pub trait ContextGraphics: Graphics + Context + Ticker {}
 /// An inactive [ContextualGraphics] context.
 pub trait InactiveContextGraphics: ContextGraphics {
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
-    fn run(self, cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>);
+    fn run(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>);
 }
 
 /// A type that permits the binding of tick handlers.
@@ -337,7 +337,7 @@ pub trait Ticker {
 /// A graphics context that can provide input and windowing.
 pub trait ContextualGraphics: Graphics {
     /// Starts a windowed context using the provided [Frame] as the document root.
-    fn start(self, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics>;
+    fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics>;
 }
 
 /// A 2-dimensional cartesian vector or point

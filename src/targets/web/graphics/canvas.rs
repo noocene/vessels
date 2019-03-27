@@ -571,7 +571,7 @@ impl Ticker for Canvas {
 impl ContextGraphics for Canvas {}
 
 impl InactiveContextGraphics for Canvas {
-    fn run(self, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
+    fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
         {
             let state = self.state.read().unwrap();
             state.root_frame.as_ref().unwrap().show();
@@ -580,7 +580,7 @@ impl InactiveContextGraphics for Canvas {
                 cloned.animate(start_time, start_time);
             });
         }
-        (cb)(Box::new(self));
+        (cb)(self);
     }
 }
 
@@ -593,12 +593,12 @@ impl Clone for Canvas {
 }
 
 impl ContextualGraphics for Canvas {
-    fn start(self, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics> {
+    fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics> {
         {
             let mut state = self.state.write().unwrap();
             state.root_frame = Some(root);
         }
-        Box::new(self)
+        self
     }
 }
 
