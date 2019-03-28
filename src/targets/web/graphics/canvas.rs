@@ -174,22 +174,20 @@ impl CanvasFrame {
                 state.context.set_shadow_color("rgba(0,0,0,0)");
             }
         } else if !entity.shadows.is_empty() {
-            let filter = format!(
-                "drop-shadow({})",
-                entity
-                    .shadows
-                    .iter()
-                    .map(|shadow| format!(
-                        "{}px {}px {}px {}",
+            let filter = entity
+                .shadows
+                .iter()
+                .map(|shadow| {
+                    format!(
+                        "drop-shadow({}px {}px {}px {})",
                         shadow.offset.x,
                         shadow.offset.y,
                         shadow.blur,
                         shadow.color.to_rgba_color()
-                    ))
-                    .collect::<Vec<String>>()
-                    .join(",")
-            );
-            console!(log, &filter);
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join(" ");
             js! {
                 @{&state.context}.filter = @{filter};
             };
