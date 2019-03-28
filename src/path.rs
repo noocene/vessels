@@ -61,6 +61,8 @@ pub struct Shadow {
     pub offset: Vector,
     /// The blur radius, in fractional pixels, of the shadow.
     pub blur: f64,
+    /// The spread radius, in fractional pixels, of the shadow.
+    pub spread: f64,
 }
 
 impl Shadow {
@@ -70,11 +72,17 @@ impl Shadow {
             color,
             offset: Vector::default(),
             blur: 0.,
+            spread: 0.,
         }
     }
     /// Sets the blur radius.
     pub fn blur(mut self, amount: f64) -> Self {
         self.blur = amount;
+        self
+    }
+    /// Sets the blur radius.
+    pub fn spread(mut self, amount: f64) -> Self {
+        self.spread = amount;
         self
     }
     /// Sets the offset.
@@ -208,7 +216,7 @@ pub struct Path {
     /// The internal fill.
     pub fill: Option<Fill>,
     /// The associated drop shadow.
-    pub shadow: Option<Shadow>,
+    pub shadows: Vec<Shadow>,
     /// Whether the path is closed.
     pub closed: bool,
 }
@@ -452,7 +460,7 @@ pub struct StyleHelper {
     geometry: Vec<Segment>,
     fill: Option<Fill>,
     stroke: Option<Stroke>,
-    shadow: Option<Shadow>,
+    shadows: Vec<Shadow>,
 }
 
 impl StyleHelper {
@@ -462,7 +470,7 @@ impl StyleHelper {
             closed: false,
             geometry,
             fill: None,
-            shadow: None,
+            shadows: vec![],
             stroke: None,
         }
     }
@@ -483,7 +491,7 @@ impl StyleHelper {
     }
     /// Shadows the path using the provided style information.
     pub fn shadow(mut self, shadow: Shadow) -> Self {
-        self.shadow = Some(shadow);
+        self.shadows.push(shadow);
         self
     }
     /// Finalizes the styling and returns a styled [Path].
@@ -492,7 +500,7 @@ impl StyleHelper {
             closed: self.closed,
             segments: self.geometry,
             fill: self.fill,
-            shadow: self.shadow,
+            shadows: self.shadows,
             stroke: self.stroke,
         }
     }

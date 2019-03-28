@@ -116,6 +116,7 @@ struct CanvasFrameState {
     pixel_ratio: f64,
     viewport: Rect,
     size: Vector,
+    layered_shadows_unsupported: bool,
 }
 
 impl Drop for CanvasFrameState {
@@ -138,6 +139,11 @@ impl CanvasFrame {
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
         Box::new(CanvasFrame {
             state: Arc::new(RwLock::new(CanvasFrameState {
+                layered_shadows_unsupported: js! {
+                    return !@{&context}.filter;
+                }
+                .try_into()
+                .unwrap(),
                 canvas,
                 pixel_ratio: window().device_pixel_ratio(),
                 context,
@@ -155,18 +161,42 @@ impl CanvasFrame {
             matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
         );
         state.context.begin_path();
-        match &entity.shadow {
-            Some(shadow) => {
+        if state.layered_shadows_unsupported {
+            if !entity.shadows.is_empty() {
+                let shadow = entity.shadows[0];
                 state.context.set_shadow_blur(shadow.blur);
                 state
                     .context
                     .set_shadow_color(&shadow.color.to_rgba_color());
                 state.context.set_shadow_offset_x(shadow.offset.x);
                 state.context.set_shadow_offset_y(shadow.offset.y);
-            }
-            None => {
+            } else {
                 state.context.set_shadow_color("rgba(0,0,0,0)");
             }
+        } else if !entity.shadows.is_empty() {
+            let filter = format!(
+                "drop-shadow({})",
+                entity
+                    .shadows
+                    .iter()
+                    .map(|shadow| format!(
+                        "{}px {}px {}px {}px {}",
+                        shadow.offset.x,
+                        shadow.offset.y,
+                        shadow.blur,
+                        shadow.spread,
+                        shadow.color.to_rgba_color()
+                    ))
+                    .collect::<Vec<String>>()
+                    .join(",")
+            );
+            js! {
+                @{&state.context}.filter = @{filter};
+            };
+        } else {
+            js! {
+                @{&state.context}.filter = "";
+            };
         }
         let segments = entity.segments.iter();
         state.context.move_to(0., 0.);
