@@ -61,8 +61,6 @@ pub struct Shadow {
     pub offset: Vector,
     /// The blur radius, in fractional pixels, of the shadow.
     pub blur: f64,
-    /// The spread radius, in fractional pixels, of the shadow.
-    pub spread: f64,
 }
 
 impl Shadow {
@@ -72,17 +70,11 @@ impl Shadow {
             color,
             offset: Vector::default(),
             blur: 0.,
-            spread: 0.,
         }
     }
     /// Sets the blur radius.
     pub fn blur(mut self, amount: f64) -> Self {
         self.blur = amount;
-        self
-    }
-    /// Sets the blur radius.
-    pub fn spread(mut self, amount: f64) -> Self {
-        self.spread = amount;
         self
     }
     /// Sets the offset.

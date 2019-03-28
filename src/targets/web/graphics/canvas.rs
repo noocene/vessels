@@ -180,16 +180,16 @@ impl CanvasFrame {
                     .shadows
                     .iter()
                     .map(|shadow| format!(
-                        "{}px {}px {}px {}px {}",
+                        "{}px {}px {}px {}",
                         shadow.offset.x,
                         shadow.offset.y,
                         shadow.blur,
-                        shadow.spread,
                         shadow.color.to_rgba_color()
                     ))
                     .collect::<Vec<String>>()
                     .join(",")
             );
+            console!(log, &filter);
             js! {
                 @{&state.context}.filter = @{filter};
             };
