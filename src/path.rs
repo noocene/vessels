@@ -130,12 +130,9 @@ impl Debug for Texture {
     }
 }
 
-impl<T: 'static> From<T> for Texture
-where
-    T: ImageRepresentation,
-{
-    fn from(input: T) -> Self {
-        Texture::Image(Box::new(input))
+impl From<Box<dyn ImageRepresentation>> for Texture {
+    fn from(input: Box<dyn ImageRepresentation>) -> Self {
+        Texture::Image(input)
     }
 }
 
@@ -211,7 +208,7 @@ pub struct Path {
     /// The internal fill.
     pub fill: Option<Fill>,
     /// The associated drop shadow.
-    pub shadow: Option<Shadow>,
+    pub shadows: Vec<Shadow>,
     /// Whether the path is closed.
     pub closed: bool,
 }
@@ -455,7 +452,7 @@ pub struct StyleHelper {
     geometry: Vec<Segment>,
     fill: Option<Fill>,
     stroke: Option<Stroke>,
-    shadow: Option<Shadow>,
+    shadows: Vec<Shadow>,
 }
 
 impl StyleHelper {
@@ -465,7 +462,7 @@ impl StyleHelper {
             closed: false,
             geometry,
             fill: None,
-            shadow: None,
+            shadows: vec![],
             stroke: None,
         }
     }
@@ -486,7 +483,7 @@ impl StyleHelper {
     }
     /// Shadows the path using the provided style information.
     pub fn shadow(mut self, shadow: Shadow) -> Self {
-        self.shadow = Some(shadow);
+        self.shadows.push(shadow);
         self
     }
     /// Finalizes the styling and returns a styled [Path].
@@ -495,7 +492,7 @@ impl StyleHelper {
             closed: self.closed,
             segments: self.geometry,
             fill: self.fill,
-            shadow: self.shadow,
+            shadows: self.shadows,
             stroke: self.stroke,
         }
     }

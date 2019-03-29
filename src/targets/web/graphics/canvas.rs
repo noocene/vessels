@@ -1,8 +1,10 @@
 use crate::graphics_2d::{
     Color, ContextGraphics, ContextualGraphics, Frame, Graphics, Image, ImageRepresentation,
-    Object, Rasterizable, Rasterizer, Rect, Texture2D, Ticker, Transform, Vector,
+    InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect, Texture2D, Ticker, Transform,
+    Vector,
 };
 use crate::input::Context;
+use crate::input::{Keyboard, Mouse};
 use crate::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
 use crate::targets::web;
 use crate::text::{Align, Font, Text, Weight, Wrap};
@@ -114,6 +116,7 @@ struct CanvasFrameState {
     pixel_ratio: f64,
     viewport: Rect,
     size: Vector,
+    layered_shadows_unsupported: bool,
 }
 
 impl Drop for CanvasFrameState {
@@ -127,15 +130,20 @@ struct CanvasFrame {
 }
 
 impl CanvasFrame {
-    fn new() -> CanvasFrame {
+    fn new() -> Box<CanvasFrame> {
         let canvas: CanvasElement = document()
             .create_element("canvas")
             .unwrap()
             .try_into()
             .unwrap();
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
-        CanvasFrame {
+        Box::new(CanvasFrame {
             state: Arc::new(RwLock::new(CanvasFrameState {
+                layered_shadows_unsupported: js! {
+                    return !@{&context}.filter;
+                }
+                .try_into()
+                .unwrap(),
                 canvas,
                 pixel_ratio: window().device_pixel_ratio(),
                 context,
@@ -143,15 +151,7 @@ impl CanvasFrame {
                 size: Vector::default(),
                 viewport: Rect::default(),
             })),
-        }
-    }
-    fn show(&self) {
-        let state = self.state.read().unwrap();
-        state.canvas.add_event_listener(|event: ContextMenuEvent| {
-            event.prevent_default();
-            event.stop_propagation();
-        });
-        document().body().unwrap().append_child(&state.canvas);
+        })
     }
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
@@ -161,18 +161,40 @@ impl CanvasFrame {
             matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
         );
         state.context.begin_path();
-        match &entity.shadow {
-            Some(shadow) => {
+        if state.layered_shadows_unsupported {
+            if !entity.shadows.is_empty() {
+                let shadow = entity.shadows[0];
                 state.context.set_shadow_blur(shadow.blur);
                 state
                     .context
                     .set_shadow_color(&shadow.color.to_rgba_color());
                 state.context.set_shadow_offset_x(shadow.offset.x);
                 state.context.set_shadow_offset_y(shadow.offset.y);
-            }
-            None => {
+            } else {
                 state.context.set_shadow_color("rgba(0,0,0,0)");
             }
+        } else if !entity.shadows.is_empty() {
+            let filter = entity
+                .shadows
+                .iter()
+                .map(|shadow| {
+                    format!(
+                        "drop-shadow({}px {}px {}px {})",
+                        shadow.offset.x,
+                        shadow.offset.y,
+                        shadow.blur,
+                        shadow.color.to_rgba_color()
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join(" ");
+            js! {
+                @{&state.context}.filter = @{filter};
+            };
+        } else {
+            js! {
+                @{&state.context}.filter = "";
+            };
         }
         let segments = entity.segments.iter();
         state.context.move_to(0., 0.);
@@ -385,34 +407,6 @@ impl CanvasFrame {
             );
         }
     }
-    fn draw(&self) {
-        let state = self.state.read().unwrap();
-        let viewport = state.viewport;
-        let size = state.size;
-        state.context.set_transform(
-            (size.x / viewport.size.x) * state.pixel_ratio,
-            0.,
-            0.,
-            (size.y / viewport.size.y) * state.pixel_ratio,
-            -viewport.position.x * state.pixel_ratio,
-            -viewport.position.y * state.pixel_ratio,
-        );
-        state.context.clear_rect(
-            viewport.position.x,
-            viewport.position.y,
-            viewport.size.x,
-            viewport.size.y,
-        );
-        state.context.save();
-        state.contents.iter().for_each(|object| {
-            let object = object.state.read().unwrap();
-            let matrix = object.orientation.to_matrix();
-            match &object.content {
-                Rasterizable::Path(path) => self.draw_path(matrix, &path),
-                Rasterizable::Text(input) => self.draw_text(matrix, &input),
-            };
-        });
-    }
     fn element(&self) -> CanvasElement {
         let state = self.state.read().unwrap();
         state.canvas.clone()
@@ -474,23 +468,45 @@ impl CanvasFrame {
     }
 }
 
-impl Clone for CanvasFrame {
-    fn clone(&self) -> Self {
-        CanvasFrame {
-            state: self.state.clone(),
-        }
-    }
-}
-
 impl Frame for CanvasFrame {
-    type Object = CanvasObject;
-    type Image = CanvasImage;
-    fn add<T, U>(&mut self, rasterizable: T, orientation: U) -> Box<dyn Object>
-    where
-        T: Into<Rasterizable>,
-        U: Into<Transform>,
-    {
-        let object = CanvasObject::new(rasterizable.into(), orientation.into());
+    fn draw(&self) {
+        let state = self.state.read().unwrap();
+        let viewport = state.viewport;
+        let size = state.size;
+        state.context.set_transform(
+            (size.x / viewport.size.x) * state.pixel_ratio,
+            0.,
+            0.,
+            (size.y / viewport.size.y) * state.pixel_ratio,
+            -viewport.position.x * state.pixel_ratio,
+            -viewport.position.y * state.pixel_ratio,
+        );
+        state.context.clear_rect(
+            viewport.position.x,
+            viewport.position.y,
+            viewport.size.x,
+            viewport.size.y,
+        );
+        state.context.save();
+        state.contents.iter().for_each(|object| {
+            let object = object.state.read().unwrap();
+            let matrix = object.orientation.to_matrix();
+            match &object.content {
+                Rasterizable::Path(path) => self.draw_path(matrix, &path),
+                Rasterizable::Text(input) => self.draw_text(matrix, &input),
+            };
+        });
+    }
+    fn show(&self) {
+        let state = self.state.read().unwrap();
+        state.canvas.add_event_listener(|event: ContextMenuEvent| {
+            event.prevent_default();
+            event.stop_propagation();
+        });
+        document().body().unwrap().append_child(&state.canvas);
+    }
+    fn add(&mut self, rasterizable: Rasterizable, orientation: Transform) -> Box<dyn Object> {
+        let object = CanvasObject::new(rasterizable, orientation);
         let mut state = self.state.write().unwrap();
         state.contents.push(object.clone());
         Box::new(object)
@@ -499,12 +515,8 @@ impl Frame for CanvasFrame {
         let mut state = self.state.write().unwrap();
         state.viewport = viewport;
     }
-    fn resize<T>(&self, size: T)
-    where
-        T: Into<Vector>,
-    {
+    fn resize(&self, size: Vector) {
         let mut state = self.state.write().unwrap();
-        let size = size.into();
         state.size = size;
         state.canvas.set_height((size.y * state.pixel_ratio) as u32);
         state.canvas.set_width((size.x * state.pixel_ratio) as u32);
@@ -513,7 +525,7 @@ impl Frame for CanvasFrame {
         let state = self.state.read().unwrap();
         state.size
     }
-    fn to_image(&self) -> Box<CanvasImage> {
+    fn to_image(&self) -> Box<dyn ImageRepresentation> {
         let state = self.state.read().unwrap();
         self.draw();
         Box::new(state.canvas.clone())
@@ -541,6 +553,11 @@ impl Frame for CanvasFrame {
                 .into()
         }
     }
+    fn box_clone(&self) -> Box<dyn Frame> {
+        Box::new(CanvasFrame {
+            state: self.state.clone(),
+        })
+    }
 }
 
 struct Canvas {
@@ -548,65 +565,63 @@ struct Canvas {
 }
 
 struct CanvasState {
-    root_frame: Option<CanvasFrame>,
+    root_frame: Option<Box<dyn Frame>>,
     size: ObserverCell<Vector>,
     tick_handlers: Vec<Box<dyn FnMut(f64) + Send + Sync>>,
 }
 
 impl Rasterizer for Canvas {
-    type Image = CanvasImage;
-    fn rasterize<T>(&self, input: T, size: Vector) -> Box<dyn ImageRepresentation>
-    where
-        T: Into<Rasterizable>,
-    {
-        let input: Rasterizable = input.into();
+    fn rasterize(&self, input: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
         let mut frame = CanvasFrame::new();
         frame.resize(size);
         frame.set_viewport(Rect::new(Vector::default(), size));
-        frame.add(input, Vector::from((0., 0.)));
+        frame.add(input, Vector::from((0., 0.)).into());
         frame.draw();
         Box::new(frame.element())
     }
 }
 
 impl Context for Canvas {
-    type Mouse = web::input::Mouse;
-    type Keyboard = web::input::Keyboard;
-    fn mouse(&self) -> Self::Mouse {
+    fn mouse(&self) -> Box<dyn Mouse> {
         web::input::Mouse::new()
     }
-    fn keyboard(&self) -> Self::Keyboard {
+    fn keyboard(&self) -> Box<dyn Keyboard> {
         web::input::Keyboard::new()
     }
 }
 
 impl Ticker for Canvas {
-    fn bind<F>(&mut self, handler: F)
-    where
-        F: FnMut(f64) + 'static + Send + Sync,
-    {
-        self.state
-            .write()
-            .unwrap()
-            .tick_handlers
-            .push(Box::new(handler));
+    fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>) {
+        self.state.write().unwrap().tick_handlers.push(handler);
     }
 }
 
-impl ContextGraphics for Canvas {
-    fn run(self) {
-        let state = self.state.read().unwrap();
-        state.root_frame.as_ref().unwrap().show();
-        let cloned = self.clone();
-        window().request_animation_frame(move |start_time| {
-            cloned.animate(start_time, start_time);
-        });
+impl ContextGraphics for Canvas {}
+
+impl InactiveContextGraphics for Canvas {
+    fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
+        {
+            let state = self.state.read().unwrap();
+            state.root_frame.as_ref().unwrap().show();
+            let cloned = self.clone();
+            window().request_animation_frame(move |start_time| {
+                cloned.animate(start_time, start_time);
+            });
+        }
+        (cb)(self);
+    }
+}
+
+impl Clone for Canvas {
+    fn clone(&self) -> Canvas {
+        Canvas {
+            state: self.state.clone(),
+        }
     }
 }
 
 impl ContextualGraphics for Canvas {
-    type Context = Canvas;
-    fn start(self, root: CanvasFrame) -> Self::Context {
+    fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics> {
         {
             let mut state = self.state.write().unwrap();
             state.root_frame = Some(root);
@@ -616,8 +631,7 @@ impl ContextualGraphics for Canvas {
 }
 
 impl Graphics for Canvas {
-    type Frame = CanvasFrame;
-    fn frame(&self) -> CanvasFrame {
+    fn frame(&self) -> Box<dyn Frame> {
         CanvasFrame::new()
     }
 }
@@ -647,15 +661,7 @@ impl Canvas {
     }
 }
 
-impl Clone for Canvas {
-    fn clone(&self) -> Canvas {
-        Canvas {
-            state: self.state.clone(),
-        }
-    }
-}
-
-pub(crate) fn new() -> impl ContextualGraphics {
+pub(crate) fn new() -> Box<dyn ContextualGraphics> {
     document()
         .head()
         .unwrap()
@@ -699,5 +705,5 @@ canvas {
             .set((body.offset_width().into(), body.offset_height().into()).into());
     });
 
-    gfx
+    Box::new(gfx)
 }
