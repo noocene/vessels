@@ -159,15 +159,19 @@ impl CanvasFrame {
             let scale = (size + shadow.spread) / size;
             state.context.begin_path();
             let segments = entity.segments.iter();
-            let offset: Vector = (300., 300.).into();
+            let offset: Vector = (
+                state.viewport.size.x + state.viewport.position.x,
+                state.viewport.size.y + state.viewport.position.y,
+            )
+                .into();
+            let new_size = size + shadow.spread;
+            let scale_offset = (size - new_size) / 2.;
+            state.context.translate(scale_offset.x, scale_offset.y);
             state.context.scale(scale.x, scale.y);
             state.context.move_to(-offset.x, -offset.y);
             state
                 .context
                 .translate(-offset.x / scale.x, -offset.y / scale.y);
-            let bounds = entity.bounds();
-            let tx = (scale - 1.) * bounds.size * -1.;
-            state.context.translate(tx.x, tx.y);
             segments.for_each(|segment| match segment {
                 Segment::LineTo(point) => {
                     state.context.line_to(point.x, point.y);
@@ -204,6 +208,11 @@ impl CanvasFrame {
             state.context.set_fill_style_color("rgba(255,255,255,1)");
             state.context.fill(FillRule::NonZero);
         }
+        state.context.restore();
+        state.context.save();
+        state.context.transform(
+            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+        );
         state.context.set_shadow_color("rgba(255,255,255,0)");
     }
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
