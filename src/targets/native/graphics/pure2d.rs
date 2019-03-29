@@ -8,13 +8,19 @@ use crate::util::ObserverCell;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
 
 use glutin::{ContextTrait, ControlFlow};
 
 use cairo::{Format, ImageSurface};
 
-type CairoImage = ImageSurface;
+use glib::SendValue;
+
+type CairoSurface = SendValue;
+
+struct CairoImage(Arc<Mutex<CairoSurface>>);
+
+type CairoContext = SendValue;
 
 impl ImageRepresentation for CairoImage {
     fn get_size(&self) -> Vector {
@@ -46,15 +52,15 @@ impl ImageRepresentation for CairoImage {
 }
 
 struct CairoFrameState {
-    context: cairo::Context,
-    surface: ImageSurface,
+    context: SendValue,
+    surface: CairoImage,
     contents: Vec<CairoObject>,
     viewport: Rect,
     size: Vector,
 }
 
 struct CairoFrame {
-    state: Arc<RwLock<CairoFrameState>>,
+    state: Arc<Mutex<CairoFrameState>>,
 }
 
 impl CairoFrame {
@@ -187,6 +193,13 @@ struct WindowState {
     root_frame: Option<CairoFrame>,
     event_handler: EventHandler,
     size: ObserverCell<Vector>,
+}
+
+impl Ticker for Window {
+    fn bind<F>(&mut self, handler: F)
+    where
+        F: FnMut(f64) + 'static + Send + Sync
+    {}
 }
 
 impl Rasterizer for Window {
