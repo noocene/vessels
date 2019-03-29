@@ -22,6 +22,12 @@ pub enum Weight {
     Bold,
     /// A heavy/black font weight.
     Heavy,
+    /// A slightly bold font weight.
+    Medium,
+    /// An extra-bold font weight.
+    ExtraBold,
+    /// A somewhat bold font weight.
+    SemiBold,
 }
 
 /// Specifies the type of text wrap used.

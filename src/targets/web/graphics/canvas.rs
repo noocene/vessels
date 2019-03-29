@@ -364,10 +364,13 @@ impl CanvasFrame {
                 Font::SystemFont => {
                     format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
                         Weight::Normal => "400",
-                        Weight::Bold => "500",
-                        Weight::Heavy => "700",
+                        Weight::Medium => "500",
+                        Weight::SemiBold => "600",
+                        Weight::Bold => "700",
+                        Weight::ExtraBold => "800",
+                        Weight::Heavy => "900",
                         Weight::Thin => "200",
-                        Weight::Light => "200",
+                        Weight::Light => "300",
                         Weight::Hairline => "100"
                     }, input.size)
                 }
