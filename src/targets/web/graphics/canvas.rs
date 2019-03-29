@@ -201,10 +201,10 @@ impl CanvasFrame {
                 .set_shadow_color(&shadow.color.to_rgba_color());
             state
                 .context
-                .set_shadow_offset_x(shadow.offset.x + offset.x * 2.);
+                .set_shadow_offset_x((shadow.offset.x + offset.x) * 2.);
             state
                 .context
-                .set_shadow_offset_y(shadow.offset.y + offset.y * 2.);
+                .set_shadow_offset_y((shadow.offset.y + offset.y) * 2.);
             state.context.set_fill_style_color("rgba(255,255,255,1)");
             state.context.fill(FillRule::NonZero);
         }
