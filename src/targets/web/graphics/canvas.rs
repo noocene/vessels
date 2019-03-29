@@ -116,7 +116,6 @@ struct CanvasFrameState {
     pixel_ratio: f64,
     viewport: Rect,
     size: Vector,
-    layered_shadows_unsupported: bool,
 }
 
 impl Drop for CanvasFrameState {
@@ -139,11 +138,6 @@ impl CanvasFrame {
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
         Box::new(CanvasFrame {
             state: Arc::new(RwLock::new(CanvasFrameState {
-                layered_shadows_unsupported: js! {
-                    return !@{&context}.filter;
-                }
-                .try_into()
-                .unwrap(),
                 canvas,
                 pixel_ratio: window().device_pixel_ratio(),
                 context,
@@ -153,6 +147,74 @@ impl CanvasFrame {
             })),
         })
     }
+    fn draw_shadows(&self, matrix: [f64; 6], entity: &Path) {
+        let state = self.state.read().unwrap();
+        for shadow in &entity.shadows {
+            state.context.restore();
+            state.context.save();
+            state.context.transform(
+                matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+            );
+            let size = entity.bounds().size;
+            let scale = (size + shadow.spread) / size;
+            state.context.begin_path();
+            let segments = entity.segments.iter();
+            let offset: Vector = (
+                state.viewport.size.x + state.viewport.position.x,
+                state.viewport.size.y + state.viewport.position.y,
+            )
+                .into();
+            let new_size = size + shadow.spread;
+            let scale_offset = (size - new_size) / 2.;
+            state.context.translate(scale_offset.x, scale_offset.y);
+            state.context.scale(scale.x, scale.y);
+            state.context.move_to(-offset.x, -offset.y);
+            state
+                .context
+                .translate(-offset.x / scale.x, -offset.y / scale.y);
+            segments.for_each(|segment| match segment {
+                Segment::LineTo(point) => {
+                    state.context.line_to(point.x, point.y);
+                }
+                Segment::MoveTo(point) => {
+                    state.context.move_to(point.x, point.y);
+                }
+                Segment::CubicTo(point, handle_1, handle_2) => {
+                    state.context.bezier_curve_to(
+                        handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
+                    );
+                }
+                Segment::QuadraticTo(point, handle) => {
+                    state
+                        .context
+                        .quadratic_curve_to(handle.x, handle.y, point.x, point.y);
+                }
+            });
+            if entity.closed {
+                state.context.close_path();
+            }
+            state
+                .context
+                .set_shadow_blur(shadow.blur * state.pixel_ratio);
+            state
+                .context
+                .set_shadow_color(&shadow.color.to_rgba_color());
+            state
+                .context
+                .set_shadow_offset_x(shadow.offset.x + offset.x * 2.);
+            state
+                .context
+                .set_shadow_offset_y(shadow.offset.y + offset.y * 2.);
+            state.context.set_fill_style_color("rgba(255,255,255,1)");
+            state.context.fill(FillRule::NonZero);
+        }
+        state.context.restore();
+        state.context.save();
+        state.context.transform(
+            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+        );
+        state.context.set_shadow_color("rgba(255,255,255,0)");
+    }
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
         state.context.restore();
@@ -160,42 +222,8 @@ impl CanvasFrame {
         state.context.transform(
             matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
         );
+        self.draw_shadows(matrix, &entity);
         state.context.begin_path();
-        if state.layered_shadows_unsupported {
-            if !entity.shadows.is_empty() {
-                let shadow = entity.shadows[0];
-                state.context.set_shadow_blur(shadow.blur);
-                state
-                    .context
-                    .set_shadow_color(&shadow.color.to_rgba_color());
-                state.context.set_shadow_offset_x(shadow.offset.x);
-                state.context.set_shadow_offset_y(shadow.offset.y);
-            } else {
-                state.context.set_shadow_color("rgba(0,0,0,0)");
-            }
-        } else if !entity.shadows.is_empty() {
-            let filter = entity
-                .shadows
-                .iter()
-                .map(|shadow| {
-                    format!(
-                        "drop-shadow({}px {}px {}px {})",
-                        shadow.offset.x,
-                        shadow.offset.y,
-                        shadow.blur,
-                        shadow.color.to_rgba_color()
-                    )
-                })
-                .collect::<Vec<String>>()
-                .join(" ");
-            js! {
-                @{&state.context}.filter = @{filter};
-            };
-        } else {
-            js! {
-                @{&state.context}.filter = "";
-            };
-        }
         let segments = entity.segments.iter();
         state.context.move_to(0., 0.);
         segments.for_each(|segment| match segment {
