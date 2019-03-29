@@ -1,4 +1,4 @@
-use crate::graphics_2d::{Color, ImageRepresentation, Vector};
+use crate::graphics_2d::{Color, ImageRepresentation, Rect, Vector};
 
 use crate::errors::Error;
 
@@ -61,6 +61,8 @@ pub struct Shadow {
     pub offset: Vector,
     /// The blur radius, in fractional pixels, of the shadow.
     pub blur: f64,
+    /// The spread radius, in fractional pixels, of the shadow.
+    pub spread: f64,
 }
 
 impl Shadow {
@@ -70,11 +72,17 @@ impl Shadow {
             color,
             offset: Vector::default(),
             blur: 0.,
+            spread: 0.,
         }
     }
     /// Sets the blur radius.
     pub fn blur(mut self, amount: f64) -> Self {
         self.blur = amount;
+        self
+    }
+    /// Sets the spread radius.
+    pub fn spread(mut self, amount: f64) -> Self {
+        self.spread = amount;
         self
     }
     /// Sets the offset.
@@ -235,6 +243,48 @@ impl Path {
             })
             .collect();
         self
+    }
+    /// Computes an axis-aligned local coordinates bounding box of the path.
+    pub fn bounds(&self) -> Rect {
+        let mut top_left = Vector::default();
+        let mut bottom_right = Vector::default();
+        let mut update = |point: &Vector| {
+            if point.x < top_left.x {
+                top_left.x = point.x;
+            }
+            if point.y < top_left.y {
+                top_left.y = point.y;
+            }
+            if point.x > bottom_right.x {
+                bottom_right.x = point.x;
+            }
+            if point.y > bottom_right.y {
+                bottom_right.y = point.y;
+            }
+        };
+        for segment in &self.segments {
+            match segment {
+                Segment::CubicTo(point, handle_1, handle_2) => {
+                    update(point);
+                    update(handle_1);
+                    update(handle_2);
+                }
+                Segment::QuadraticTo(point, handle) => {
+                    update(point);
+                    update(handle);
+                }
+                Segment::MoveTo(point) => {
+                    update(point);
+                }
+                Segment::LineTo(point) => {
+                    update(point);
+                }
+            }
+        }
+        Rect::new(
+            (top_left.x, top_left.y),
+            (bottom_right.x - top_left.x, bottom_right.y - top_left.y),
+        )
     }
 }
 
