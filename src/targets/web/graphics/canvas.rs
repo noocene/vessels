@@ -473,7 +473,7 @@ impl CanvasFrame {
             full_width = shorter_width;
             text != ""
         } {}
-        spaced_width
+        spaced_width - spacing
     }
     fn draw_text(&self, matrix: [f64; 6], input: &Text) {
         let state = self.state.read().unwrap();
