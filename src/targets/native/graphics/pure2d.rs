@@ -7,28 +7,59 @@ use crate::util::ObserverCell;
 
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
-use std::rc::Rc;
 use std::sync::{Arc, RwLock, Mutex};
+use std::any::Any;
+use std::ops::Deref;
 
 use glutin::{ContextTrait, ControlFlow};
 
 use cairo::{Format, ImageSurface};
 
-use glib::SendValue;
+struct CairoSurface(ImageSurface);
 
-type CairoSurface = SendValue;
+struct CairoContext(cairo::Context);
+
+unsafe impl Send for CairoSurface {}
+
+impl Deref for CairoSurface {
+    type Target = ImageSurface;
+
+    fn deref(&self) -> &ImageSurface {
+        &self.0
+    }
+}
+
+unsafe impl Send for CairoContext {}
+
+impl Deref for CairoContext {
+    type Target = cairo::Context;
+
+    fn deref(&self) -> &cairo::Context {
+        &self.0
+    }
+}
 
 struct CairoImage(Arc<Mutex<CairoSurface>>);
 
-type CairoContext = SendValue;
+impl CairoImage {
+    fn new(surface: CairoSurface) -> CairoImage {
+        CairoImage(Arc::new(Mutex::new(surface)))
+    }
+}
+
+impl Clone for CairoImage {
+    fn clone(&self) -> Self {
+        CairoImage(self.0.clone())
+    }
+}
 
 impl ImageRepresentation for CairoImage {
     fn get_size(&self) -> Vector {
-        (self.get_width() as f64, self.get_height() as f64).into()
+        (self.0.lock().unwrap().get_width() as f64, self.0.lock().unwrap().get_height() as f64).into()
     }
 
     fn box_clone(&self) -> Box<dyn ImageRepresentation> {
-        Box::new(self.clone())
+        Box::new(CairoImage(self.0.clone()))
     }
 
     fn as_texture(&self) -> Image<Color, Texture2D> {
@@ -42,17 +73,21 @@ impl ImageRepresentation for CairoImage {
     }
 
     fn from_texture(texture: Image<Color, Texture2D>) -> CairoImage {
-        ImageSurface::create(
+        CairoImage::new(CairoSurface(ImageSurface::create(
             Format::ARgb32,
             texture.format.width as i32,
             texture.format.height as i32,
         )
-        .unwrap()
+        .unwrap()))
+    }
+
+    fn as_any(&self) -> Box<dyn Any> {
+        Box::new(CairoImage(self.0.clone()))
     }
 }
 
 struct CairoFrameState {
-    context: SendValue,
+    context: Mutex<CairoContext>,
     surface: CairoImage,
     contents: Vec<CairoObject>,
     viewport: Rect,
@@ -60,28 +95,30 @@ struct CairoFrameState {
 }
 
 struct CairoFrame {
-    state: Arc<Mutex<CairoFrameState>>,
+    state: Arc<RwLock<CairoFrameState>>,
 }
 
 impl CairoFrame {
-    fn new() -> CairoFrame {
+    fn new() -> Box<CairoFrame> {
         let size = Vector::default();
         let surface = ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
-        CairoFrame {
+        Box::new(CairoFrame {
             state: Arc::new(RwLock::new(CairoFrameState {
-                context: cairo::Context::new(&surface),
-                surface: surface,
+                context: Mutex::new(CairoContext(cairo::Context::new(&surface))),
+                surface: CairoImage::new(CairoSurface(surface)),
                 contents: vec![],
-                size: Cell::from(size),
-                viewport: Cell::from(Rect {
+                size: size,
+                viewport: Rect {
                     size: Vector::default(),
                     position: (0., 0.).into(),
-                }),
+                },
             })),
-        }
+        })
     }
 
-    fn draw(&self) {}
+    fn surface(&self) -> CairoImage {
+        self.state.read().unwrap().surface.clone()
+    }
 }
 
 impl Clone for CairoFrame {
@@ -93,42 +130,56 @@ impl Clone for CairoFrame {
 }
 
 impl Frame for CairoFrame {
-    type Image = CairoImage;
-    type Object = CairoObject;
-
-    fn add<T, U>(&mut self, rasterizable: T, orientation: U) -> Box<dyn Object>
-    where
-        T: Into<Rasterizable>,
-        U: Into<Transform>,
-    {
-        let object = CairoObject::new(rasterizable.into(), orientation.into());
+    fn add(&mut self, rasterizable: Rasterizable, orientation: Transform) -> Box<dyn Object> {
+        let object = CairoObject::new(rasterizable, orientation);
         let mut state = self.state.write().unwrap();
         state.contents.push(object.clone());
         Box::new(object)
     }
 
     fn set_viewport(&self, viewport: Rect) {
-        let state = self.state.borrow();
-        state.viewport.set(viewport);
+        let mut state = self.state.write().unwrap();
+        state.viewport = viewport;
     }
 
-    fn resize<T>(&self, size: T)
-    where
-        T: Into<Vector>,
-    {
-        let state = self.state.borrow();
+    fn resize(&self, size: Vector) {
+        let mut state = self.state.write().unwrap();
         let size = size.into();
-        state.size.set(size);
+        state.size = size;
         //TODO: Actual resizing
     }
+
     fn get_size(&self) -> Vector {
-        let state = self.state.borrow();
-        state.size.get()
+        let state = self.state.read().unwrap();
+        state.size
     }
-    fn to_image(&self) -> Box<CairoImage> {
-        let state = self.state.borrow();
+
+    fn to_image(&self) -> Box<dyn ImageRepresentation> {
+        let state = self.state.write().unwrap();
         self.draw();
         Box::new(state.surface.clone())
+    }
+
+    fn measure(&self, input: Text) -> Vector {
+        //temporary
+        Vector {
+            x: 5.0,
+            y: 5.0,
+        }
+    }
+
+    fn box_clone(&self) -> Box<dyn Frame> {
+        Box::new(CairoFrame {
+            state: self.state.clone(),
+        })
+    }
+
+    fn show(&self) {
+        //show
+    }
+
+    fn draw(&self) {
+        //draw
     }
 }
 
@@ -190,76 +241,81 @@ struct Window {
 }
 
 struct WindowState {
-    root_frame: Option<CairoFrame>,
+    root_frame: Option<Box<dyn Frame>>,
     event_handler: EventHandler,
     size: ObserverCell<Vector>,
 }
 
 impl Ticker for Window {
-    fn bind<F>(&mut self, handler: F)
-    where
-        F: FnMut(f64) + 'static + Send + Sync
-    {}
+    fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>) {
+    }
 }
 
 impl Rasterizer for Window {
-    type Image = CairoImage;
-
     //todo pepega, make sure to update with dpr
-    fn rasterize<T>(&self, input: T, size: Vector) -> Box<dyn ImageRepresentation>
-    where
-        T: Into<Rasterizable>,
-    {
-        let input = input.into();
-        let surface = match input {
-            Rasterizable::Text(input) => {
-                let mut lines: Vec<String> = input
-                    .content
-                    .split('\n')
-                    .map(std::borrow::ToOwned::to_owned)
-                    .collect();
-                let height = (f64::from(input.line_height)) as i32
-                    * ((lines.len() - 1).max(0) as i32)
-                    + (f64::from(input.size)) as i32;
-                let width = match input.max_width {
-                    None => {
-                        //todo pepega
-                        5
-                    }
-                    Some(max_width) => (f64::from(max_width)) as i32,
-                };
-                ImageSurface::create(Format::ARgb32, height, width).unwrap()
-            }
-        };
-        Box::new(surface)
+    fn rasterize(&self, input: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
+        let mut frame = CairoFrame::new();
+        frame.resize(size);
+        frame.set_viewport(Rect::new(Vector::default(), size));
+        frame.add(input, Vector::from((0., 0.)).into());
+        frame.draw();
+        Box::new(frame.surface())
     }
 }
 
 impl Context for Window {
-    type Mouse = native::input::Mouse;
-    type Keyboard = native::input::Keyboard;
-    fn mouse(&self) -> Self::Mouse {
+    fn mouse(&self) -> Box<dyn Mouse>{
         native::input::Mouse::new()
     }
-    fn keyboard(&self) -> Self::Keyboard {
+    fn keyboard(&self) -> Box<dyn Keyboard> {
         native::input::Keyboard::new()
     }
 }
 
-impl ContextGraphics for Window {
-    fn run(self) {}
+impl ContextGraphics for Window {}
+
+impl InactiveContextGraphics for Window {
+    fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
+        let mut el = glutin::EventsLoop::new();
+        let wb = glutin::WindowBuilder::new();
+        let windowed_context = glutin::ContextBuilder::new()
+            .build_windowed(wb, &el)
+            .unwrap();
+        unsafe { windowed_context.make_current().unwrap() }
+
+        let mut running = true;
+        while running {
+            el.poll_events(|event| {
+                //temporary event handling
+                println!("{:?}", event);
+                match event {
+                    glutin::Event::WindowEvent { event, .. } => match event {
+                        glutin::WindowEvent::CloseRequested => running = false,
+                        glutin::WindowEvent::Resized(logical_size) => {
+                            let dpi_factor = windowed_context.get_hidpi_factor();
+                            windowed_context.resize(logical_size.to_physical(dpi_factor));
+                        }
+                        _ => (),
+                    },
+                    _ => (),
+                }
+            });
+        }
+    }
 }
 
 impl ContextualGraphics for Window {
-    type Context = Window;
-    fn start(self, root: CairoFrame) -> Self::Context {
+    fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics> {
+        {
+            let mut state = self.state.write().unwrap();
+            state.root_frame = Some(root);
+        }
         self
     }
 }
 
 impl Graphics for Window {
-    type Frame = CairoFrame;
-    fn frame(&self) -> CairoFrame {
+    fn frame(&self) -> Box<dyn Frame> {
         CairoFrame::new()
     }
 }
@@ -272,32 +328,7 @@ impl Clone for Window {
     }
 }
 
-pub(crate) fn new() -> impl ContextualGraphics {
-    let mut el = glutin::EventsLoop::new();
-    let wb = glutin::WindowBuilder::new();
-    let windowed_context = glutin::ContextBuilder::new()
-        .build_windowed(wb, &el)
-        .unwrap();
-    unsafe { windowed_context.make_current().unwrap() }
-
-    let mut running = true;
-    while running {
-        el.poll_events(|event| {
-            //temporary event handling
-            println!("{:?}", event);
-            match event {
-                glutin::Event::WindowEvent { event, .. } => match event {
-                    glutin::WindowEvent::CloseRequested => running = false,
-                    glutin::WindowEvent::Resized(logical_size) => {
-                        let dpi_factor = windowed_context.get_hidpi_factor();
-                        windowed_context.resize(logical_size.to_physical(dpi_factor));
-                    }
-                    _ => (),
-                },
-                _ => (),
-            }
-        });
-    }
+pub(crate) fn new() -> Box<dyn ContextualGraphics> {
     let event_handler = EventHandler::new();
 
     let window = Window {
@@ -308,5 +339,5 @@ pub(crate) fn new() -> impl ContextualGraphics {
         })),
     };
 
-    window
+    Box::new(window)
 }

@@ -16,11 +16,8 @@ pub(crate) struct Mouse {
 
 impl input::Source for Mouse {
     type Event = Event;
-    fn bind<F>(&self, handler: F)
-    where
-        F: Fn(Event) + 'static,
-    {
-        self.state.borrow_mut().handlers.push(Box::new(handler));
+    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static>) {
+        self.state.borrow_mut().handlers.push(handler);
     }
 }
 
@@ -31,7 +28,7 @@ impl input::Mouse for Mouse {
 }
 
 impl Mouse {
-    pub(crate) fn new() -> Mouse {
+    pub(crate) fn new() -> Box<dyn input::Mouse> {
         let mouse = Mouse {
             state: Rc::new(RefCell::new(MouseState {
                 handlers: vec![],
@@ -39,7 +36,7 @@ impl Mouse {
             })),
         };
         mouse.initialize();
-        mouse
+        Box::new(mouse)
     }
     fn initialize(&self) {
     }

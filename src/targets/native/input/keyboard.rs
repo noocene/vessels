@@ -18,11 +18,8 @@ pub(crate) struct Keyboard {
 
 impl input::Source for Keyboard {
     type Event = Event;
-    fn bind<F>(&self, handler: F)
-    where
-        F: Fn(Event) + 'static,
-    {
-        self.state.borrow_mut().handlers.push(Box::new(handler));
+    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static>) {
+        self.state.borrow_mut().handlers.push(handler);
     }
 }
 
@@ -43,7 +40,7 @@ impl keyboard::State for KeyboardState {
 }
 
 impl Keyboard {
-    pub(crate) fn new() -> Keyboard {
+    pub(crate) fn new() -> Box<dyn input::Keyboard> {
         let keyboard = Keyboard {
             state: Rc::new(RefCell::new(KeyboardState {
                 handlers: vec![],
@@ -51,7 +48,7 @@ impl Keyboard {
             })),
         };
         keyboard.initialize();
-        keyboard
+        Box::new(keyboard)
     }
     fn initialize(&self) {
     }
