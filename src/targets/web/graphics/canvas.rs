@@ -513,7 +513,6 @@ impl CanvasFrame {
         state.canvas.clone()
     }
     fn wrap_text(&self, input: &Text) -> Vec<String> {
-        let state = self.state.read().unwrap();
         let mut lines: Vec<String> = input
             .content
             .split('\n')
