@@ -413,6 +413,34 @@ impl CanvasFrame {
             .context
             .set_fill_style_color(&input.color.to_rgba_color());
     }
+    fn fill_text_with_spacing(&self, text: &'_ str, position: Vector, spacing: f64) {
+        let state = self.state.read().unwrap();
+        let mut full_width = state.context.measure_text(&text).unwrap().get_width();
+        let mut position = position;
+        let mut text = text.to_owned();
+        let mut text_iter = text.chars();
+        while {
+            let head = text_iter.next().unwrap();
+            text = text_iter
+                .map(|character| character.to_string())
+                .collect::<Vec<String>>()
+                .join("");
+            text_iter = text.chars();
+            state
+                .context
+                .fill_text(&head.to_string(), position.x, position.y, None);
+
+            let shorter_width = if text == "" {
+                0.
+            } else {
+                state.context.measure_text(&text).unwrap().get_width()
+            };
+            let character_width = full_width - shorter_width;
+            position.x += character_width + spacing;
+            full_width = shorter_width;
+            text != ""
+        } {}
+    }
     fn draw_text(&self, matrix: [f64; 6], input: &Text) {
         let state = self.state.read().unwrap();
         state.context.restore();
@@ -430,12 +458,20 @@ impl CanvasFrame {
             lines = self.wrap_text(&input);
         }
         for (index, line) in lines.iter().enumerate() {
-            state.context.fill_text(
-                line,
-                0.,
-                (u32::from(input.line_height) * index as u32).into(),
-                None,
-            );
+            if input.letter_spacing != 0. {
+                self.fill_text_with_spacing(
+                    line,
+                    (0., (u32::from(input.line_height) * index as u32).into()).into(),
+                    input.letter_spacing,
+                );
+            } else {
+                state.context.fill_text(
+                    line,
+                    0.,
+                    (u32::from(input.line_height) * index as u32).into(),
+                    None,
+                );
+            }
         }
     }
     fn element(&self) -> CanvasElement {

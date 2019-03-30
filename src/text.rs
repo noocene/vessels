@@ -73,6 +73,8 @@ pub struct Text {
     pub wrap: Wrap,
     /// The font weight used.
     pub weight: Weight,
+    /// The letter spacing of the text.
+    pub letter_spacing: f64,
 }
 
 impl Text {
@@ -102,6 +104,11 @@ impl Text {
     /// Sets the line height of the text.
     pub fn with_line_height(mut self, line_height: u16) -> Self {
         self.line_height = line_height;
+        self
+    }
+    /// Sets the letter spacing of the text.
+    pub fn with_letter_spacing(mut self, letter_spacing: f64) -> Self {
+        self.letter_spacing = letter_spacing;
         self
     }
     /// Sets the max width of the text.
@@ -141,6 +148,7 @@ impl Default for Text {
             italic: false,
             max_width: None,
             align: Align::Start,
+            letter_spacing: 0.,
             line_height: 26,
             wrap: Wrap::None,
             weight: Weight::Normal,
