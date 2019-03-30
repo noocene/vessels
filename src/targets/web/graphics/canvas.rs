@@ -414,6 +414,9 @@ impl CanvasFrame {
             .set_fill_style_color(&input.color.to_rgba_color());
     }
     fn fill_text_with_spacing(&self, text: &'_ str, position: Vector, spacing: f64) {
+        if text == "" {
+            return;
+        }
         let state = self.state.read().unwrap();
         let mut full_width = state.context.measure_text(&text).unwrap().get_width();
         let mut position = position;
@@ -440,6 +443,37 @@ impl CanvasFrame {
             full_width = shorter_width;
             text != ""
         } {}
+    }
+    fn measure_text_with_spacing(&self, text: &'_ str, spacing: f64) -> f64 {
+        if text == "" {
+            return 0.;
+        }
+        let state = self.state.read().unwrap();
+        let mut full_width = state.context.measure_text(&text).unwrap().get_width();
+        if spacing == 0. {
+            return full_width;
+        }
+        let mut spaced_width = 0.;
+        let mut text = text.to_owned();
+        let mut text_iter = text.chars();
+        while {
+            text_iter.next().unwrap();
+            text = text_iter
+                .map(|character| character.to_string())
+                .collect::<Vec<String>>()
+                .join("");
+            text_iter = text.chars();
+            let shorter_width = if text == "" {
+                0.
+            } else {
+                state.context.measure_text(&text).unwrap().get_width()
+            };
+            let character_width = full_width - shorter_width;
+            spaced_width += character_width + spacing;
+            full_width = shorter_width;
+            text != ""
+        } {}
+        spaced_width
     }
     fn draw_text(&self, matrix: [f64; 6], input: &Text) {
         let state = self.state.read().unwrap();
@@ -499,12 +533,10 @@ impl CanvasFrame {
                         Some(line) => {
                             let words = line.split(' ').collect::<Vec<&str>>();
                             for (index, word) in words.iter().cloned().enumerate() {
-                                if state
-                                    .context
-                                    .measure_text(&(test_string.clone() + word))
-                                    .unwrap()
-                                    .get_width()
-                                    <= f64::from(input.max_width.unwrap())
+                                if self.measure_text_with_spacing(
+                                    &(test_string.clone() + word),
+                                    input.letter_spacing,
+                                ) <= f64::from(input.max_width.unwrap())
                                 {
                                     test_string += &format!(" {}", word);
                                 } else {
@@ -599,7 +631,6 @@ impl Frame for CanvasFrame {
     }
     fn measure(&self, input: Text) -> Vector {
         self.update_text_style(&input);
-        let state = self.state.read().unwrap();
         if input.max_width.is_some() {
             let lines = self.wrap_text(&input);
             (
@@ -610,11 +641,7 @@ impl Frame for CanvasFrame {
                 .into()
         } else {
             (
-                state
-                    .context
-                    .measure_text(&input.content)
-                    .unwrap()
-                    .get_width(),
+                self.measure_text_with_spacing(&input.content, input.letter_spacing),
                 f64::from(input.size),
             )
                 .into()
