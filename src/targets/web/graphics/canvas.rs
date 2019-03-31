@@ -7,7 +7,7 @@ use crate::input::Context;
 use crate::input::{Keyboard, Mouse};
 use crate::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
 use crate::targets::web;
-use crate::text::{Align, Font, Text, Weight, Wrap};
+use crate::text::{Align, Font, Origin, Text, Weight, Wrap};
 use crate::util::ObserverCell;
 
 use stdweb::traits::{IChildNode, IElement, IEvent, IEventTarget, IHtmlElement, INode};
@@ -408,7 +408,10 @@ impl CanvasFrame {
             Align::End => TextAlign::End,
             Align::Start => TextAlign::Start,
         });
-        state.context.set_text_baseline(TextBaseline::Hanging);
+        state.context.set_text_baseline(match input.origin {
+            Origin::Top => TextBaseline::Top,
+            Origin::Baseline => TextBaseline::Alphabetic,
+        });
         state
             .context
             .set_fill_style_color(&input.color.to_rgba_color());

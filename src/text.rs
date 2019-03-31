@@ -50,6 +50,15 @@ pub enum Align {
     End,
 }
 
+/// Specifies the origin of text.
+#[derive(Clone, Copy, Debug)]
+pub enum Origin {
+    /// Places the origin at the start of the alphabetic baseline.
+    Baseline,
+    /// Places the origin at the upper justification-start corner of the rendered text.
+    Top,
+}
+
 /// Provides an abstraction for representing text content.
 #[derive(Clone, Debug)]
 pub struct Text {
@@ -75,6 +84,8 @@ pub struct Text {
     pub weight: Weight,
     /// The letter spacing of the text.
     pub letter_spacing: f64,
+    /// The origin of the rendered text.
+    pub origin: Origin,
 }
 
 impl Text {
@@ -136,6 +147,11 @@ impl Text {
         self.weight = weight;
         self
     }
+    /// Sets text origin to be the baseline start.
+    pub fn with_baseline_origin(mut self) -> Self {
+        self.origin = Origin::Baseline;
+        self
+    }
 }
 
 impl Default for Text {
@@ -151,6 +167,7 @@ impl Default for Text {
             letter_spacing: 0.,
             line_height: 26,
             wrap: Wrap::None,
+            origin: Origin::Top,
             weight: Weight::Normal,
         }
     }
