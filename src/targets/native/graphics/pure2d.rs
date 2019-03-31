@@ -13,6 +13,7 @@ use std::ops::Deref;
 use std::ffi::c_void;
 
 use glutin::{ContextTrait, ControlFlow};
+use glutin::dpi::LogicalSize;
 
 use cairo::{Format, ImageSurface};
 
@@ -149,7 +150,9 @@ impl Frame for CairoFrame {
         let mut state = self.state.write().unwrap();
         let size = size.into();
         state.size = size;
-        //TODO: Actual resizing
+        let surface = ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
+        state.context = Mutex::new(CairoContext(cairo::Context::new(&surface)));
+        state.surface = CairoImage::new(CairoSurface(surface));
     }
 
     fn get_size(&self) -> Vector {
@@ -158,7 +161,7 @@ impl Frame for CairoFrame {
     }
 
     fn to_image(&self) -> Box<dyn ImageRepresentation> {
-        let state = self.state.write().unwrap();
+        let state = self.state.read().unwrap();
         self.draw();
         Box::new(state.surface.clone())
     }
@@ -182,7 +185,10 @@ impl Frame for CairoFrame {
     }
 
     fn draw(&self) {
-        //draw
+        let state = self.state.read().unwrap();
+        let context = state.context.lock().unwrap();
+        context.set_source_rgb(1.0, 0.0, 0.0);
+        context.paint();
     }
 }
 
@@ -256,6 +262,7 @@ impl Ticker for Window {
 
 impl Rasterizer for Window {
     fn rasterize(&self, input: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
+        //this is probably wrong, just temp
         let mut frame = CairoFrame::new();
         frame.resize(size);
         frame.set_viewport(Rect::new(Vector::default(), size));
@@ -278,18 +285,23 @@ impl ContextGraphics for Window {}
 
 impl InactiveContextGraphics for Window {
     fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
+        let size = self.state.read().unwrap().size.get().clone();
+        self.state.read().unwrap().root_frame.as_ref().unwrap().resize(size);
         let mut el = glutin::EventsLoop::new();
-        let wb = glutin::WindowBuilder::new();
+        let wb = glutin::WindowBuilder::new().with_dimensions(LogicalSize::new(size.x, size.y));
         let windowed_context = glutin::ContextBuilder::new()
             .build_windowed(wb, &el)
             .unwrap();
+
         unsafe {
             windowed_context.make_current().unwrap();
             gl::load_with(|symbol| windowed_context.get_proc_address(symbol) as *const _);
         }
 
         let mut texture_id: GLuint = 0;
-        unsafe { gl::GenTextures(1, &mut texture_id) }
+        unsafe {
+            gl::GenTextures(1, &mut texture_id);
+        }
 
         let mut running = true;
         while running {
@@ -311,12 +323,16 @@ impl InactiveContextGraphics for Window {
             {
                 let state = self.state.read().unwrap();
                 let root_frame = state.root_frame.as_ref().unwrap();
-                let surface_pointer = root_frame.to_image().as_any().downcast_ref::<CairoImage>().unwrap().0.lock().unwrap().to_raw_none() as *const c_void;
+                let image_any = root_frame.to_image().as_any();
+                let mut surface = image_any.downcast_ref::<CairoImage>().unwrap().0.lock().unwrap();
+                let surface_data = surface.get_data().unwrap();
+                let surface_pointer = surface_data.deref() as *const _ as *const c_void;
                 let size = root_frame.get_size();
 
                 unsafe {
-                    gl::BindTexture(gl::TEXTURE_2D, texture_id);
-                    gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA as i32, size.x as i32, size.y as i32, 0, gl::BGRA, gl::UNSIGNED_BYTE, surface_pointer);
+                    gl::Clear(gl::COLOR_BUFFER_BIT);
+                    gl::BindTexture(gl::TEXTURE_RECTANGLE, texture_id);
+                    gl::TexImage2D(gl::TEXTURE_RECTANGLE, 0, gl::RGBA as i32, size.x as i32, size.y as i32, 0, gl::BGRA, gl::UNSIGNED_BYTE, surface_pointer);
                 }
             }
             windowed_context.swap_buffers().unwrap();
@@ -351,7 +367,8 @@ impl Clone for Window {
 pub(crate) fn new() -> Box<dyn ContextualGraphics> {
     let window = Window {
         state: Arc::new(RwLock::new(WindowState {
-            size: ObserverCell::new((5.0, 10.0).into()),
+            //need to figure out how to select size, temp default
+            size: ObserverCell::new((700.0, 700.0).into()),
             event_handler: EventHandler::new(),
             root_frame: None,
         })),
