@@ -10,10 +10,13 @@ use std::cell::{Cell, RefCell};
 use std::sync::{Arc, RwLock, Mutex};
 use std::any::Any;
 use std::ops::Deref;
+use std::ffi::c_void;
 
 use glutin::{ContextTrait, ControlFlow};
 
 use cairo::{Format, ImageSurface};
+
+use gl::types::*;
 
 struct CairoSurface(ImageSurface);
 
@@ -252,7 +255,6 @@ impl Ticker for Window {
 }
 
 impl Rasterizer for Window {
-    //todo pepega, make sure to update with dpr
     fn rasterize(&self, input: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
         let mut frame = CairoFrame::new();
         frame.resize(size);
@@ -281,7 +283,13 @@ impl InactiveContextGraphics for Window {
         let windowed_context = glutin::ContextBuilder::new()
             .build_windowed(wb, &el)
             .unwrap();
-        unsafe { windowed_context.make_current().unwrap() }
+        unsafe {
+            windowed_context.make_current().unwrap();
+            gl::load_with(|symbol| windowed_context.get_proc_address(symbol) as *const _);
+        }
+
+        let mut texture_id: GLuint = 0;
+        unsafe { gl::GenTextures(1, &mut texture_id) }
 
         let mut running = true;
         while running {
@@ -300,6 +308,18 @@ impl InactiveContextGraphics for Window {
                     _ => (),
                 }
             });
+            {
+                let state = self.state.read().unwrap();
+                let root_frame = state.root_frame.as_ref().unwrap();
+                let surface_pointer = root_frame.to_image().as_any().downcast_ref::<CairoImage>().unwrap().0.lock().unwrap().to_raw_none() as *const c_void;
+                let size = root_frame.get_size();
+
+                unsafe {
+                    gl::BindTexture(gl::TEXTURE_2D, texture_id);
+                    gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA as i32, size.x as i32, size.y as i32, 0, gl::BGRA, gl::UNSIGNED_BYTE, surface_pointer);
+                }
+            }
+            windowed_context.swap_buffers().unwrap();
         }
     }
 }
@@ -329,12 +349,10 @@ impl Clone for Window {
 }
 
 pub(crate) fn new() -> Box<dyn ContextualGraphics> {
-    let event_handler = EventHandler::new();
-
     let window = Window {
         state: Arc::new(RwLock::new(WindowState {
             size: ObserverCell::new((5.0, 10.0).into()),
-            event_handler,
+            event_handler: EventHandler::new(),
             root_frame: None,
         })),
     };
