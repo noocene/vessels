@@ -708,7 +708,10 @@ impl Rasterizer for Canvas {
                     frame.set_viewport(Rect::new((0., -size.y), size));
                 }
                 Origin::Middle => {
-                    frame.set_viewport(Rect::new((0., -size.y / 2.), size));
+                    frame.set_viewport(Rect::new(
+                        (0., -size.y / (2. * window().device_pixel_ratio())),
+                        size,
+                    ));
                 }
             }
         }
