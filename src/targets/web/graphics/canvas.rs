@@ -699,8 +699,20 @@ struct CanvasState {
 impl Rasterizer for Canvas {
     fn rasterize(&self, input: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
         let mut frame = CanvasFrame::new();
+        if let Rasterizable::Text(text) = &input {
+            match &text.origin {
+                Origin::Top => {
+                    frame.set_viewport(Rect::new(Vector::default(), size));
+                }
+                Origin::Baseline => {
+                    frame.set_viewport(Rect::new((0., -size.y), size));
+                }
+                Origin::Middle => {
+                    frame.set_viewport(Rect::new((0., -size.y / 2.), size));
+                }
+            }
+        }
         frame.resize(size);
-        frame.set_viewport(Rect::new(Vector::default(), size));
         frame.add(input, Vector::from((0., 0.)).into());
         frame.draw();
         Box::new(frame.element())
