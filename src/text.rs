@@ -154,6 +154,11 @@ impl Text {
         self.origin = Origin::Baseline;
         self
     }
+    /// Sets text origin to be the middle of the rendered line.
+    pub fn with_middle_origin(mut self) -> Self {
+        self.origin = Origin::Middle;
+        self
+    }
 }
 
 impl Default for Text {
