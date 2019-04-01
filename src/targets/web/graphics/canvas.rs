@@ -540,7 +540,9 @@ impl CanvasFrame {
             el.textContent = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
             el.style.font = @{font};
             document.body.appendChild(el);
-            return el.offsetHeight;
+            let offsetHeight = el.offsetHeight;
+            el.remove();
+            return offsetHeight;
         })
         .try_into()
         .unwrap()
