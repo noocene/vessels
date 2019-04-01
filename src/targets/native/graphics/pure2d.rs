@@ -5,15 +5,15 @@ use crate::targets::native;
 use crate::text::*;
 use crate::util::ObserverCell;
 
+use std::any::Any;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
-use std::sync::{Arc, RwLock, Mutex};
-use std::any::Any;
-use std::ops::Deref;
 use std::ffi::c_void;
+use std::ops::Deref;
+use std::sync::{Arc, Mutex, RwLock};
 
-use glutin::{ContextTrait, ControlFlow};
 use glutin::dpi::LogicalSize;
+use glutin::{ContextTrait, ControlFlow};
 
 use cairo::{Format, ImageSurface};
 
@@ -59,7 +59,11 @@ impl Clone for CairoImage {
 
 impl ImageRepresentation for CairoImage {
     fn get_size(&self) -> Vector {
-        (self.0.lock().unwrap().get_width() as f64, self.0.lock().unwrap().get_height() as f64).into()
+        (
+            self.0.lock().unwrap().get_width() as f64,
+            self.0.lock().unwrap().get_height() as f64,
+        )
+            .into()
     }
 
     fn box_clone(&self) -> Box<dyn ImageRepresentation> {
@@ -77,12 +81,14 @@ impl ImageRepresentation for CairoImage {
     }
 
     fn from_texture(texture: Image<Color, Texture2D>) -> CairoImage {
-        CairoImage::new(CairoSurface(ImageSurface::create(
-            Format::ARgb32,
-            texture.format.width as i32,
-            texture.format.height as i32,
-        )
-        .unwrap()))
+        CairoImage::new(CairoSurface(
+            ImageSurface::create(
+                Format::ARgb32,
+                texture.format.width as i32,
+                texture.format.height as i32,
+            )
+            .unwrap(),
+        ))
     }
 
     fn as_any(&self) -> Box<dyn Any> {
@@ -168,10 +174,7 @@ impl Frame for CairoFrame {
 
     fn measure(&self, input: Text) -> Vector {
         //temporary
-        Vector {
-            x: 5.0,
-            y: 5.0,
-        }
+        Vector { x: 5.0, y: 5.0 }
     }
 
     fn box_clone(&self) -> Box<dyn Frame> {
@@ -256,8 +259,7 @@ struct WindowState {
 }
 
 impl Ticker for Window {
-    fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>) {
-    }
+    fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>) {}
 }
 
 impl Rasterizer for Window {
@@ -273,7 +275,7 @@ impl Rasterizer for Window {
 }
 
 impl Context for Window {
-    fn mouse(&self) -> Box<dyn Mouse>{
+    fn mouse(&self) -> Box<dyn Mouse> {
         native::input::Mouse::new()
     }
     fn keyboard(&self) -> Box<dyn Keyboard> {
@@ -285,8 +287,14 @@ impl ContextGraphics for Window {}
 
 impl InactiveContextGraphics for Window {
     fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
-        let size = self.state.read().unwrap().size.get().clone();
-        self.state.read().unwrap().root_frame.as_ref().unwrap().resize(size);
+        let size = self.state.read().unwrap().size.get();
+        self.state
+            .read()
+            .unwrap()
+            .root_frame
+            .as_ref()
+            .unwrap()
+            .resize(size);
         let mut el = glutin::EventsLoop::new();
         let wb = glutin::WindowBuilder::new().with_dimensions(LogicalSize::new(size.x, size.y));
         let windowed_context = glutin::ContextBuilder::new()
@@ -324,15 +332,25 @@ impl InactiveContextGraphics for Window {
                 let state = self.state.read().unwrap();
                 let root_frame = state.root_frame.as_ref().unwrap();
                 let image_any = root_frame.to_image().as_any();
-                let mut surface = image_any.downcast_ref::<CairoImage>().unwrap().0.lock().unwrap();
-                let surface_data = surface.get_data().unwrap();
-                let surface_pointer = surface_data.deref() as *const _ as *const c_void;
+                let image = image_any.downcast_ref::<CairoImage>().unwrap();
+                let mut surface = image.0.lock().unwrap();
+                let surface_pointer = (*surface).0.get_data().unwrap().as_ptr() as *const c_void;
                 let size = root_frame.get_size();
 
                 unsafe {
                     gl::Clear(gl::COLOR_BUFFER_BIT);
                     gl::BindTexture(gl::TEXTURE_RECTANGLE, texture_id);
-                    gl::TexImage2D(gl::TEXTURE_RECTANGLE, 0, gl::RGBA as i32, size.x as i32, size.y as i32, 0, gl::BGRA, gl::UNSIGNED_BYTE, surface_pointer);
+                    gl::TexImage2D(
+                        gl::TEXTURE_RECTANGLE,
+                        0,
+                        gl::RGBA as i32,
+                        size.x as i32,
+                        size.y as i32,
+                        0,
+                        gl::BGRA,
+                        gl::UNSIGNED_BYTE,
+                        surface_pointer,
+                    );
                 }
             }
             windowed_context.swap_buffers().unwrap();
