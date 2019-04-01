@@ -57,6 +57,8 @@ pub enum Origin {
     Baseline,
     /// Places the origin at the upper justification-start corner of the rendered text.
     Top,
+    /// Places the origin in the middle of the rendered text.
+    Middle,
 }
 
 /// Provides an abstraction for representing text content.

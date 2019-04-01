@@ -411,6 +411,7 @@ impl CanvasFrame {
         state.context.set_text_baseline(match input.origin {
             Origin::Top => TextBaseline::Top,
             Origin::Baseline => TextBaseline::Alphabetic,
+            Origin::Middle => TextBaseline::Middle,
         });
         state
             .context
