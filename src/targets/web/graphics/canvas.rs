@@ -515,6 +515,35 @@ impl CanvasFrame {
         let state = self.state.read().unwrap();
         state.canvas.clone()
     }
+    fn measure_text_height(&self, input: Text) -> f64 {
+        let font = match input.font {
+            Font::SystemFont => {
+                format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
+                    Weight::Normal => "400",
+                    Weight::Medium => "500",
+                    Weight::SemiBold => "600",
+                    Weight::Bold => "700",
+                    Weight::ExtraBold => "800",
+                    Weight::Heavy => "900",
+                    Weight::Thin => "200",
+                    Weight::Light => "300",
+                    Weight::Hairline => "100"
+                }, input.size)
+            }
+        };
+        (js! {
+            let el = document.createElement("span");
+            el.style.position = "fixed";
+            el.style.left = "-5000px";
+            el.style.top = "-5000px";
+            el.textContent = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            el.style.font = @{font};
+            document.body.appendChild(el);
+            return el.offsetHeight;
+        })
+        .try_into()
+        .unwrap()
+    }
     fn wrap_text(&self, input: &Text) -> Vec<String> {
         let mut lines: Vec<String> = input
             .content
@@ -644,7 +673,7 @@ impl Frame for CanvasFrame {
         } else {
             (
                 self.measure_text_with_spacing(&input.content, input.letter_spacing),
-                f64::from(input.size),
+                self.measure_text_height(input),
             )
                 .into()
         }
