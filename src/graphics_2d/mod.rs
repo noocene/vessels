@@ -71,6 +71,28 @@ pub struct Color {
     pub a: u8,
 }
 
+impl From<(u8, u8, u8)> for Color {
+    fn from(input: (u8, u8, u8)) -> Color {
+        Color {
+            r: input.0,
+            g: input.1,
+            b: input.2,
+            a: 255,
+        }
+    }
+}
+
+impl From<(u8, u8, u8, u8)> for Color {
+    fn from(input: (u8, u8, u8, u8)) -> Color {
+        Color {
+            r: input.0,
+            g: input.1,
+            b: input.2,
+            a: input.3,
+        }
+    }
+}
+
 impl Color {
     /// Returns a CSS-compatible rgba color string in form `rgba(r, g, b, a)` where `r`, `g`, and `b`
     /// are integers between 0 and 255 and `a` is the alpha channel represented as a floating point value between
