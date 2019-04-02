@@ -311,6 +311,17 @@ impl InactiveContextGraphics for Window {
             gl::GenTextures(1, &mut texture_id);
         }
 
+        let mut surface_pointer: *const c_void;
+
+        {
+            let state = self.state.read().unwrap();
+            let root_frame = state.root_frame.as_ref().unwrap();
+            let image_any = root_frame.to_image().as_any();
+            let image = image_any.downcast_ref::<CairoImage>().unwrap();
+            let mut surface = image.0.lock().unwrap();
+            surface_pointer = (*surface).0.get_data().unwrap().as_ptr() as *const c_void;
+        }
+
         let mut running = true;
         while running {
             el.poll_events(|event| {
@@ -322,36 +333,50 @@ impl InactiveContextGraphics for Window {
                         glutin::WindowEvent::Resized(logical_size) => {
                             let dpi_factor = windowed_context.get_hidpi_factor();
                             windowed_context.resize(logical_size.to_physical(dpi_factor));
+                            self.state
+                                .read()
+                                .unwrap()
+                                .size
+                                .set((logical_size.width, logical_size.height).into());
                         }
                         _ => (),
                     },
                     _ => (),
                 }
             });
-            {
-                let state = self.state.read().unwrap();
+            let state = self.state.read().unwrap();
+
+            if state.size.is_dirty() {
+                self.state
+                    .read()
+                    .unwrap()
+                    .root_frame
+                    .as_ref()
+                    .unwrap()
+                    .resize(size);
                 let root_frame = state.root_frame.as_ref().unwrap();
                 let image_any = root_frame.to_image().as_any();
                 let image = image_any.downcast_ref::<CairoImage>().unwrap();
                 let mut surface = image.0.lock().unwrap();
-                let surface_pointer = (*surface).0.get_data().unwrap().as_ptr() as *const c_void;
-                let size = root_frame.get_size();
+                surface_pointer = (*surface).0.get_data().unwrap().as_ptr() as *const c_void;
+            }
 
-                unsafe {
-                    gl::Clear(gl::COLOR_BUFFER_BIT);
-                    gl::BindTexture(gl::TEXTURE_RECTANGLE, texture_id);
-                    gl::TexImage2D(
-                        gl::TEXTURE_RECTANGLE,
-                        0,
-                        gl::RGBA as i32,
-                        size.x as i32,
-                        size.y as i32,
-                        0,
-                        gl::BGRA,
-                        gl::UNSIGNED_BYTE,
-                        surface_pointer,
-                    );
-                }
+            let size = state.size.get();
+
+            unsafe {
+                gl::Clear(gl::COLOR_BUFFER_BIT);
+                gl::BindTexture(gl::TEXTURE_RECTANGLE, texture_id);
+                gl::TexImage2D(
+                    gl::TEXTURE_RECTANGLE,
+                    0,
+                    gl::RGBA as i32,
+                    size.x as i32,
+                    size.y as i32,
+                    0,
+                    gl::BGRA,
+                    gl::UNSIGNED_BYTE,
+                    surface_pointer,
+                );
             }
             windowed_context.swap_buffers().unwrap();
         }
