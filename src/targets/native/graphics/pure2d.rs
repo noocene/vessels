@@ -19,6 +19,8 @@ use cairo::{Format, ImageSurface};
 
 use gl::types::*;
 
+use cairo_sys;
+
 struct CairoSurface(ImageSurface);
 
 struct CairoContext(cairo::Context);
@@ -98,7 +100,6 @@ impl ImageRepresentation for CairoImage {
 
 struct CairoFrameState {
     context: Mutex<CairoContext>,
-    surface: CairoImage,
     contents: Vec<CairoObject>,
     viewport: Rect,
     size: Vector,
@@ -115,7 +116,6 @@ impl CairoFrame {
         Box::new(CairoFrame {
             state: Arc::new(RwLock::new(CairoFrameState {
                 context: Mutex::new(CairoContext(cairo::Context::new(&surface))),
-                surface: CairoImage::new(CairoSurface(surface)),
                 contents: vec![],
                 size: size,
                 viewport: Rect {
@@ -287,14 +287,9 @@ impl ContextGraphics for Window {}
 
 impl InactiveContextGraphics for Window {
     fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
-        let size = self.state.read().unwrap().size.get();
-        self.state
-            .read()
-            .unwrap()
-            .root_frame
-            .as_ref()
-            .unwrap()
-            .resize(size);
+        let state = self.state.read().unwrap();
+        let size = state.size.get();
+        state.root_frame.as_ref().unwrap().resize(size);
         let mut el = glutin::EventsLoop::new();
         let wb = glutin::WindowBuilder::new().with_dimensions(LogicalSize::new(size.x, size.y));
         let windowed_context = glutin::ContextBuilder::new()
@@ -314,11 +309,16 @@ impl InactiveContextGraphics for Window {
         let mut surface_pointer: *const c_void;
 
         {
-            let state = self.state.read().unwrap();
             let root_frame = state.root_frame.as_ref().unwrap();
             let image_any = root_frame.to_image().as_any();
             let image = image_any.downcast_ref::<CairoImage>().unwrap();
             let mut surface = image.0.lock().unwrap();
+            unsafe {
+                println!(
+                    "{:?}",
+                    cairo_sys::cairo_surface_get_reference_count(surface.to_raw_none())
+                );
+            }
             surface_pointer = (*surface).0.get_data().unwrap().as_ptr() as *const c_void;
         }
 
