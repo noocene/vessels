@@ -7,6 +7,12 @@ pub enum Font {
     SystemFont,
 }
 
+impl Default for Font {
+    fn default() -> Font {
+        Font::SystemFont
+    }
+}
+
 /// Specifies the weight of a font.
 #[derive(Clone, Copy, Debug)]
 pub enum Weight {
