@@ -326,8 +326,9 @@ impl Content {
         self.transform = transform;
         self
     }
+    /// Sets the z-depth of the content.
     pub fn with_depth(mut self, depth: u32) -> Self {
-        self.depth = u32;
+        self.depth = depth;
         self
     }
 }
