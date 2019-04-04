@@ -36,6 +36,12 @@ pub enum Weight {
     SemiBold,
 }
 
+impl Default for Weight {
+    fn default() -> Weight {
+        Weight::Normal
+    }
+}
+
 /// Specifies the type of text wrap used.
 #[derive(Clone, Copy, Debug)]
 pub enum Wrap {
