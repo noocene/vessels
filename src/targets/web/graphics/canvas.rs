@@ -663,22 +663,27 @@ impl Frame for CanvasFrame {
         self.draw();
         Box::new(state.canvas.clone())
     }
-    fn measure(&self, input: Text) -> Vector {
-        self.update_text_style(&input);
-        if input.max_width.is_some() {
-            let lines = self.wrap_text(&input);
-            (
-                f64::from(input.max_width.unwrap()),
-                (f64::from((lines.len() - 1).max(0) as u32) * f64::from(input.line_height))
-                    + f64::from(input.size),
-            )
-                .into()
-        } else {
-            (
-                self.measure_text_with_spacing(&input.content, input.letter_spacing),
-                self.measure_text_height(input),
-            )
-                .into()
+    fn measure(&self, input: Rasterizable) -> Vector {
+        match input {
+            Rasterizable::Text(input) => {
+                self.update_text_style(&input);
+                if input.max_width.is_some() {
+                    let lines = self.wrap_text(&input);
+                    (
+                        f64::from(input.max_width.unwrap()),
+                        (f64::from((lines.len() - 1).max(0) as u32) * f64::from(input.line_height))
+                            + f64::from(input.size),
+                    )
+                        .into()
+                } else {
+                    (
+                        self.measure_text_with_spacing(&input.content, input.letter_spacing),
+                        self.measure_text_height(*input),
+                    )
+                        .into()
+                }
+            }
+            Rasterizable::Path(input) => input.bounds().size,
         }
     }
     fn box_clone(&self) -> Box<dyn Frame> {

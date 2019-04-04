@@ -292,8 +292,8 @@ pub trait Frame: Sync + Send {
     fn get_size(&self) -> Vector;
     /// Returns an image that is a still rasterization of any rendered content.
     fn to_image(&self) -> Box<dyn ImageRepresentation>;
-    /// Returns the measured dimensions of some provided text.
-    fn measure(&self, input: Text) -> Vector;
+    /// Returns the measured dimensions of some provided content.
+    fn measure(&self, input: Rasterizable) -> Vector;
     #[doc(hidden)]
     fn box_clone(&self) -> Box<dyn Frame>;
     #[doc(hidden)]
