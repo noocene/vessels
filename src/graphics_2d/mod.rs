@@ -326,6 +326,10 @@ impl Content {
         self.transform = transform;
         self
     }
+    pub fn with_depth(mut self, depth: u32) -> Self {
+        self.depth = u32;
+        self
+    }
 }
 
 impl From<Rasterizable> for Content {
