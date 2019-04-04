@@ -276,6 +276,10 @@ pub trait Object: Sync + Send {
     fn get_transform(&self) -> Transform;
     /// Sets the current transfomration of the [Object].
     fn set_transform(&mut self, transform: Transform);
+    /// Gets the current z-depth of the [Object].
+    fn get_depth(&self) -> u32;
+    /// Sets the current z-depth of the [Object].
+    fn set_depth(&mut self, depth: u32);
     /// Replaces the contents of the [Object] with new Rasterizable content. This may be costly.
     fn update(&mut self, content: Rasterizable);
 }
@@ -283,7 +287,7 @@ pub trait Object: Sync + Send {
 /// An isolated rendering context.
 pub trait Frame: Sync + Send {
     /// Adds content to the [Frame].
-    fn add(&mut self, rasterizable: Rasterizable, orientation: Transform) -> Box<dyn Object>;
+    fn add(&mut self, content: Content) -> Box<dyn Object>;
     /// Resizes the [Frame]. This does not resize the viewport.
     fn resize(&self, size: Vector);
     /// Sets the viewport.
@@ -305,6 +309,32 @@ pub trait Frame: Sync + Send {
 impl Clone for Box<dyn Frame> {
     fn clone(&self) -> Self {
         self.box_clone()
+    }
+}
+
+/// Renderable content.
+#[derive(Debug, Clone)]
+pub struct Content {
+    pub(crate) content: Rasterizable,
+    pub(crate) depth: u32,
+    pub(crate) transform: Transform,
+}
+
+impl Content {
+    /// Sets the orientation of the content.
+    pub fn with_transform(mut self, transform: Transform) -> Self {
+        self.transform = transform;
+        self
+    }
+}
+
+impl From<Rasterizable> for Content {
+    fn from(input: Rasterizable) -> Content {
+        Content {
+            content: input,
+            depth: 0,
+            transform: Transform::default(),
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::graphics_2d::{
-    Color, ContextGraphics, ContextualGraphics, Frame, Graphics, Image, ImageRepresentation,
-    InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect, Texture2D, Ticker, Transform,
-    Vector,
+    Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics, Image,
+    ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
+    Texture2D, Ticker, Transform, Vector,
 };
 use crate::input::Context;
 use crate::input::{Keyboard, Mouse};
@@ -9,6 +9,8 @@ use crate::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
 use crate::targets::web;
 use crate::text::{Align, Font, Origin, Text, Weight, Wrap};
 use crate::util::ObserverCell;
+
+use itertools::Itertools;
 
 use stdweb::traits::{IChildNode, IElement, IEvent, IEventTarget, IHtmlElement, INode};
 use stdweb::unstable::TryInto;
@@ -76,6 +78,7 @@ impl ImageRepresentation for CanvasImage {
 struct CanvasObjectState {
     orientation: Transform,
     content: Rasterizable,
+    depth: u32,
 }
 
 #[derive(Clone)]
@@ -84,11 +87,12 @@ struct CanvasObject {
 }
 
 impl CanvasObject {
-    fn new(content: Rasterizable, orientation: Transform) -> CanvasObject {
+    fn new(content: Rasterizable, orientation: Transform, depth: u32) -> CanvasObject {
         CanvasObject {
             state: Arc::new(RwLock::new(CanvasObjectState {
                 orientation,
                 content,
+                depth,
             })),
         }
     }
@@ -103,6 +107,12 @@ impl Object for CanvasObject {
     }
     fn set_transform(&mut self, transform: Transform) {
         self.state.write().unwrap().orientation = transform;
+    }
+    fn set_depth(&mut self, depth: u32) {
+        self.state.write().unwrap().depth = depth;
+    }
+    fn get_depth(&self) -> u32 {
+        self.state.read().unwrap().depth
     }
     fn update(&mut self, input: Rasterizable) {
         self.state.write().unwrap().content = input;
@@ -621,14 +631,22 @@ impl Frame for CanvasFrame {
             viewport.size.y,
         );
         state.context.save();
-        state.contents.iter().for_each(|object| {
-            let object = object.state.read().unwrap();
-            let matrix = object.orientation.to_matrix();
-            match &object.content {
-                Rasterizable::Path(path) => self.draw_path(matrix, &path),
-                Rasterizable::Text(input) => self.draw_text(matrix, &input),
-            };
-        });
+        state
+            .contents
+            .iter()
+            .sorted_by(|a, b| {
+                let a = a.state.read().unwrap();
+                let b = b.state.read().unwrap();
+                a.depth.partial_cmp(&b.depth).unwrap()
+            })
+            .for_each(|object| {
+                let object = object.state.read().unwrap();
+                let matrix = object.orientation.to_matrix();
+                match &object.content {
+                    Rasterizable::Path(path) => self.draw_path(matrix, &path),
+                    Rasterizable::Text(input) => self.draw_text(matrix, &input),
+                };
+            });
     }
     fn show(&self) {
         let state = self.state.read().unwrap();
@@ -638,8 +656,8 @@ impl Frame for CanvasFrame {
         });
         document().body().unwrap().append_child(&state.canvas);
     }
-    fn add(&mut self, rasterizable: Rasterizable, orientation: Transform) -> Box<dyn Object> {
-        let object = CanvasObject::new(rasterizable, orientation);
+    fn add(&mut self, content: Content) -> Box<dyn Object> {
+        let object = CanvasObject::new(content.content, content.transform, content.depth);
         let mut state = self.state.write().unwrap();
         state.contents.push(object.clone());
         Box::new(object)
@@ -720,7 +738,7 @@ impl Rasterizer for Canvas {
             }
         }
         frame.resize(size);
-        frame.add(input, Vector::from((0., 0.)).into());
+        frame.add(input.into());
         frame.draw();
         Box::new(frame.element())
     }
