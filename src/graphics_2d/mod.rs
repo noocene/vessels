@@ -347,6 +347,12 @@ impl From<Rasterizable> for Content {
     }
 }
 
+impl From<Content> for Rasterizable {
+    fn from(input: Content) -> Rasterizable {
+        input.content
+    }
+}
+
 /// A type that can rasterized.
 #[derive(Debug, Clone)]
 pub enum Rasterizable {
