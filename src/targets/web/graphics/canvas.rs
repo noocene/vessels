@@ -685,7 +685,8 @@ impl Frame for CanvasFrame {
         match input {
             Rasterizable::Text(input) => {
                 self.update_text_style(&input);
-                if input.max_width.is_some() {
+                let origin = input.origin;
+                let mut size: Vector = if input.max_width.is_some() {
                     let lines = self.wrap_text(&input);
                     (
                         f64::from(input.max_width.unwrap()),
@@ -699,7 +700,11 @@ impl Frame for CanvasFrame {
                         self.measure_text_height(*input),
                     )
                         .into()
+                };
+                if origin == Origin::Middle {
+                    size.y = 0.;
                 }
+                size
             }
             Rasterizable::Path(input) => input.bounds().size,
         }

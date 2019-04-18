@@ -63,7 +63,7 @@ pub enum Align {
 }
 
 /// Specifies the origin of text.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Origin {
     /// Places the origin at the start of the alphabetic baseline.
     Baseline,
