@@ -792,6 +792,9 @@ impl ContextualGraphics for Canvas {
     fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics> {
         {
             let mut state = self.state.write().unwrap();
+            let size = state.size.get();
+            root.resize(size);
+            root.set_viewport(Rect::new((0., 0.), size));
             state.root_frame = Some(root);
         }
         self
