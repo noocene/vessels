@@ -51,6 +51,18 @@ impl CairoImage {
     fn new(surface: CairoSurface) -> CairoImage {
         CairoImage(Arc::new(Mutex::new(surface)))
     }
+
+    fn get_data_ptr(&mut self) -> *const c_void {
+        let mut surface = self.0.lock().unwrap();
+        unsafe {
+            println!(
+                "{:?}",
+                cairo_sys::cairo_surface_get_reference_count(surface.to_raw_none())
+            );
+        }
+        let data = (*surface).get_data().unwrap();
+        data.as_ptr() as *const c_void
+    }
 }
 
 impl Clone for CairoImage {
@@ -126,8 +138,20 @@ impl CairoFrame {
         })
     }
 
-    fn surface(&self) -> CairoImage {
-        self.state.read().unwrap().surface.clone()
+    fn surface(&self) -> Box<CairoImage> {
+        self.draw();
+        Box::new(CairoImage::new(CairoSurface(
+            ImageSurface::from(
+                self.state
+                    .read()
+                    .unwrap()
+                    .context
+                    .lock()
+                    .unwrap()
+                    .get_target(),
+            )
+            .unwrap(),
+        )))
     }
 }
 
@@ -158,7 +182,6 @@ impl Frame for CairoFrame {
         state.size = size;
         let surface = ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
         state.context = Mutex::new(CairoContext(cairo::Context::new(&surface)));
-        state.surface = CairoImage::new(CairoSurface(surface));
     }
 
     fn get_size(&self) -> Vector {
@@ -167,9 +190,7 @@ impl Frame for CairoFrame {
     }
 
     fn to_image(&self) -> Box<dyn ImageRepresentation> {
-        let state = self.state.read().unwrap();
-        self.draw();
-        Box::new(state.surface.clone())
+        self.surface()
     }
 
     fn measure(&self, input: Text) -> Vector {
@@ -270,7 +291,7 @@ impl Rasterizer for Window {
         frame.set_viewport(Rect::new(Vector::default(), size));
         frame.add(input, Vector::from((0., 0.)).into());
         frame.draw();
-        Box::new(frame.surface())
+        frame.surface()
     }
 }
 
@@ -310,16 +331,12 @@ impl InactiveContextGraphics for Window {
 
         {
             let root_frame = state.root_frame.as_ref().unwrap();
-            let image_any = root_frame.to_image().as_any();
-            let image = image_any.downcast_ref::<CairoImage>().unwrap();
-            let mut surface = image.0.lock().unwrap();
-            unsafe {
-                println!(
-                    "{:?}",
-                    cairo_sys::cairo_surface_get_reference_count(surface.to_raw_none())
-                );
-            }
-            surface_pointer = (*surface).0.get_data().unwrap().as_ptr() as *const c_void;
+            surface_pointer = root_frame
+                .to_image()
+                .as_any()
+                .downcast::<CairoImage>()
+                .unwrap()
+                .get_data_ptr();
         }
 
         let mut running = true;
@@ -355,10 +372,12 @@ impl InactiveContextGraphics for Window {
                     .unwrap()
                     .resize(size);
                 let root_frame = state.root_frame.as_ref().unwrap();
-                let image_any = root_frame.to_image().as_any();
-                let image = image_any.downcast_ref::<CairoImage>().unwrap();
-                let mut surface = image.0.lock().unwrap();
-                surface_pointer = (*surface).0.get_data().unwrap().as_ptr() as *const c_void;
+                surface_pointer = root_frame
+                    .to_image()
+                    .as_any()
+                    .downcast::<CairoImage>()
+                    .unwrap()
+                    .get_data_ptr();
             }
 
             let size = state.size.get();
