@@ -15,7 +15,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use glutin::dpi::LogicalSize;
 use glutin::{ContextTrait, ControlFlow};
 
-use cairo::{Format, ImageSurface};
+use cairo::Status;
+use cairo::{Format, ImageSurface, ImageSurfaceData};
 
 use gl::types::*;
 
@@ -52,16 +53,19 @@ impl CairoImage {
         CairoImage(Arc::new(Mutex::new(surface)))
     }
 
-    fn get_data_ptr(&mut self) -> *const c_void {
-        let mut surface = self.0.lock().unwrap();
+    fn get_data_ptr(&self) -> *const c_void {
+        let surface = &self.0.lock().unwrap().0;
         unsafe {
-            println!(
-                "{:?}",
-                cairo_sys::cairo_surface_get_reference_count(surface.to_raw_none())
-            );
+            cairo_sys::cairo_surface_flush(surface.to_raw_none());
+            match Status::from(cairo_sys::cairo_surface_status(surface.to_raw_none())) {
+                Status::Success => (),
+                status => panic!("Cairo Surface borrow error!"),
+            }
+            if cairo_sys::cairo_image_surface_get_data(surface.to_raw_none()).is_null() {
+                panic!("Cairo Surface borrow error!");
+            }
+            cairo_sys::cairo_image_surface_get_data(surface.to_raw_none()) as *const c_void
         }
-        let data = (*surface).0.get_data().unwrap();
-        data.as_ptr() as *const c_void
     }
 }
 
