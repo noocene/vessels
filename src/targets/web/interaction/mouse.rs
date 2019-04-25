@@ -1,6 +1,6 @@
 use crate::graphics_2d::Vector;
-use crate::input;
-use crate::input::mouse::{Action, Button, Event};
+use crate::interaction;
+use crate::interaction::mouse::{Action, Button, Event};
 
 use stdweb::web::event::{
     IEvent, IMouseEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, MouseWheelEvent,
@@ -19,14 +19,14 @@ pub(crate) struct Mouse {
     state: Rc<RefCell<MouseState>>,
 }
 
-impl input::Source for Mouse {
+impl interaction::Source for Mouse {
     type Event = Event;
     fn bind(&self, handler: Box<dyn Fn(Event) + 'static>) {
         self.state.borrow_mut().handlers.push(handler);
     }
 }
 
-impl input::Mouse for Mouse {
+impl interaction::Mouse for Mouse {
     fn position(&self) -> Vector {
         self.state.borrow().position
     }
@@ -34,7 +34,7 @@ impl input::Mouse for Mouse {
 
 impl Mouse {
     #[allow(clippy::new_ret_no_self)]
-    pub(crate) fn new() -> Box<dyn input::Mouse> {
+    pub(crate) fn new() -> Box<dyn interaction::Mouse> {
         let mouse = Mouse {
             state: Rc::new(RefCell::new(MouseState {
                 handlers: vec![],

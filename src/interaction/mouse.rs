@@ -1,6 +1,6 @@
 use crate::graphics_2d::Vector;
 
-/// An input event [Source](super::Source) that represents a mouse.
+/// An interaction event [Source](super::Source) that represents a mouse.
 pub trait Mouse: super::Source<Event = Event> {
     /// Returns the current mouse position.
     fn position(&self) -> Vector;
@@ -29,7 +29,7 @@ pub enum Action {
     Down(Button),
     /// A mouse movement.
     Move(Vector),
-    /// A mouse scroll input.
+    /// A mouse scroll interaction.
     Scroll(Vector),
 }
 

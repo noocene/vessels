@@ -22,8 +22,8 @@ extern crate stdweb;
 mod errors;
 /// Provides interfaces to 2D graphics APIs.
 pub mod graphics_2d;
-/// Provides interfaces to user input/HID APIs.
-pub mod input;
+/// Provides interfaces to user interaction/HID APIs.
+pub mod interaction;
 /// Provides helper types that allow ergonomic construction and styling of 2D vector graphics.
 pub mod path;
 mod targets;
