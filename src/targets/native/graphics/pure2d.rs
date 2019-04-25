@@ -60,7 +60,7 @@ impl CairoImage {
                 cairo_sys::cairo_surface_get_reference_count(surface.to_raw_none())
             );
         }
-        let data = (*surface).get_data().unwrap();
+        let data = (*surface).0.get_data().unwrap();
         data.as_ptr() as *const c_void
     }
 }
