@@ -6,14 +6,12 @@ use crate::text::*;
 use crate::util::ObserverCell;
 
 use std::any::Any;
-use std::borrow::Cow;
-use std::cell::{Cell, RefCell};
-use std::ffi::c_void;
+use std::ffi::{c_void, CString};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
 
 use glutin::dpi::LogicalSize;
-use glutin::{ContextTrait, ControlFlow};
+use glutin::ContextTrait;
 
 use cairo::Status;
 use cairo::{Format, ImageSurface, ImageSurfaceData};
@@ -215,8 +213,13 @@ impl Frame for CairoFrame {
     fn draw(&self) {
         let state = self.state.read().unwrap();
         let context = state.context.lock().unwrap();
-        context.set_source_rgb(1.0, 1.0, 0.0);
+        context.set_source_rgb(1., 1., 1.);
         context.paint();
+        context.set_source_rgb(0., 0., 0.);
+        context.set_line_width(1.);
+        context.rectangle(0., 0., 100., 100.);
+        context.stroke_preserve();
+        context.fill();
     }
 }
 
@@ -277,10 +280,20 @@ struct Window {
     state: Arc<RwLock<WindowState>>,
 }
 
+fn new_shader(source: &str, kind: GLenum) -> GLuint {
+    unsafe {
+        let id = gl::CreateShader(kind);
+        let source_string = CString::new(source).unwrap();
+        gl::ShaderSource(id, 1, &(source_string).as_ptr(), std::ptr::null());
+        gl::CompileShader(id);
+        id
+    }
+}
+
 struct WindowState {
     root_frame: Option<Box<dyn Frame>>,
     event_handler: EventHandler,
-    size: ObserverCell<Vector>,
+    size: ObserverCell<(f64, f64, f64)>,
 }
 
 impl Ticker for Window {
@@ -314,9 +327,13 @@ impl InactiveContextGraphics for Window {
     fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
         let state = self.state.read().unwrap();
         let size = state.size.get();
-        state.root_frame.as_ref().unwrap().resize(size);
+        state
+            .root_frame
+            .as_ref()
+            .unwrap()
+            .resize((size.0, size.1).into());
         let mut el = glutin::EventsLoop::new();
-        let wb = glutin::WindowBuilder::new().with_dimensions(LogicalSize::new(size.x, size.y));
+        let wb = glutin::WindowBuilder::new().with_dimensions(LogicalSize::new(size.0, size.1));
         let windowed_context = glutin::ContextBuilder::new()
             .build_windowed(wb, &el)
             .unwrap();
@@ -343,26 +360,99 @@ impl InactiveContextGraphics for Window {
                 .get_data_ptr();
         }
 
+        let vert_id = new_shader(
+            r#"#version 330 core
+layout (location = 0) in vec3 pos;
+
+out vec2 coord;
+
+void main()
+{
+    gl_Position = vec4(pos, 1.0);
+    coord = pos.xy;
+}"#,
+            gl::VERTEX_SHADER,
+        );
+
+        let frag_id = new_shader(
+            r#"#version 330 core
+out vec4 FragColor;
+  
+in vec2 coord;
+
+uniform sampler2D tex;
+
+void main()
+{
+    FragColor = texture(tex, coord);
+}"#,
+            gl::FRAGMENT_SHADER,
+        );
+
+        let program = unsafe {
+            let id = gl::CreateProgram();
+            gl::AttachShader(id, vert_id);
+            gl::AttachShader(id, frag_id);
+            gl::LinkProgram(id);
+            id
+        };
+
+        let vertices: Vec<f32> = vec![1., -1., 0., 1., 1., 0., -1., -1., 0., -1., 1., 0.];
+        let mut vbo: GLuint = 0;
+        unsafe {
+            gl::GenBuffers(1, &mut vbo);
+            gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+            gl::BufferData(
+                gl::ARRAY_BUFFER,
+                (vertices.len() * std::mem::size_of::<f32>()) as GLsizeiptr,
+                vertices.as_ptr() as *const GLvoid,
+                gl::STATIC_DRAW,
+            );
+            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+        }
+
+        let mut vao: GLuint = 0;
+        unsafe {
+            gl::GenVertexArrays(1, &mut vao);
+            gl::BindVertexArray(vao);
+            gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+            gl::EnableVertexAttribArray(0);
+            gl::VertexAttribPointer(
+                0,
+                3,
+                gl::FLOAT,
+                gl::FALSE,
+                (3 * std::mem::size_of::<f32>()) as GLint,
+                std::ptr::null(),
+            );
+            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+            gl::BindVertexArray(0);
+        }
+
+        state
+            .size
+            .set((700., 700., windowed_context.get_hidpi_factor()));
+
         let mut running = true;
         while running {
             el.poll_events(|event| {
                 //temporary event handling
                 //println!("{:?}", event);
-                match event {
-                    glutin::Event::WindowEvent { event, .. } => match event {
+                if let glutin::Event::WindowEvent { event, .. } = event {
+                    match event {
                         glutin::WindowEvent::CloseRequested => running = false,
                         glutin::WindowEvent::Resized(logical_size) => {
                             let dpi_factor = windowed_context.get_hidpi_factor();
-                            windowed_context.resize(logical_size.to_physical(dpi_factor));
+                            let true_size = logical_size.to_physical(dpi_factor);
+                            windowed_context.resize(true_size);
                             self.state
                                 .read()
                                 .unwrap()
                                 .size
-                                .set((logical_size.width, logical_size.height).into());
+                                .set((true_size.width, true_size.height, dpi_factor).into());
                         }
                         _ => (),
-                    },
-                    _ => (),
+                    }
                 }
             });
             let state = self.state.read().unwrap();
@@ -374,7 +464,7 @@ impl InactiveContextGraphics for Window {
                     .root_frame
                     .as_ref()
                     .unwrap()
-                    .resize(size);
+                    .resize((size.0, size.1).into());
                 let root_frame = state.root_frame.as_ref().unwrap();
                 surface_pointer = root_frame
                     .to_image()
@@ -387,6 +477,7 @@ impl InactiveContextGraphics for Window {
             let size = state.size.get();
 
             unsafe {
+                gl::Viewport(0, 0, size.0 as i32, size.1 as i32);
                 gl::Clear(gl::COLOR_BUFFER_BIT);
                 gl::BindTexture(gl::TEXTURE_2D, texture_id);
                 gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_BASE_LEVEL, 0);
@@ -395,14 +486,16 @@ impl InactiveContextGraphics for Window {
                     gl::TEXTURE_2D,
                     0,
                     gl::RGBA as i32,
-                    size.x as i32,
-                    size.y as i32,
+                    (size.0 / size.2) as i32,
+                    (size.1 / size.2) as i32,
                     0,
                     gl::BGRA,
                     gl::UNSIGNED_BYTE,
                     surface_pointer,
                 );
-                println!("{:?}", gl::GetError());
+                gl::UseProgram(program);
+                gl::BindVertexArray(vao);
+                gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4);
             }
             windowed_context.swap_buffers().unwrap();
         }
@@ -437,7 +530,7 @@ pub(crate) fn new() -> Box<dyn ContextualGraphics> {
     let window = Window {
         state: Arc::new(RwLock::new(WindowState {
             //need to figure out how to select size, temp default
-            size: ObserverCell::new((700.0, 700.0).into()),
+            size: ObserverCell::new((700.0, 700.0, 2.).into()),
             event_handler: EventHandler::new(),
             root_frame: None,
         })),

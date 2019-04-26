@@ -505,7 +505,6 @@ impl Rect {
     }
 }
 
-
 /// Initializes a new graphics context.
 pub fn new() -> Box<dyn ContextualGraphics> {
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
@@ -514,4 +513,3 @@ pub fn new() -> Box<dyn ContextualGraphics> {
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     return targets::native::graphics::new();
 }
-
