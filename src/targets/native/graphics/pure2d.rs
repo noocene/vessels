@@ -215,7 +215,7 @@ impl Frame for CairoFrame {
     fn draw(&self) {
         let state = self.state.read().unwrap();
         let context = state.context.lock().unwrap();
-        context.set_source_rgb(1.0, 0.0, 0.0);
+        context.set_source_rgb(1.0, 1.0, 0.0);
         context.paint();
     }
 }
@@ -347,7 +347,7 @@ impl InactiveContextGraphics for Window {
         while running {
             el.poll_events(|event| {
                 //temporary event handling
-                println!("{:?}", event);
+                //println!("{:?}", event);
                 match event {
                     glutin::Event::WindowEvent { event, .. } => match event {
                         glutin::WindowEvent::CloseRequested => running = false,
@@ -388,9 +388,11 @@ impl InactiveContextGraphics for Window {
 
             unsafe {
                 gl::Clear(gl::COLOR_BUFFER_BIT);
-                gl::BindTexture(gl::TEXTURE_RECTANGLE, texture_id);
+                gl::BindTexture(gl::TEXTURE_2D, texture_id);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_BASE_LEVEL, 0);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAX_LEVEL, 0);
                 gl::TexImage2D(
-                    gl::TEXTURE_RECTANGLE,
+                    gl::TEXTURE_2D,
                     0,
                     gl::RGBA as i32,
                     size.x as i32,
@@ -400,6 +402,7 @@ impl InactiveContextGraphics for Window {
                     gl::UNSIGNED_BYTE,
                     surface_pointer,
                 );
+                println!("{:?}", gl::GetError());
             }
             windowed_context.swap_buffers().unwrap();
         }
