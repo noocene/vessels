@@ -10,7 +10,7 @@ use std::ffi::{c_void, CString};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
 
-use glutin::dpi::LogicalSize;
+use glutin::dpi::{LogicalSize, PhysicalSize};
 use glutin::ContextTrait;
 
 use cairo::Status;
@@ -76,8 +76,8 @@ impl Clone for CairoImage {
 impl ImageRepresentation for CairoImage {
     fn get_size(&self) -> Vector {
         (
-            self.0.lock().unwrap().get_width() as f64,
-            self.0.lock().unwrap().get_height() as f64,
+            f64::from(self.0.lock().unwrap().get_width()),
+            f64::from(self.0.lock().unwrap().get_height()),
         )
             .into()
     }
@@ -180,7 +180,6 @@ impl Frame for CairoFrame {
 
     fn resize(&self, size: Vector) {
         let mut state = self.state.write().unwrap();
-        let size = size.into();
         state.size = size;
         let surface = ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
         state.context = Mutex::new(CairoContext(cairo::Context::new(&surface)));
@@ -219,7 +218,6 @@ impl Frame for CairoFrame {
         context.set_line_width(1.);
         context.rectangle(0., 0., 100., 100.);
         context.stroke_preserve();
-        context.fill();
     }
 }
 
@@ -293,7 +291,7 @@ fn new_shader(source: &str, kind: GLenum) -> GLuint {
 struct WindowState {
     root_frame: Option<Box<dyn Frame>>,
     event_handler: EventHandler,
-    size: ObserverCell<(f64, f64, f64)>,
+    size: ObserverCell<Vector>,
 }
 
 impl Ticker for Window {
@@ -327,17 +325,18 @@ impl InactiveContextGraphics for Window {
     fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
         let state = self.state.read().unwrap();
         let size = state.size.get();
+        let size = LogicalSize::new(size.x, size.y);
+        let mut el = glutin::EventsLoop::new();
+        let wb = glutin::WindowBuilder::new().with_dimensions(size);
+        let windowed_context = glutin::ContextBuilder::new()
+            .build_windowed(wb, &el)
+            .unwrap();
+        let size = size.to_physical(windowed_context.get_hidpi_factor());
         state
             .root_frame
             .as_ref()
             .unwrap()
-            .resize((size.0, size.1).into());
-        let mut el = glutin::EventsLoop::new();
-        let wb = glutin::WindowBuilder::new().with_dimensions(LogicalSize::new(size.0, size.1));
-        let windowed_context = glutin::ContextBuilder::new()
-            .build_windowed(wb, &el)
-            .unwrap();
-
+            .resize((size.width, size.height).into());
         unsafe {
             windowed_context.make_current().unwrap();
             gl::load_with(|symbol| windowed_context.get_proc_address(symbol) as *const _);
@@ -369,7 +368,7 @@ out vec2 coord;
 void main()
 {
     gl_Position = vec4(pos, 1.0);
-    coord = pos.xy;
+    coord = (pos.xy + vec2(1, 1)) / 2;
 }"#,
             gl::VERTEX_SHADER,
         );
@@ -429,10 +428,6 @@ void main()
             gl::BindVertexArray(0);
         }
 
-        state
-            .size
-            .set((700., 700., windowed_context.get_hidpi_factor()));
-
         let mut running = true;
         while running {
             el.poll_events(|event| {
@@ -449,7 +444,7 @@ void main()
                                 .read()
                                 .unwrap()
                                 .size
-                                .set((true_size.width, true_size.height, dpi_factor).into());
+                                .set((true_size.width, true_size.height).into());
                         }
                         _ => (),
                     }
@@ -458,13 +453,14 @@ void main()
             let state = self.state.read().unwrap();
 
             if state.size.is_dirty() {
+                let size = state.size.get();
                 self.state
                     .read()
                     .unwrap()
                     .root_frame
                     .as_ref()
                     .unwrap()
-                    .resize((size.0, size.1).into());
+                    .resize(size);
                 let root_frame = state.root_frame.as_ref().unwrap();
                 surface_pointer = root_frame
                     .to_image()
@@ -477,7 +473,7 @@ void main()
             let size = state.size.get();
 
             unsafe {
-                gl::Viewport(0, 0, size.0 as i32, size.1 as i32);
+                gl::Viewport(0, 0, size.x as i32, size.y as i32);
                 gl::Clear(gl::COLOR_BUFFER_BIT);
                 gl::BindTexture(gl::TEXTURE_2D, texture_id);
                 gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_BASE_LEVEL, 0);
@@ -486,8 +482,8 @@ void main()
                     gl::TEXTURE_2D,
                     0,
                     gl::RGBA as i32,
-                    (size.0 / size.2) as i32,
-                    (size.1 / size.2) as i32,
+                    size.x as i32,
+                    size.y as i32,
                     0,
                     gl::BGRA,
                     gl::UNSIGNED_BYTE,
@@ -530,7 +526,7 @@ pub(crate) fn new() -> Box<dyn ContextualGraphics> {
     let window = Window {
         state: Arc::new(RwLock::new(WindowState {
             //need to figure out how to select size, temp default
-            size: ObserverCell::new((700.0, 700.0, 2.).into()),
+            size: ObserverCell::new((700., 700.).into()),
             event_handler: EventHandler::new(),
             root_frame: None,
         })),
