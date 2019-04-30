@@ -329,6 +329,7 @@ impl InactiveContextGraphics for Window {
         let mut el = glutin::EventsLoop::new();
         let wb = glutin::WindowBuilder::new().with_dimensions(size);
         let windowed_context = glutin::ContextBuilder::new()
+            .with_vsync(true)
             .build_windowed(wb, &el)
             .unwrap();
         let size = size.to_physical(windowed_context.get_hidpi_factor());
