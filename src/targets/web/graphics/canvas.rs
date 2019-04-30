@@ -145,7 +145,7 @@ impl CanvasFrame {
                 .try_into()
                 .unwrap(),
                 canvas,
-                pixel_ratio: window().device_pixel_ratio(),
+                pixel_ratio: 0.,
                 context,
                 contents: vec![],
                 size: Vector::default(),
@@ -469,6 +469,10 @@ impl CanvasFrame {
 }
 
 impl Frame for CanvasFrame {
+    fn set_pixel_ratio(&self, ratio: f64) {
+        let mut state = self.state.write().unwrap();
+        state.pixel_ratio = ratio;
+    }
     fn draw(&self) {
         let state = self.state.read().unwrap();
         let viewport = state.viewport;
@@ -632,7 +636,9 @@ impl ContextualGraphics for Canvas {
 
 impl Graphics for Canvas {
     fn frame(&self) -> Box<dyn Frame> {
-        CanvasFrame::new()
+        let frame = CanvasFrame::new();
+        frame.set_pixel_ratio(window().device_pixel_ratio());
+        frame
     }
 }
 

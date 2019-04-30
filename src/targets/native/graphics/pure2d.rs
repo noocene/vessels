@@ -6,15 +6,16 @@ use crate::text::*;
 use crate::util::ObserverCell;
 
 use std::any::Any;
+use std::f64::consts::PI;
 use std::ffi::{c_void, CString};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
 
-use glutin::dpi::{LogicalSize, PhysicalSize};
+use glutin::dpi::LogicalSize;
 use glutin::ContextTrait;
 
 use cairo::Status;
-use cairo::{Format, ImageSurface, ImageSurfaceData};
+use cairo::{Format, ImageSurface, LineCap, LineJoin, Matrix};
 
 use gl::types::*;
 
@@ -117,6 +118,7 @@ struct CairoFrameState {
     contents: Vec<CairoObject>,
     viewport: Rect,
     size: Vector,
+    pixel_ratio: f64,
 }
 
 struct CairoFrame {
@@ -136,10 +138,10 @@ impl CairoFrame {
                     size: Vector::default(),
                     position: (0., 0.).into(),
                 },
+                pixel_ratio: 1.,
             })),
         })
     }
-
     fn surface(&self) -> Box<CairoImage> {
         self.draw();
         Box::new(CairoImage::new(CairoSurface(
@@ -155,6 +157,193 @@ impl CairoFrame {
             .unwrap(),
         )))
     }
+    fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
+        let state = self.state.read().unwrap();
+        let context = state.context.lock().unwrap();
+        context.restore();
+        context.save();
+        context.transform(Matrix {
+            xx: matrix[0],
+            yx: matrix[2],
+            xy: matrix[1],
+            yy: matrix[3],
+            x0: matrix[4],
+            y0: matrix[5],
+        });
+        let segments = entity.segments.iter();
+        context.move_to(0., 0.);
+        segments.for_each(|segment| match segment {
+            Segment::LineTo(point) => {
+                context.line_to(point.x, point.y);
+            }
+            Segment::MoveTo(point) => {
+                context.move_to(point.x, point.y);
+            }
+            Segment::CubicTo(point, handle_1, handle_2) => {
+                context.curve_to(
+                    handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
+                );
+            }
+            Segment::QuadraticTo(point, handle) => {
+                context.curve_to(handle.x, handle.y, handle.x, handle.y, point.x, point.y);
+            }
+        });
+        if entity.closed {
+            context.close_path();
+        }
+        match &entity.stroke {
+            Some(stroke) => {
+                context.set_line_cap(match &stroke.cap {
+                    StrokeCapType::Butt => LineCap::Butt,
+                    StrokeCapType::Round => LineCap::Round,
+                });
+                context.set_line_join(match &stroke.join {
+                    StrokeJoinType::Miter => LineJoin::Miter,
+                    StrokeJoinType::Round => LineJoin::Round,
+                    StrokeJoinType::Bevel => LineJoin::Bevel,
+                });
+                match &stroke.content {
+                    Texture::Solid(color) => {
+                        context.set_source_rgba(
+                            f64::from(color.r) / 255.,
+                            f64::from(color.g) / 255.,
+                            f64::from(color.b) / 255.,
+                            f64::from(color.a) / 255.,
+                        );
+                    }
+                    Texture::LinearGradient(gradient) => {
+                        /*let canvas_gradient = state.context.create_linear_gradient(
+                            gradient.start.x,
+                            gradient.start.y,
+                            gradient.end.x,
+                            gradient.end.y,
+                        );
+                        gradient.stops.iter().for_each(|stop| {
+                            canvas_gradient
+                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
+                                .unwrap();
+                        });
+                        state.context.set_stroke_style_gradient(&canvas_gradient);*/
+                    } /*Texture::Image(image) => {
+                    let pattern: CanvasPattern = match image.as_any().downcast::<CanvasImage>() {
+                    Ok(as_image) => js! {
+                    return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
+                    }.try_into().unwrap(),
+                    Err(_) => {
+                    let as_image = CanvasImage::from_texture(image.box_clone().as_texture());
+                    return js! {
+                    return @{&state.context}.createPattern(@{as_image}, "no-repeat");
+                    }.try_into().unwrap();
+                    }
+                    };
+                    state
+                    .context
+                    .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
+                    state.context.set_stroke_style_pattern(&pattern);
+                    }*/
+                    /*Texture::RadialGradient(gradient) => {
+                        let canvas_gradient = state
+                            .context
+                            .create_radial_gradient(
+                                gradient.start.x,
+                                gradient.start.y,
+                                gradient.start_radius,
+                                gradient.end.x,
+                                gradient.end.y,
+                                gradient.end_radius,
+                            )
+                            .unwrap();
+                        gradient.stops.iter().for_each(|stop| {
+                            canvas_gradient
+                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
+                                .unwrap();
+                        });
+                        state.context.set_stroke_style_gradient(&canvas_gradient);
+                    }*/
+                    _ => {}
+                }
+                context.set_line_width(f64::from(stroke.width));
+                if entity.fill.is_some() {
+                    context.stroke_preserve();
+                } else {
+                    context.stroke();
+                }
+                if let Texture::Image(_image) = &stroke.content {
+                    context.scale(state.pixel_ratio, state.pixel_ratio);
+                }
+            }
+            None => {}
+        }
+        match &entity.fill {
+            Some(fill) => {
+                match &fill.content {
+                    Texture::Solid(color) => {
+                        context.set_source_rgba(
+                            color.r as f64 / 255.,
+                            color.g as f64 / 255.,
+                            color.b as f64 / 255.,
+                            color.a as f64 / 255.,
+                        );
+                    } /*Texture::Image(image) => {
+                    let pattern: CanvasPattern = match image.as_any().downcast::<CanvasImage>() {
+                    Ok(as_image) => js! {
+                    return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
+                    }.try_into().unwrap(),
+                    Err(_) => {
+                    let as_image = CanvasImage::from_texture(image.box_clone().as_texture());
+                    return js! {
+                    return @{&state.context}.createPattern(@{as_image}, "no-repeat");
+                    }.try_into().unwrap();
+                    }
+                    };
+                    state
+                    .context
+                    .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
+                    state.context.set_fill_style_pattern(&pattern);
+                    }*/
+                    /*Texture::LinearGradient(gradient) => {
+                        let canvas_gradient = state.context.create_linear_gradient(
+                            gradient.start.x,
+                            gradient.start.y,
+                            gradient.end.x,
+                            gradient.end.y,
+                        );
+                        gradient.stops.iter().for_each(|stop| {
+                            canvas_gradient
+                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
+                                .unwrap();
+                        });
+                        state.context.set_fill_style_gradient(&canvas_gradient);
+                    }*/
+                    /*Texture::RadialGradient(gradient) => {
+                        let canvas_gradient = state
+                            .context
+                            .create_radial_gradient(
+                                gradient.start.x,
+                                gradient.start.y,
+                                gradient.start_radius,
+                                gradient.end.x,
+                                gradient.end.y,
+                                gradient.end_radius,
+                            )
+                            .unwrap();
+                        gradient.stops.iter().for_each(|stop| {
+                            canvas_gradient
+                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
+                                .unwrap();
+                        });
+                        state.context.set_fill_style_gradient(&canvas_gradient);
+                    }*/
+                    _ => {}
+                }
+                context.fill();
+                if let Texture::Image(_image) = &fill.content {
+                    context.scale(state.pixel_ratio, state.pixel_ratio);
+                }
+            }
+            None => {}
+        }
+    }
 }
 
 impl Clone for CairoFrame {
@@ -166,6 +355,11 @@ impl Clone for CairoFrame {
 }
 
 impl Frame for CairoFrame {
+    fn set_pixel_ratio(&self, ratio: f64) {
+        let mut state = self.state.write().unwrap();
+        state.pixel_ratio = ratio;
+    }
+
     fn add(&mut self, rasterizable: Rasterizable, orientation: Transform) -> Box<dyn Object> {
         let object = CairoObject::new(rasterizable, orientation);
         let mut state = self.state.write().unwrap();
@@ -205,19 +399,42 @@ impl Frame for CairoFrame {
         })
     }
 
-    fn show(&self) {
-        //show
-    }
+    fn show(&self) {}
 
     fn draw(&self) {
         let state = self.state.read().unwrap();
-        let context = state.context.lock().unwrap();
-        context.set_source_rgb(1., 1., 1.);
-        context.paint();
-        context.set_source_rgb(0., 0., 0.);
-        context.set_line_width(1.);
-        context.rectangle(0., 0., 100., 100.);
-        context.stroke_preserve();
+        {
+            let context = state.context.lock().unwrap();
+            context.set_source_rgb(1., 1., 1.);
+            let viewport = state.viewport;
+            let size = state.size;
+            context.set_matrix(Matrix {
+                xx: (size.x / viewport.size.x) * state.pixel_ratio,
+                yx: 0.,
+                xy: 0.,
+                yy: -(size.y / viewport.size.y) * state.pixel_ratio,
+                x0: -viewport.position.x * state.pixel_ratio,
+                y0: -viewport.position.y * state.pixel_ratio + viewport.size.y,
+            });
+            context.rectangle(
+                viewport.position.x,
+                viewport.position.y,
+                viewport.size.x,
+                viewport.size.y,
+            );
+            context.fill();
+            context.save();
+        }
+        state.contents.iter().for_each(|object| {
+            let object = object.state.read().unwrap();
+            let matrix = object.orientation.to_matrix();
+            match &object.content {
+                Rasterizable::Path(path) => self.draw_path(matrix, &path),
+                Rasterizable::Text(input) =>
+                    /*self.draw_text(matrix, &input)*/
+                    {}
+            };
+        });
     }
 }
 
@@ -332,12 +549,20 @@ impl InactiveContextGraphics for Window {
             .with_vsync(true)
             .build_windowed(wb, &el)
             .unwrap();
-        let size = size.to_physical(windowed_context.get_hidpi_factor());
+        let dpi_factor = windowed_context.get_hidpi_factor();
         state
             .root_frame
             .as_ref()
             .unwrap()
-            .resize((size.width, size.height).into());
+            .set_pixel_ratio(dpi_factor);
+        let size = size.to_physical(dpi_factor);
+        let frame = state.root_frame.as_ref().unwrap();
+
+        let size = (size.width, size.height).into();
+
+        frame.resize(size);
+        frame.set_viewport(Rect::new((0., 0.), size));
+
         unsafe {
             windowed_context.make_current().unwrap();
             gl::load_with(|symbol| windowed_context.get_proc_address(symbol) as *const _);
@@ -455,14 +680,9 @@ void main()
 
             if state.size.is_dirty() {
                 let size = state.size.get();
-                self.state
-                    .read()
-                    .unwrap()
-                    .root_frame
-                    .as_ref()
-                    .unwrap()
-                    .resize(size);
                 let root_frame = state.root_frame.as_ref().unwrap();
+                root_frame.set_viewport(Rect::new((0., 0.), size));
+                root_frame.resize(size);
                 surface_pointer = root_frame
                     .to_image()
                     .as_any()
