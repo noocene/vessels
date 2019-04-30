@@ -6,7 +6,6 @@ use crate::text::*;
 use crate::util::ObserverCell;
 
 use std::any::Any;
-use std::f64::consts::PI;
 use std::ffi::{c_void, CString};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
@@ -16,6 +15,8 @@ use glutin::ContextTrait;
 
 use cairo::Status;
 use cairo::{Format, ImageSurface, LineCap, LineJoin, Matrix};
+
+use pango::{FontDescription, Layout, LayoutExt};
 
 use gl::types::*;
 
@@ -156,6 +157,44 @@ impl CairoFrame {
             )
             .unwrap(),
         )))
+    }
+    fn draw_text(&self, matrix: [f64; 6], entity: &Text) {
+        let state = self.state.read().unwrap();
+        let context = state.context.lock().unwrap();
+        context.restore();
+        context.save();
+        context.transform(Matrix {
+            xx: matrix[0],
+            yx: matrix[2],
+            xy: matrix[1],
+            yy: matrix[3],
+            x0: matrix[4],
+            y0: matrix[5],
+        });
+        let layout = pangocairo::functions::create_layout(&context).unwrap();
+        layout.set_text(&entity.content);
+        let mut font = FontDescription::new();
+        font.set_size(i32::from(entity.size) * pango::SCALE);
+        font.set_family("San Francisco");
+        font.set_weight(match entity.weight {
+            Weight::Bold => pango::Weight::Bold,
+            Weight::Hairline => pango::Weight::Ultralight,
+            Weight::Normal => pango::Weight::Normal,
+            Weight::Heavy => pango::Weight::Heavy,
+            Weight::Thin => pango::Weight::Semilight,
+            Weight::Light => pango::Weight::Light,
+        });
+        layout.set_font_description(&font);
+        let attribute_list = pango::AttrList::new();
+        layout.set_attributes(&attribute_list);
+        context.set_source_rgba(
+            f64::from(entity.color.r) / 255.,
+            f64::from(entity.color.g) / 255.,
+            f64::from(entity.color.b) / 255.,
+            f64::from(entity.color.a) / 255.,
+        );
+        pangocairo::functions::update_layout(&context, &layout);
+        pangocairo::functions::show_layout(&context, &layout);
     }
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
@@ -430,9 +469,7 @@ impl Frame for CairoFrame {
             let matrix = object.orientation.to_matrix();
             match &object.content {
                 Rasterizable::Path(path) => self.draw_path(matrix, &path),
-                Rasterizable::Text(input) =>
-                    /*self.draw_text(matrix, &input)*/
-                    {}
+                Rasterizable::Text(input) => self.draw_text(matrix, &input),
             };
         });
     }
