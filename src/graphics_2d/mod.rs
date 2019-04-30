@@ -1,4 +1,4 @@
-use crate::input::Context;
+use crate::interaction::Context;
 use crate::path::{Path, Primitive, Texture};
 use crate::targets;
 use crate::text::Text;
@@ -69,6 +69,28 @@ pub struct Color {
     pub b: u8,
     /// Alpha channel data.
     pub a: u8,
+}
+
+impl From<(u8, u8, u8)> for Color {
+    fn from(interaction: (u8, u8, u8)) -> Color {
+        Color {
+            r: interaction.0,
+            g: interaction.1,
+            b: interaction.2,
+            a: 255,
+        }
+    }
+}
+
+impl From<(u8, u8, u8, u8)> for Color {
+    fn from(interaction: (u8, u8, u8, u8)) -> Color {
+        Color {
+            r: interaction.0,
+            g: interaction.1,
+            b: interaction.2,
+            a: interaction.3,
+        }
+    }
 }
 
 impl Color {
@@ -243,14 +265,14 @@ impl Default for Transform {
 }
 
 impl From<Vector> for Transform {
-    fn from(input: Vector) -> Transform {
-        Transform::default().with_position(input)
+    fn from(interaction: Vector) -> Transform {
+        Transform::default().with_position(interaction)
     }
 }
 
 impl From<(f64, f64)> for Transform {
-    fn from(input: (f64, f64)) -> Transform {
-        Vector::from(input).into()
+    fn from(interaction: (f64, f64)) -> Transform {
+        Vector::from(interaction).into()
     }
 }
 
@@ -262,6 +284,10 @@ pub trait Object: Sync + Send {
     fn get_transform(&self) -> Transform;
     /// Sets the current transfomration of the [Object].
     fn set_transform(&mut self, transform: Transform);
+    /// Gets the current z-depth of the [Object].
+    fn get_depth(&self) -> u32;
+    /// Sets the current z-depth of the [Object].
+    fn set_depth(&mut self, depth: u32);
     /// Replaces the contents of the [Object] with new Rasterizable content. This may be costly.
     fn update(&mut self, content: Rasterizable);
 }
@@ -269,7 +295,7 @@ pub trait Object: Sync + Send {
 /// An isolated rendering context.
 pub trait Frame: Sync + Send {
     /// Adds content to the [Frame].
-    fn add(&mut self, rasterizable: Rasterizable, orientation: Transform) -> Box<dyn Object>;
+    fn add(&mut self, content: Content) -> Box<dyn Object>;
     /// Resizes the [Frame]. This does not resize the viewport.
     fn resize(&self, size: Vector);
     /// Sets the viewport.
@@ -278,8 +304,8 @@ pub trait Frame: Sync + Send {
     fn get_size(&self) -> Vector;
     /// Returns an image that is a still rasterization of any rendered content.
     fn to_image(&self) -> Box<dyn ImageRepresentation>;
-    /// Returns the measured dimensions of some provided text.
-    fn measure(&self, input: Text) -> Vector;
+    /// Returns the measured dimensions of some provided content.
+    fn measure(&self, interaction: Rasterizable) -> Vector;
     #[doc(hidden)]
     fn box_clone(&self) -> Box<dyn Frame>;
     #[doc(hidden)]
@@ -296,6 +322,67 @@ impl Clone for Box<dyn Frame> {
     }
 }
 
+/// Renderable content.
+#[derive(Debug, Clone)]
+pub struct Content {
+    pub(crate) content: Rasterizable,
+    pub(crate) depth: u32,
+    pub(crate) transform: Transform,
+}
+
+impl Content {
+    /// Sets the orientation of the content.
+    pub fn with_transform(mut self, transform: Transform) -> Self {
+        self.transform = transform;
+        self
+    }
+    /// Applies a transformation to the content.
+    pub fn apply_transform(&mut self, transform: Transform) {
+        self.transform = transform;
+    }
+    /// Sets the z-depth of the content.
+    pub fn with_depth(mut self, depth: u32) -> Self {
+        self.depth = depth;
+        self
+    }
+}
+
+impl From<Path> for Content {
+    fn from(interaction: Path) -> Content {
+        Content {
+            content: interaction.into(),
+            depth: 0,
+            transform: Transform::default(),
+        }
+    }
+}
+
+impl From<Text> for Content {
+    fn from(interaction: Text) -> Content {
+        Content {
+            content: interaction.into(),
+            depth: 0,
+            transform: Transform::default(),
+        }
+    }
+}
+
+impl From<Rasterizable> for Content {
+    fn from(interaction: Rasterizable) -> Content {
+        Content {
+            content: interaction,
+            depth: 0,
+            transform: Transform::default(),
+        }
+    }
+}
+
+impl From<Content> for Rasterizable {
+    fn from(interaction: Content) -> Rasterizable {
+        interaction.content
+    }
+}
+
 /// A type that can rasterized.
 #[derive(Debug, Clone)]
 pub enum Rasterizable {
@@ -306,22 +393,22 @@ pub enum Rasterizable {
 }
 
 impl From<Path> for Rasterizable {
-    fn from(input: Path) -> Rasterizable {
-        Rasterizable::Path(Box::new(input))
+    fn from(interaction: Path) -> Rasterizable {
+        Rasterizable::Path(Box::new(interaction))
     }
 }
 
 impl From<Text> for Rasterizable {
-    fn from(input: Text) -> Rasterizable {
-        Rasterizable::Text(Box::new(input))
+    fn from(interaction: Text) -> Rasterizable {
+        Rasterizable::Text(Box::new(interaction))
     }
 }
 
 impl From<Box<dyn ImageRepresentation>> for Rasterizable {
-    fn from(input: Box<dyn ImageRepresentation>) -> Rasterizable {
+    fn from(interaction: Box<dyn ImageRepresentation>) -> Rasterizable {
         Rasterizable::Path(Box::new(
-            Primitive::rectangle(input.get_size())
-                .fill(input.into())
+            Primitive::rectangle(interaction.get_size())
+                .fill(interaction.into())
                 .finalize(),
         ))
     }
@@ -329,8 +416,8 @@ impl From<Box<dyn ImageRepresentation>> for Rasterizable {
 
 /// Provides an interface for the rasterization of content.
 pub trait Rasterizer: Sync + Send {
-    /// Returns a rasterization of the input.
-    fn rasterize(&self, input: Rasterizable, vector: Vector) -> Box<dyn ImageRepresentation>;
+    /// Returns a rasterization of the interaction.
+    fn rasterize(&self, interaction: Rasterizable, vector: Vector) -> Box<dyn ImageRepresentation>;
 }
 
 /// Provides 2-dimensional euclidean rendering capabilities.
@@ -354,7 +441,7 @@ pub trait Ticker {
     fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>);
 }
 
-/// A graphics context that can provide input and windowing.
+/// A graphics context that can provide interaction and windowing.
 pub trait ContextualGraphics: Graphics {
     /// Starts a windowed context using the provided [Frame] as the document root.
     fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics>;
@@ -370,17 +457,20 @@ pub struct Vector {
 }
 
 impl From<(f64, f64)> for Vector {
-    fn from(input: (f64, f64)) -> Vector {
+    fn from(interaction: (f64, f64)) -> Vector {
         Vector {
-            x: input.0,
-            y: input.1,
+            x: interaction.0,
+            y: interaction.1,
         }
     }
 }
 
 impl From<f64> for Vector {
-    fn from(input: f64) -> Vector {
-        Vector { x: input, y: input }
+    fn from(interaction: f64) -> Vector {
+        Vector {
+            x: interaction,
+            y: interaction,
+        }
     }
 }
 

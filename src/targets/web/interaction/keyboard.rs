@@ -1,6 +1,6 @@
-use crate::input;
-use crate::input::keyboard;
-use crate::input::keyboard::{
+use crate::interaction;
+use crate::interaction::keyboard;
+use crate::interaction::keyboard::{
     Action, Alpha, Arrow, Event, Function, Key, Location, Number, Numpad,
 };
 
@@ -143,7 +143,7 @@ pub(crate) struct Keyboard {
     state: Rc<RefCell<KeyboardState>>,
 }
 
-impl input::Source for Keyboard {
+impl interaction::Source for Keyboard {
     type Event = Event;
     fn bind(&self, handler: Box<dyn Fn(Event) + 'static>) {
         self.state.borrow_mut().handlers.push(handler);
@@ -168,7 +168,7 @@ impl keyboard::State for KeyboardState {
 
 impl Keyboard {
     #[allow(clippy::new_ret_no_self)]
-    pub(crate) fn new() -> Box<dyn input::Keyboard> {
+    pub(crate) fn new() -> Box<dyn interaction::Keyboard> {
         let keyboard = Keyboard {
             state: Rc::new(RefCell::new(KeyboardState {
                 handlers: vec![],

@@ -1,6 +1,6 @@
-use crate::input;
-use crate::input::keyboard;
-use crate::input::keyboard::{Event, Key};
+use crate::interaction;
+use crate::interaction::keyboard;
+use crate::interaction::keyboard::{Event, Key};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -16,7 +16,7 @@ pub(crate) struct Keyboard {
     state: Rc<RefCell<KeyboardState>>,
 }
 
-impl input::Source for Keyboard {
+impl interaction::Source for Keyboard {
     type Event = Event;
     fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static>) {
         self.state.borrow_mut().handlers.push(handler);
@@ -40,7 +40,7 @@ impl keyboard::State for KeyboardState {
 }
 
 impl Keyboard {
-    pub(crate) fn new() -> Box<dyn input::Keyboard> {
+    pub(crate) fn new() -> Box<dyn interaction::Keyboard> {
         let keyboard = Keyboard {
             state: Rc::new(RefCell::new(KeyboardState {
                 handlers: vec![],
@@ -50,6 +50,5 @@ impl Keyboard {
         keyboard.initialize();
         Box::new(keyboard)
     }
-    fn initialize(&self) {
-    }
+    fn initialize(&self) {}
 }

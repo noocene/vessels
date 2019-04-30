@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
-/// An input event [Source](super::Source) that represents a keyboard.
+/// An interaction event [Source](super::Source) that represents a keyboard.
 pub trait Keyboard: super::Source<Event = Event> + State {}
 
 /// A context that permits active polling of key states.

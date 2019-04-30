@@ -7,27 +7,26 @@ version = "0.1.0"
 [dependencies]
 failure = "0.1.5"
 
-[profile.release]
-debug = false
-lto = true
+[target.wasm32-unknown-unknown.dependencies]
+stdweb = "0.4.13"
+serde_derive = "1.0.84"
+stdweb-derive = "0.5.1"
+serde = "1.0.84"
+itertools = "0.8.0"
 
 [target.asmjs-unknown-emscripten.dependencies]
 serde = "1.0.84"
 serde_derive = "1.0.84"
 stdweb = "0.4.13"
 stdweb-derive = "0.5.1"
+itertools = "0.8.0"
 
 [target.wasm32-unknown-emscripten.dependencies]
 serde = "1.0.84"
 serde_derive = "1.0.84"
 stdweb = "0.4.13"
 stdweb-derive = "0.5.1"
-
-[target.wasm32-unknown-unknown.dependencies]
-serde = "1.0.84"
-serde_derive = "1.0.84"
-stdweb = "0.4.13"
-stdweb-derive = "0.5.1"
+itertools = "0.8.0"
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
 glutin = "0.20.0"
@@ -37,3 +36,8 @@ glib = "0.7.1"
 pangocairo = "0.7.0"
 cairo-sys-rs = "0.8.0"
 pango = "0.6.0"
+itertools = "0.8.0"
+
+[profile.release]
+lto = true
+debug = false

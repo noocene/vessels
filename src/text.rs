@@ -7,6 +7,12 @@ pub enum Font {
     SystemFont,
 }
 
+impl Default for Font {
+    fn default() -> Font {
+        Font::SystemFont
+    }
+}
+
 /// Specifies the weight of a font.
 #[derive(Clone, Copy, Debug)]
 pub enum Weight {
@@ -22,6 +28,18 @@ pub enum Weight {
     Bold,
     /// A heavy/black font weight.
     Heavy,
+    /// A slightly bold font weight.
+    Medium,
+    /// An extra-bold font weight.
+    ExtraBold,
+    /// A somewhat bold font weight.
+    SemiBold,
+}
+
+impl Default for Weight {
+    fn default() -> Weight {
+        Weight::Normal
+    }
 }
 
 /// Specifies the type of text wrap used.
@@ -42,6 +60,17 @@ pub enum Align {
     Start,
     /// Right-justification.
     End,
+}
+
+/// Specifies the origin of text.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Origin {
+    /// Places the origin at the start of the alphabetic baseline.
+    Baseline,
+    /// Places the origin at the upper justification-start corner of the rendered text.
+    Top,
+    /// Places the origin in the middle of the rendered text.
+    Middle,
 }
 
 /// Provides an abstraction for representing text content.
@@ -67,6 +96,10 @@ pub struct Text {
     pub wrap: Wrap,
     /// The font weight used.
     pub weight: Weight,
+    /// The letter spacing of the text.
+    pub letter_spacing: f64,
+    /// The origin of the rendered text.
+    pub origin: Origin,
 }
 
 impl Text {
@@ -98,6 +131,11 @@ impl Text {
         self.line_height = line_height;
         self
     }
+    /// Sets the letter spacing of the text.
+    pub fn with_letter_spacing(mut self, letter_spacing: f64) -> Self {
+        self.letter_spacing = letter_spacing;
+        self
+    }
     /// Sets the max width of the text.
     pub fn with_max_width(mut self, max_width: u32) -> Self {
         self.max_width = Some(max_width);
@@ -123,6 +161,16 @@ impl Text {
         self.weight = weight;
         self
     }
+    /// Sets text origin to be the baseline start.
+    pub fn with_baseline_origin(mut self) -> Self {
+        self.origin = Origin::Baseline;
+        self
+    }
+    /// Sets text origin to be the middle of the rendered line.
+    pub fn with_middle_origin(mut self) -> Self {
+        self.origin = Origin::Middle;
+        self
+    }
 }
 
 impl Default for Text {
@@ -135,8 +183,10 @@ impl Default for Text {
             italic: false,
             max_width: None,
             align: Align::Start,
+            letter_spacing: 0.,
             line_height: 26,
             wrap: Wrap::None,
+            origin: Origin::Top,
             weight: Weight::Normal,
         }
     }

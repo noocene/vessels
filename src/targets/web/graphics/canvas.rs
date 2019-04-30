@@ -1,14 +1,16 @@
 use crate::graphics_2d::{
-    Color, ContextGraphics, ContextualGraphics, Frame, Graphics, Image, ImageRepresentation,
-    InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect, Texture2D, Ticker, Transform,
-    Vector,
+    Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics, Image,
+    ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
+    Texture2D, Ticker, Transform, Vector,
 };
-use crate::input::Context;
-use crate::input::{Keyboard, Mouse};
+use crate::interaction::Context;
+use crate::interaction::{Keyboard, Mouse, Window};
 use crate::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
 use crate::targets::web;
-use crate::text::{Align, Font, Text, Weight, Wrap};
+use crate::text::{Align, Font, Origin, Text, Weight, Wrap};
 use crate::util::ObserverCell;
+
+use itertools::Itertools;
 
 use stdweb::traits::{IChildNode, IElement, IEvent, IEventTarget, IHtmlElement, INode};
 use stdweb::unstable::TryInto;
@@ -76,6 +78,7 @@ impl ImageRepresentation for CanvasImage {
 struct CanvasObjectState {
     orientation: Transform,
     content: Rasterizable,
+    depth: u32,
 }
 
 #[derive(Clone)]
@@ -84,11 +87,12 @@ struct CanvasObject {
 }
 
 impl CanvasObject {
-    fn new(content: Rasterizable, orientation: Transform) -> CanvasObject {
+    fn new(content: Rasterizable, orientation: Transform, depth: u32) -> CanvasObject {
         CanvasObject {
             state: Arc::new(RwLock::new(CanvasObjectState {
                 orientation,
                 content,
+                depth,
             })),
         }
     }
@@ -104,8 +108,14 @@ impl Object for CanvasObject {
     fn set_transform(&mut self, transform: Transform) {
         self.state.write().unwrap().orientation = transform;
     }
-    fn update(&mut self, input: Rasterizable) {
-        self.state.write().unwrap().content = input;
+    fn set_depth(&mut self, depth: u32) {
+        self.state.write().unwrap().depth = depth;
+    }
+    fn get_depth(&self) -> u32 {
+        self.state.read().unwrap().depth
+    }
+    fn update(&mut self, interaction: Rasterizable) {
+        self.state.write().unwrap().content = interaction;
     }
 }
 
@@ -116,7 +126,6 @@ struct CanvasFrameState {
     pixel_ratio: f64,
     viewport: Rect,
     size: Vector,
-    layered_shadows_unsupported: bool,
 }
 
 impl Drop for CanvasFrameState {
@@ -139,11 +148,6 @@ impl CanvasFrame {
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
         Box::new(CanvasFrame {
             state: Arc::new(RwLock::new(CanvasFrameState {
-                layered_shadows_unsupported: js! {
-                    return !@{&context}.filter;
-                }
-                .try_into()
-                .unwrap(),
                 canvas,
                 pixel_ratio: 0.,
                 context,
@@ -153,6 +157,74 @@ impl CanvasFrame {
             })),
         })
     }
+    fn draw_shadows(&self, matrix: [f64; 6], entity: &Path) {
+        let state = self.state.read().unwrap();
+        for shadow in &entity.shadows {
+            state.context.restore();
+            state.context.save();
+            state.context.transform(
+                matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+            );
+            let size = entity.bounds().size;
+            let scale = (size + shadow.spread) / size;
+            state.context.begin_path();
+            let segments = entity.segments.iter();
+            let offset: Vector = (
+                state.viewport.size.x + state.viewport.position.x,
+                state.viewport.size.y + state.viewport.position.y,
+            )
+                .into();
+            let new_size = size + shadow.spread;
+            let scale_offset = (size - new_size) / 2.;
+            state.context.translate(scale_offset.x, scale_offset.y);
+            state.context.scale(scale.x, scale.y);
+            state.context.move_to(-offset.x, -offset.y);
+            state
+                .context
+                .translate(-offset.x / scale.x, -offset.y / scale.y);
+            segments.for_each(|segment| match segment {
+                Segment::LineTo(point) => {
+                    state.context.line_to(point.x, point.y);
+                }
+                Segment::MoveTo(point) => {
+                    state.context.move_to(point.x, point.y);
+                }
+                Segment::CubicTo(point, handle_1, handle_2) => {
+                    state.context.bezier_curve_to(
+                        handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
+                    );
+                }
+                Segment::QuadraticTo(point, handle) => {
+                    state
+                        .context
+                        .quadratic_curve_to(handle.x, handle.y, point.x, point.y);
+                }
+            });
+            if entity.closed {
+                state.context.close_path();
+            }
+            state
+                .context
+                .set_shadow_blur(shadow.blur * state.pixel_ratio);
+            state
+                .context
+                .set_shadow_color(&shadow.color.to_rgba_color());
+            state
+                .context
+                .set_shadow_offset_x((shadow.offset.x + offset.x) * state.pixel_ratio);
+            state
+                .context
+                .set_shadow_offset_y((shadow.offset.y + offset.y) * state.pixel_ratio);
+            state.context.set_fill_style_color("rgba(255,255,255,1)");
+            state.context.fill(FillRule::NonZero);
+        }
+        state.context.restore();
+        state.context.save();
+        state.context.transform(
+            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+        );
+        state.context.set_shadow_color("rgba(255,255,255,0)");
+    }
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
         state.context.restore();
@@ -160,42 +232,8 @@ impl CanvasFrame {
         state.context.transform(
             matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
         );
+        self.draw_shadows(matrix, &entity);
         state.context.begin_path();
-        if state.layered_shadows_unsupported {
-            if !entity.shadows.is_empty() {
-                let shadow = entity.shadows[0];
-                state.context.set_shadow_blur(shadow.blur);
-                state
-                    .context
-                    .set_shadow_color(&shadow.color.to_rgba_color());
-                state.context.set_shadow_offset_x(shadow.offset.x);
-                state.context.set_shadow_offset_y(shadow.offset.y);
-            } else {
-                state.context.set_shadow_color("rgba(0,0,0,0)");
-            }
-        } else if !entity.shadows.is_empty() {
-            let filter = entity
-                .shadows
-                .iter()
-                .map(|shadow| {
-                    format!(
-                        "drop-shadow({}px {}px {}px {})",
-                        shadow.offset.x,
-                        shadow.offset.y,
-                        shadow.blur,
-                        shadow.color.to_rgba_color()
-                    )
-                })
-                .collect::<Vec<String>>()
-                .join(" ");
-            js! {
-                @{&state.context}.filter = @{filter};
-            };
-        } else {
-            js! {
-                @{&state.context}.filter = "";
-            };
-        }
         let segments = entity.segments.iter();
         state.context.move_to(0., 0.);
         segments.for_each(|segment| match segment {
@@ -358,67 +396,178 @@ impl CanvasFrame {
             None => {}
         }
     }
-    fn update_text_style(&self, input: &Text) {
+    fn update_text_style(&self, interaction: &Text) {
         let state = self.state.read().unwrap();
-        state.context.set_font((match input.font {
+        state.context.set_font((match interaction.font {
                 Font::SystemFont => {
-                    format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
+                    format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if interaction.italic { "italic " } else { "" }, match interaction.weight {
                         Weight::Normal => "400",
-                        Weight::Bold => "500",
-                        Weight::Heavy => "700",
+                        Weight::Medium => "500",
+                        Weight::SemiBold => "600",
+                        Weight::Bold => "700",
+                        Weight::ExtraBold => "800",
+                        Weight::Heavy => "900",
                         Weight::Thin => "200",
-                        Weight::Light => "200",
+                        Weight::Light => "300",
                         Weight::Hairline => "100"
-                    }, input.size)
+                    }, interaction.size)
                 }
             }).as_str());
-        state.context.set_text_align(match input.align {
+        state.context.set_text_align(match interaction.align {
             Align::Center => TextAlign::Center,
             Align::End => TextAlign::End,
             Align::Start => TextAlign::Start,
         });
-        state.context.set_text_baseline(TextBaseline::Hanging);
+        state.context.set_text_baseline(match interaction.origin {
+            Origin::Top => TextBaseline::Top,
+            Origin::Baseline => TextBaseline::Alphabetic,
+            Origin::Middle => TextBaseline::Middle,
+        });
         state
             .context
-            .set_fill_style_color(&input.color.to_rgba_color());
+            .set_fill_style_color(&interaction.color.to_rgba_color());
     }
-    fn draw_text(&self, matrix: [f64; 6], input: &Text) {
+    fn fill_text_with_spacing(&self, text: &'_ str, position: Vector, spacing: f64) {
+        if text == "" {
+            return;
+        }
+        let state = self.state.read().unwrap();
+        let mut full_width = state.context.measure_text(&text).unwrap().get_width();
+        let mut position = position;
+        let mut text = text.to_owned();
+        let mut text_iter = text.chars();
+        while {
+            let head = text_iter.next().unwrap();
+            text = text_iter
+                .map(|character| character.to_string())
+                .collect::<Vec<String>>()
+                .join("");
+            text_iter = text.chars();
+            state
+                .context
+                .fill_text(&head.to_string(), position.x, position.y, None);
+
+            let shorter_width = if text == "" {
+                0.
+            } else {
+                state.context.measure_text(&text).unwrap().get_width()
+            };
+            let character_width = full_width - shorter_width;
+            position.x += character_width + spacing;
+            full_width = shorter_width;
+            text != ""
+        } {}
+    }
+    fn measure_text_with_spacing(&self, text: &'_ str, spacing: f64) -> f64 {
+        if text == "" {
+            return 0.;
+        }
+        let state = self.state.read().unwrap();
+        let mut full_width = state.context.measure_text(&text).unwrap().get_width();
+        if spacing == 0. {
+            return full_width;
+        }
+        let mut spaced_width = 0.;
+        let mut text = text.to_owned();
+        let mut text_iter = text.chars();
+        while {
+            text_iter.next().unwrap();
+            text = text_iter
+                .map(|character| character.to_string())
+                .collect::<Vec<String>>()
+                .join("");
+            text_iter = text.chars();
+            let shorter_width = if text == "" {
+                0.
+            } else {
+                state.context.measure_text(&text).unwrap().get_width()
+            };
+            let character_width = full_width - shorter_width;
+            spaced_width += character_width + spacing;
+            full_width = shorter_width;
+            text != ""
+        } {}
+        spaced_width - spacing
+    }
+    fn draw_text(&self, matrix: [f64; 6], interaction: &Text) {
         let state = self.state.read().unwrap();
         state.context.restore();
         state.context.save();
         state.context.transform(
             matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
         );
-        let mut lines: Vec<String> = input
+        let mut lines: Vec<String> = interaction
             .content
             .split('\n')
             .map(std::borrow::ToOwned::to_owned)
             .collect();
-        self.update_text_style(&input);
-        if input.max_width.is_some() {
-            lines = self.wrap_text(&input);
+        self.update_text_style(&interaction);
+        if interaction.max_width.is_some() {
+            lines = self.wrap_text(&interaction);
         }
         for (index, line) in lines.iter().enumerate() {
-            state.context.fill_text(
-                line,
-                0.,
-                (u32::from(input.line_height) * index as u32).into(),
-                None,
-            );
+            if interaction.letter_spacing != 0. {
+                self.fill_text_with_spacing(
+                    line,
+                    (
+                        0.,
+                        (u32::from(interaction.line_height) * index as u32).into(),
+                    )
+                        .into(),
+                    interaction.letter_spacing,
+                );
+            } else {
+                state.context.fill_text(
+                    line,
+                    0.,
+                    (u32::from(interaction.line_height) * index as u32).into(),
+                    None,
+                );
+            }
         }
     }
     fn element(&self) -> CanvasElement {
         let state = self.state.read().unwrap();
         state.canvas.clone()
     }
-    fn wrap_text(&self, input: &Text) -> Vec<String> {
-        let state = self.state.read().unwrap();
-        let mut lines: Vec<String> = input
+    fn measure_text_height(&self, interaction: Text) -> f64 {
+        let font = match interaction.font {
+            Font::SystemFont => {
+                format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if interaction.italic { "italic " } else { "" }, match interaction.weight {
+                    Weight::Normal => "400",
+                    Weight::Medium => "500",
+                    Weight::SemiBold => "600",
+                    Weight::Bold => "700",
+                    Weight::ExtraBold => "800",
+                    Weight::Heavy => "900",
+                    Weight::Thin => "200",
+                    Weight::Light => "300",
+                    Weight::Hairline => "100"
+                }, interaction.size)
+            }
+        };
+        (js! {
+            let el = document.createElement("span");
+            el.style.position = "fixed";
+            el.style.left = "-5000px";
+            el.style.top = "-5000px";
+            el.textContent = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            el.style.font = @{font};
+            document.body.appendChild(el);
+            let offsetHeight = el.offsetHeight;
+            el.remove();
+            return offsetHeight;
+        })
+        .try_into()
+        .unwrap()
+    }
+    fn wrap_text(&self, interaction: &Text) -> Vec<String> {
+        let mut lines: Vec<String> = interaction
             .content
             .split('\n')
             .map(std::borrow::ToOwned::to_owned)
             .collect();
-        match input.wrap {
+        match interaction.wrap {
             Wrap::Normal => {
                 let mut test_string = "".to_owned();
                 lines.reverse();
@@ -432,12 +581,10 @@ impl CanvasFrame {
                         Some(line) => {
                             let words = line.split(' ').collect::<Vec<&str>>();
                             for (index, word) in words.iter().cloned().enumerate() {
-                                if state
-                                    .context
-                                    .measure_text(&(test_string.clone() + word))
-                                    .unwrap()
-                                    .get_width()
-                                    <= f64::from(input.max_width.unwrap())
+                                if self.measure_text_with_spacing(
+                                    &(test_string.clone() + word),
+                                    interaction.letter_spacing,
+                                ) <= f64::from(interaction.max_width.unwrap())
                                 {
                                     test_string += &format!(" {}", word);
                                 } else {
@@ -492,14 +639,22 @@ impl Frame for CanvasFrame {
             viewport.size.y,
         );
         state.context.save();
-        state.contents.iter().for_each(|object| {
-            let object = object.state.read().unwrap();
-            let matrix = object.orientation.to_matrix();
-            match &object.content {
-                Rasterizable::Path(path) => self.draw_path(matrix, &path),
-                Rasterizable::Text(input) => self.draw_text(matrix, &input),
-            };
-        });
+        state
+            .contents
+            .iter()
+            .sorted_by(|a, b| {
+                let a = a.state.read().unwrap();
+                let b = b.state.read().unwrap();
+                a.depth.partial_cmp(&b.depth).unwrap()
+            })
+            .for_each(|object| {
+                let object = object.state.read().unwrap();
+                let matrix = object.orientation.to_matrix();
+                match &object.content {
+                    Rasterizable::Path(path) => self.draw_path(matrix, &path),
+                    Rasterizable::Text(interaction) => self.draw_text(matrix, &interaction),
+                };
+            });
     }
     fn show(&self) {
         let state = self.state.read().unwrap();
@@ -509,8 +664,8 @@ impl Frame for CanvasFrame {
         });
         document().body().unwrap().append_child(&state.canvas);
     }
-    fn add(&mut self, rasterizable: Rasterizable, orientation: Transform) -> Box<dyn Object> {
-        let object = CanvasObject::new(rasterizable, orientation);
+    fn add(&mut self, content: Content) -> Box<dyn Object> {
+        let object = CanvasObject::new(content.content, content.transform, content.depth);
         let mut state = self.state.write().unwrap();
         state.contents.push(object.clone());
         Box::new(object)
@@ -534,27 +689,36 @@ impl Frame for CanvasFrame {
         self.draw();
         Box::new(state.canvas.clone())
     }
-    fn measure(&self, input: Text) -> Vector {
-        self.update_text_style(&input);
-        let state = self.state.read().unwrap();
-        if input.max_width.is_some() {
-            let lines = self.wrap_text(&input);
-            (
-                f64::from(input.max_width.unwrap()),
-                (f64::from((lines.len() - 1).max(0) as u32) * f64::from(input.line_height))
-                    + f64::from(input.size),
-            )
-                .into()
-        } else {
-            (
-                state
-                    .context
-                    .measure_text(&input.content)
-                    .unwrap()
-                    .get_width(),
-                f64::from(input.size),
-            )
-                .into()
+    fn measure(&self, interaction: Rasterizable) -> Vector {
+        match interaction {
+            Rasterizable::Text(interaction) => {
+                self.update_text_style(&interaction);
+                let origin = interaction.origin;
+                let mut size: Vector = if interaction.max_width.is_some() {
+                    let lines = self.wrap_text(&interaction);
+                    (
+                        f64::from(interaction.max_width.unwrap()),
+                        (f64::from((lines.len() - 1).max(0) as u32)
+                            * f64::from(interaction.line_height))
+                            + f64::from(interaction.size),
+                    )
+                        .into()
+                } else {
+                    (
+                        self.measure_text_with_spacing(
+                            &interaction.content,
+                            interaction.letter_spacing,
+                        ),
+                        self.measure_text_height(*interaction),
+                    )
+                        .into()
+                };
+                if origin == Origin::Middle {
+                    size.y = 0.;
+                }
+                size
+            }
+            Rasterizable::Path(interaction) => interaction.bounds().size,
         }
     }
     fn box_clone(&self) -> Box<dyn Frame> {
@@ -575,11 +739,23 @@ struct CanvasState {
 }
 
 impl Rasterizer for Canvas {
-    fn rasterize(&self, input: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
+    fn rasterize(&self, interaction: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
         let mut frame = CanvasFrame::new();
+        if let Rasterizable::Text(text) = &interaction {
+            match &text.origin {
+                Origin::Top => {
+                    frame.set_viewport(Rect::new(Vector::default(), size));
+                }
+                Origin::Baseline => {
+                    frame.set_viewport(Rect::new((0., -size.y), size));
+                }
+                Origin::Middle => {
+                    frame.set_viewport(Rect::new((0., -size.y / 2.), size));
+                }
+            }
+        }
         frame.resize(size);
-        frame.set_viewport(Rect::new(Vector::default(), size));
-        frame.add(input, Vector::from((0., 0.)).into());
+        frame.add(interaction.into());
         frame.draw();
         Box::new(frame.element())
     }
@@ -587,10 +763,13 @@ impl Rasterizer for Canvas {
 
 impl Context for Canvas {
     fn mouse(&self) -> Box<dyn Mouse> {
-        web::input::Mouse::new()
+        web::interaction::Mouse::new()
     }
     fn keyboard(&self) -> Box<dyn Keyboard> {
-        web::input::Keyboard::new()
+        web::interaction::Keyboard::new()
+    }
+    fn window(&self) -> Box<dyn Window> {
+        web::interaction::Window::new()
     }
 }
 
@@ -628,6 +807,9 @@ impl ContextualGraphics for Canvas {
     fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics> {
         {
             let mut state = self.state.write().unwrap();
+            let size = state.size.get();
+            root.resize(size);
+            root.set_viewport(Rect::new((0., 0.), size));
             state.root_frame = Some(root);
         }
         self
@@ -673,6 +855,7 @@ pub(crate) fn new() -> Box<dyn ContextualGraphics> {
         .unwrap()
         .append_html(
             r#"
+<title></title>
 <style>
 body, html, canvas {
     height: 100%;

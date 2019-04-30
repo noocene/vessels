@@ -1,5 +1,5 @@
 use crate::graphics_2d::*;
-use crate::input::*;
+use crate::interaction::*;
 use crate::path::*;
 use crate::targets::native;
 use crate::text::*;
@@ -183,9 +183,18 @@ impl CairoFrame {
             Weight::Heavy => pango::Weight::Heavy,
             Weight::Thin => pango::Weight::Semilight,
             Weight::Light => pango::Weight::Light,
+            Weight::Medium => pango::Weight::Medium,
+            Weight::ExtraBold => pango::Weight::Ultrabold,
+            Weight::SemiBold => pango::Weight::Semibold,
         });
         layout.set_font_description(&font);
         let attribute_list = pango::AttrList::new();
+        attribute_list.insert(
+            pango::Attribute::new_letter_spacing(
+                (entity.letter_spacing * f64::from(pango::SCALE)) as i32,
+            )
+            .unwrap(),
+        );
         layout.set_attributes(&attribute_list);
         context.set_source_rgba(
             f64::from(entity.color.r) / 255.,
@@ -399,8 +408,8 @@ impl Frame for CairoFrame {
         state.pixel_ratio = ratio;
     }
 
-    fn add(&mut self, rasterizable: Rasterizable, orientation: Transform) -> Box<dyn Object> {
-        let object = CairoObject::new(rasterizable, orientation);
+    fn add(&mut self, content: Content) -> Box<dyn Object> {
+        let object = CairoObject::new(content.content, content.transform, content.depth);
         let mut state = self.state.write().unwrap();
         state.contents.push(object.clone());
         Box::new(object)
@@ -427,7 +436,7 @@ impl Frame for CairoFrame {
         self.surface()
     }
 
-    fn measure(&self, input: Text) -> Vector {
+    fn measure(&self, input: Rasterizable) -> Vector {
         //temporary
         Vector { x: 5.0, y: 5.0 }
     }
@@ -478,6 +487,7 @@ impl Frame for CairoFrame {
 struct CairoObjectState {
     orientation: Transform,
     content: Rasterizable,
+    depth: u32,
 }
 
 #[derive(Clone)]
@@ -486,11 +496,12 @@ struct CairoObject {
 }
 
 impl CairoObject {
-    fn new(content: Rasterizable, orientation: Transform) -> CairoObject {
+    fn new(content: Rasterizable, orientation: Transform, depth: u32) -> CairoObject {
         CairoObject {
             state: Arc::new(RwLock::new(CairoObjectState {
                 orientation,
                 content,
+                depth,
             })),
         }
     }
@@ -508,6 +519,12 @@ impl Object for CairoObject {
     }
     fn update(&mut self, input: Rasterizable) {
         self.state.write().unwrap().content = input;
+    }
+    fn get_depth(&self) -> u32 {
+        self.state.read().unwrap().depth
+    }
+    fn set_depth(&mut self, depth: u32) {
+        self.state.write().unwrap().depth = depth;
     }
 }
 
@@ -528,8 +545,8 @@ impl EventHandler {
     }
 }
 
-struct Window {
-    state: Arc<RwLock<WindowState>>,
+struct Cairo {
+    state: Arc<RwLock<CairoState>>,
 }
 
 fn new_shader(source: &str, kind: GLenum) -> GLuint {
@@ -542,40 +559,43 @@ fn new_shader(source: &str, kind: GLenum) -> GLuint {
     }
 }
 
-struct WindowState {
+struct CairoState {
     root_frame: Option<Box<dyn Frame>>,
     event_handler: EventHandler,
     size: ObserverCell<Vector>,
 }
 
-impl Ticker for Window {
+impl Ticker for Cairo {
     fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>) {}
 }
 
-impl Rasterizer for Window {
+impl Rasterizer for Cairo {
     fn rasterize(&self, input: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
         //this is probably wrong, just temp
         let mut frame = CairoFrame::new();
         frame.resize(size);
         frame.set_viewport(Rect::new(Vector::default(), size));
-        frame.add(input, Vector::from((0., 0.)).into());
+        frame.add(input.into());
         frame.draw();
         frame.surface()
     }
 }
 
-impl Context for Window {
+impl Context for Cairo {
     fn mouse(&self) -> Box<dyn Mouse> {
-        native::input::Mouse::new()
+        native::interaction::Mouse::new()
     }
     fn keyboard(&self) -> Box<dyn Keyboard> {
-        native::input::Keyboard::new()
+        native::interaction::Keyboard::new()
+    }
+    fn window(&self) -> Box<dyn Window> {
+        native::interaction::Window::new()
     }
 }
 
-impl ContextGraphics for Window {}
+impl ContextGraphics for Cairo {}
 
-impl InactiveContextGraphics for Window {
+impl InactiveContextGraphics for Cairo {
     fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
         let state = self.state.read().unwrap();
         let size = state.size.get();
@@ -756,7 +776,7 @@ void main()
     }
 }
 
-impl ContextualGraphics for Window {
+impl ContextualGraphics for Cairo {
     fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics> {
         {
             let mut state = self.state.write().unwrap();
@@ -766,23 +786,23 @@ impl ContextualGraphics for Window {
     }
 }
 
-impl Graphics for Window {
+impl Graphics for Cairo {
     fn frame(&self) -> Box<dyn Frame> {
         CairoFrame::new()
     }
 }
 
-impl Clone for Window {
-    fn clone(&self) -> Window {
-        Window {
+impl Clone for Cairo {
+    fn clone(&self) -> Cairo {
+        Cairo {
             state: self.state.clone(),
         }
     }
 }
 
 pub(crate) fn new() -> Box<dyn ContextualGraphics> {
-    let window = Window {
-        state: Arc::new(RwLock::new(WindowState {
+    let window = Cairo {
+        state: Arc::new(RwLock::new(CairoState {
             //need to figure out how to select size, temp default
             size: ObserverCell::new((700., 700.).into()),
             event_handler: EventHandler::new(),

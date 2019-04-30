@@ -1,6 +1,6 @@
 use crate::graphics_2d::Vector;
-use crate::input;
-use crate::input::mouse::Event;
+use crate::interaction;
+use crate::interaction::mouse::Event;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -14,21 +14,21 @@ pub(crate) struct Mouse {
     state: Rc<RefCell<MouseState>>,
 }
 
-impl input::Source for Mouse {
+impl interaction::Source for Mouse {
     type Event = Event;
     fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static>) {
         self.state.borrow_mut().handlers.push(handler);
     }
 }
 
-impl input::Mouse for Mouse {
+impl interaction::Mouse for Mouse {
     fn position(&self) -> Vector {
         self.state.borrow().position
     }
 }
 
 impl Mouse {
-    pub(crate) fn new() -> Box<dyn input::Mouse> {
+    pub(crate) fn new() -> Box<dyn interaction::Mouse> {
         let mouse = Mouse {
             state: Rc::new(RefCell::new(MouseState {
                 handlers: vec![],
@@ -38,6 +38,5 @@ impl Mouse {
         mouse.initialize();
         Box::new(mouse)
     }
-    fn initialize(&self) {
-    }
+    fn initialize(&self) {}
 }
