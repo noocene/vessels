@@ -276,7 +276,7 @@ impl CairoFrame {
             x0: matrix[4],
             y0: matrix[5],
         });
-        context.set_shadow_color("rgba(255,255,255,0)");
+        //context.set_shadow_color("rgba(255,255,255,0)");
     }
 
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
