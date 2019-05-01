@@ -16,6 +16,7 @@ before_script:
 check:
   script:
     - cargo check --target wasm32-unknown-emscripten
+    - cargo check
 
 docs:
   stage: deploy
