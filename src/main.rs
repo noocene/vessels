@@ -1,21 +1,12 @@
 use vitruvia::graphics_2d;
 use vitruvia::graphics_2d::{Color, Content, Transform};
-use vitruvia::path::{GradientStop, LinearGradient, Path, Primitive, StrokeBuilder, Texture};
+use vitruvia::path::{Shadow, Path, Primitive};
 use vitruvia::text::Text;
 
 fn main() {
     let gfx = graphics_2d::new();
     let mut root = gfx.frame();
-    let gradient = Texture::LinearGradient(LinearGradient {
-        stops: vec![
-            GradientStop::new(0.0, Color::black()).unwrap(),
-            GradientStop::new(1.0, Color::white()).unwrap(),
-        ],
-        start: (0.0, 0.0).into(),
-        end: (100.0, 100.0).into(),
-    });
-    let stroke_gradient = StrokeBuilder::new(gradient, 10.0).finalize();
-    let path: Path = Primitive::square(100.).stroke(stroke_gradient).finalize();
+    let path: Path = Primitive::square(100.).fill(Color::black().into()).shadow(Shadow::new(Color::black().with_alpha(200)).blur(10.)).finalize();
     let mut object = root.add(path.into());
     let translate: Transform = (100., 100.).into();
     object.apply_transform(translate);
