@@ -82,6 +82,10 @@ fn pixels_to_pango_points(pixels: f64) -> i32 {
     (pixels * 0.75 * f64::from(pango::SCALE)) as i32
 }
 
+fn pixels_to_pango_pixels(pixels: f64) -> i32 {
+    (pixels * f64::from(pango::SCALE)) as i32
+}
+
 impl ImageRepresentation for CairoImage {
     fn get_size(&self) -> Vector {
         (
@@ -196,13 +200,10 @@ impl CairoFrame {
         });
         layout.set_font_description(&font);
         if entity.max_width.is_some() {
-            layout.set_width(pixels_to_pango_points(f64::from(entity.max_width.unwrap())));
+            layout.set_width(pixels_to_pango_pixels(f64::from(entity.max_width.unwrap())));
         }
-        match entity.wrap {
-            Wrap::Normal => {
-                layout.set_wrap(pango::WrapMode::Word);
-            }
-            _ => {}
+        if let Wrap::Normal = entity.wrap {
+            layout.set_wrap(pango::WrapMode::Word);
         }
         let attribute_list = pango::AttrList::new();
         attribute_list.insert(
