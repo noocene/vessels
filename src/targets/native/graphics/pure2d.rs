@@ -280,24 +280,14 @@ impl CairoFrame {
                                 f64::from(stop.color.a) / 255.,
                             )
                         });
-                        //TODO: Set stroke as gradient
-                    } /*Texture::Image(image) => {
-                    let pattern: CanvasPattern = match image.as_any().downcast::<CanvasImage>() {
-                    Ok(as_image) => js! {
-                    return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
-                    }.try_into().unwrap(),
-                    Err(_) => {
-                    let as_image = CanvasImage::from_texture(image.box_clone().as_texture());
-                    return js! {
-                    return @{&state.context}.createPattern(@{as_image}, "no-repeat");
-                    }.try_into().unwrap();
+                        context.set_source(&Pattern::LinearGradient(canvas_gradient));
                     }
-                    };
-                    state
-                    .context
-                    .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
-                    state.context.set_stroke_style_pattern(&pattern);
-                    }*/
+                    Texture::Image(image) => {
+                        let pattern = image.as_any().downcast::<CairoImage>().unwrap();
+                        let surface = &pattern.0.lock().unwrap().0;
+                        //TODO: coordinates here probd shouldn't be 0, 0
+                        context.set_source_surface(surface, 0.0, 0.0);
+                    }
                     Texture::RadialGradient(gradient) => {
                         let canvas_gradient = RadialGradient::new(
                             gradient.start.x,
@@ -316,7 +306,7 @@ impl CairoFrame {
                                 f64::from(stop.color.a) / 255.,
                             );
                         });;
-                        //TODO: set stroke style as radialgradient
+                        context.set_source(&Pattern::RadialGradient(canvas_gradient));
                     }
                     _ => {}
                 }
@@ -342,23 +332,13 @@ impl CairoFrame {
                             f64::from(color.b) / 255.,
                             f64::from(color.a) / 255.,
                         );
-                    } /*Texture::Image(image) => {
-                    let pattern: CanvasPattern = match image.as_any().downcast::<CanvasImage>() {
-                    Ok(as_image) => js! {
-                    return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
-                    }.try_into().unwrap(),
-                    Err(_) => {
-                    let as_image = CanvasImage::from_texture(image.box_clone().as_texture());
-                    return js! {
-                    return @{&state.context}.createPattern(@{as_image}, "no-repeat");
-                    }.try_into().unwrap();
                     }
-                    };
-                    state
-                    .context
-                    .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
-                    state.context.set_fill_style_pattern(&pattern);
-                    }*/
+                    Texture::Image(image) => {
+                        let pattern = image.as_any().downcast::<CairoImage>().unwrap();
+                        let surface = &pattern.0.lock().unwrap().0;
+                        //TODO: coordinates here probd shouldn't be 0, 0
+                        context.set_source_surface(surface, 0.0, 0.0);
+                    }
                     Texture::LinearGradient(gradient) => {
                         let canvas_gradient = LinearGradient::new(
                             gradient.start.x,
