@@ -23,7 +23,9 @@ fn main() {
         Content::from(
             Text::new("Haha yes text")
                 .with_letter_spacing(-0.5)
-                .with_color(Color::black()),
+                .with_color(Color::black())
+                .wrap()
+                .with_max_width(10),
         )
         .with_transform((200., 200.).into()),
     );

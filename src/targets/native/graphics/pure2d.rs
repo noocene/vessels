@@ -195,6 +195,15 @@ impl CairoFrame {
             Weight::SemiBold => pango::Weight::Semibold,
         });
         layout.set_font_description(&font);
+        if entity.max_width.is_some() {
+            layout.set_width(entity.max_width.unwrap() as i32);
+        }
+        match entity.wrap {
+            Wrap::Normal => {
+                layout.set_wrap(pango::WrapMode::Word);
+            }
+            _ => {}
+        }
         let attribute_list = pango::AttrList::new();
         attribute_list.insert(
             pango::Attribute::new_letter_spacing(pixels_to_pango_points(entity.letter_spacing))
