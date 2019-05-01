@@ -290,18 +290,21 @@ impl CairoFrame {
 
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
+        {
+            let context = state.context.lock().unwrap();
+            context.restore();
+            context.save();
+            context.transform(Matrix {
+                xx: matrix[0],
+                yx: matrix[2],
+                xy: matrix[1],
+                yy: matrix[3],
+                x0: matrix[4],
+                y0: matrix[5],
+            });
+        }
+        self.draw_shadows(matrix, &entity);
         let context = state.context.lock().unwrap();
-        context.restore();
-        context.save();
-        context.transform(Matrix {
-            xx: matrix[0],
-            yx: matrix[2],
-            xy: matrix[1],
-            yy: matrix[3],
-            x0: matrix[4],
-            y0: matrix[5],
-        });
-        //self.draw_shadows(matrix, &entity);
         let segments = entity.segments.iter();
         context.move_to(0., 0.);
         segments.for_each(|segment| match segment {
