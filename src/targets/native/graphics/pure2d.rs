@@ -196,7 +196,7 @@ impl CairoFrame {
         });
         layout.set_font_description(&font);
         if entity.max_width.is_some() {
-            layout.set_width(entity.max_width.unwrap() as i32);
+            layout.set_width(pixels_to_pango_points(f64::from(entity.max_width.unwrap())));
         }
         match entity.wrap {
             Wrap::Normal => {
