@@ -511,7 +511,7 @@ impl CanvasFrame {
                     line,
                     (
                         0.,
-                        (u32::from(input.line_height) * index as u32).into(),
+                        input.line_height * f64::from(index as u32),
                     )
                         .into(),
                     input.letter_spacing,
@@ -520,7 +520,7 @@ impl CanvasFrame {
                 state.context.fill_text(
                     line,
                     0.,
-                    (u32::from(input.line_height) * index as u32).into(),
+                    input.line_height * f64::from(index as u32),
                     None,
                 );
             }
@@ -584,7 +584,7 @@ impl CanvasFrame {
                                 if self.measure_text_with_spacing(
                                     &(test_string.clone() + word),
                                     input.letter_spacing,
-                                ) <= f64::from(input.max_width.unwrap())
+                                ) <= input.max_width.unwrap()
                                 {
                                     test_string += &format!(" {}", word);
                                 } else {
@@ -697,10 +697,10 @@ impl Frame for CanvasFrame {
                 let mut size: Vector = if input.max_width.is_some() {
                     let lines = self.wrap_text(&input);
                     (
-                        f64::from(input.max_width.unwrap()),
+                        input.max_width.unwrap(),
                         (f64::from((lines.len() - 1).max(0) as u32)
-                            * f64::from(input.line_height))
-                            + f64::from(input.size),
+                            * input.line_height)
+                            + input.size,
                     )
                         .into()
                 } else {
