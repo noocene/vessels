@@ -75,6 +75,10 @@ impl Clone for CairoImage {
     }
 }
 
+fn pixels_to_pango_points(pixels: f64) -> i32 {
+    (pixels * 0.75 * f64::from(pango::SCALE)) as i32
+}
+
 impl ImageRepresentation for CairoImage {
     fn get_size(&self) -> Vector {
         (
@@ -174,7 +178,7 @@ impl CairoFrame {
         let layout = pangocairo::functions::create_layout(&context).unwrap();
         layout.set_text(&entity.content);
         let mut font = FontDescription::new();
-        font.set_size(i32::from(entity.size) * pango::SCALE);
+        font.set_size(pixels_to_pango_points(f64::from(entity.size)));
         font.set_family("San Francisco");
         font.set_weight(match entity.weight {
             Weight::Bold => pango::Weight::Bold,
@@ -191,7 +195,7 @@ impl CairoFrame {
         let attribute_list = pango::AttrList::new();
         attribute_list.insert(
             pango::Attribute::new_letter_spacing(
-                (entity.letter_spacing * f64::from(pango::SCALE)) as i32,
+                pixels_to_pango_points(entity.letter_spacing)
             )
             .unwrap(),
         );
