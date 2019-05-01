@@ -14,7 +14,10 @@ use glutin::dpi::LogicalSize;
 use glutin::ContextTrait;
 
 use cairo::Status;
-use cairo::{Format, ImageSurface, LineCap, LineJoin, Matrix};
+use cairo::{
+    Format, Gradient, ImageSurface, LineCap, LineJoin, LinearGradient, Matrix, Pattern,
+    RadialGradient,
+};
 
 use pango::{FontDescription, Layout, LayoutExt};
 
@@ -194,10 +197,8 @@ impl CairoFrame {
         layout.set_font_description(&font);
         let attribute_list = pango::AttrList::new();
         attribute_list.insert(
-            pango::Attribute::new_letter_spacing(
-                pixels_to_pango_points(entity.letter_spacing)
-            )
-            .unwrap(),
+            pango::Attribute::new_letter_spacing(pixels_to_pango_points(entity.letter_spacing))
+                .unwrap(),
         );
         layout.set_attributes(&attribute_list);
         context.set_source_rgba(
@@ -264,18 +265,22 @@ impl CairoFrame {
                         );
                     }
                     Texture::LinearGradient(gradient) => {
-                        /*let canvas_gradient = state.context.create_linear_gradient(
+                        let canvas_gradient = LinearGradient::new(
                             gradient.start.x,
                             gradient.start.y,
                             gradient.end.x,
                             gradient.end.y,
                         );
                         gradient.stops.iter().for_each(|stop| {
-                            canvas_gradient
-                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
-                                .unwrap();
+                            canvas_gradient.add_color_stop_rgba(
+                                stop.offset,
+                                f64::from(stop.color.r) / 255.,
+                                f64::from(stop.color.g) / 255.,
+                                f64::from(stop.color.b) / 255.,
+                                f64::from(stop.color.a) / 255.,
+                            )
                         });
-                        state.context.set_stroke_style_gradient(&canvas_gradient);*/
+                        //TODO: Set stroke as gradient
                     } /*Texture::Image(image) => {
                     let pattern: CanvasPattern = match image.as_any().downcast::<CanvasImage>() {
                     Ok(as_image) => js! {
@@ -293,25 +298,26 @@ impl CairoFrame {
                     .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
                     state.context.set_stroke_style_pattern(&pattern);
                     }*/
-                    /*Texture::RadialGradient(gradient) => {
-                        let canvas_gradient = state
-                            .context
-                            .create_radial_gradient(
-                                gradient.start.x,
-                                gradient.start.y,
-                                gradient.start_radius,
-                                gradient.end.x,
-                                gradient.end.y,
-                                gradient.end_radius,
-                            )
-                            .unwrap();
+                    Texture::RadialGradient(gradient) => {
+                        let canvas_gradient = RadialGradient::new(
+                            gradient.start.x,
+                            gradient.start.y,
+                            gradient.start_radius,
+                            gradient.end.x,
+                            gradient.end.y,
+                            gradient.end_radius,
+                        );
                         gradient.stops.iter().for_each(|stop| {
-                            canvas_gradient
-                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
-                                .unwrap();
-                        });
-                        state.context.set_stroke_style_gradient(&canvas_gradient);
-                    }*/
+                            canvas_gradient.add_color_stop_rgba(
+                                stop.offset,
+                                f64::from(stop.color.r) / 255.,
+                                f64::from(stop.color.g) / 255.,
+                                f64::from(stop.color.b) / 255.,
+                                f64::from(stop.color.a) / 255.,
+                            );
+                        });;
+                        //TODO: set stroke style as radialgradient
+                    }
                     _ => {}
                 }
                 context.set_line_width(f64::from(stroke.width));
@@ -331,10 +337,10 @@ impl CairoFrame {
                 match &fill.content {
                     Texture::Solid(color) => {
                         context.set_source_rgba(
-                            color.r as f64 / 255.,
-                            color.g as f64 / 255.,
-                            color.b as f64 / 255.,
-                            color.a as f64 / 255.,
+                            f64::from(color.r) / 255.,
+                            f64::from(color.g) / 255.,
+                            f64::from(color.b) / 255.,
+                            f64::from(color.a) / 255.,
                         );
                     } /*Texture::Image(image) => {
                     let pattern: CanvasPattern = match image.as_any().downcast::<CanvasImage>() {
@@ -353,39 +359,44 @@ impl CairoFrame {
                     .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
                     state.context.set_fill_style_pattern(&pattern);
                     }*/
-                    /*Texture::LinearGradient(gradient) => {
-                        let canvas_gradient = state.context.create_linear_gradient(
+                    Texture::LinearGradient(gradient) => {
+                        let canvas_gradient = LinearGradient::new(
                             gradient.start.x,
                             gradient.start.y,
                             gradient.end.x,
                             gradient.end.y,
                         );
                         gradient.stops.iter().for_each(|stop| {
-                            canvas_gradient
-                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
-                                .unwrap();
-                        });
-                        state.context.set_fill_style_gradient(&canvas_gradient);
-                    }*/
-                    /*Texture::RadialGradient(gradient) => {
-                        let canvas_gradient = state
-                            .context
-                            .create_radial_gradient(
-                                gradient.start.x,
-                                gradient.start.y,
-                                gradient.start_radius,
-                                gradient.end.x,
-                                gradient.end.y,
-                                gradient.end_radius,
+                            canvas_gradient.add_color_stop_rgba(
+                                stop.offset,
+                                f64::from(stop.color.r) / 255.,
+                                f64::from(stop.color.g) / 255.,
+                                f64::from(stop.color.b) / 255.,
+                                f64::from(stop.color.a) / 255.,
                             )
-                            .unwrap();
-                        gradient.stops.iter().for_each(|stop| {
-                            canvas_gradient
-                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
-                                .unwrap();
                         });
-                        state.context.set_fill_style_gradient(&canvas_gradient);
-                    }*/
+                        context.set_source(&Pattern::LinearGradient(canvas_gradient));
+                    }
+                    Texture::RadialGradient(gradient) => {
+                        let canvas_gradient = RadialGradient::new(
+                            gradient.start.x,
+                            gradient.start.y,
+                            gradient.start_radius,
+                            gradient.end.x,
+                            gradient.end.y,
+                            gradient.end_radius,
+                        );
+                        gradient.stops.iter().for_each(|stop| {
+                            canvas_gradient.add_color_stop_rgba(
+                                stop.offset,
+                                f64::from(stop.color.r) / 255.,
+                                f64::from(stop.color.g) / 255.,
+                                f64::from(stop.color.b) / 255.,
+                                f64::from(stop.color.a) / 255.,
+                            );
+                        });
+                        context.set_source(&Pattern::RadialGradient(canvas_gradient));
+                    }
                     _ => {}
                 }
                 context.fill();
