@@ -114,8 +114,8 @@ impl Object for CanvasObject {
     fn get_depth(&self) -> u32 {
         self.state.read().unwrap().depth
     }
-    fn update(&mut self, interaction: Rasterizable) {
-        self.state.write().unwrap().content = interaction;
+    fn update(&mut self, input: Rasterizable) {
+        self.state.write().unwrap().content = input;
     }
 }
 
@@ -396,11 +396,11 @@ impl CanvasFrame {
             None => {}
         }
     }
-    fn update_text_style(&self, interaction: &Text) {
+    fn update_text_style(&self, input: &Text) {
         let state = self.state.read().unwrap();
-        state.context.set_font((match interaction.font {
+        state.context.set_font((match input.font {
                 Font::SystemFont => {
-                    format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if interaction.italic { "italic " } else { "" }, match interaction.weight {
+                    format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
                         Weight::Normal => "400",
                         Weight::Medium => "500",
                         Weight::SemiBold => "600",
@@ -410,22 +410,22 @@ impl CanvasFrame {
                         Weight::Thin => "200",
                         Weight::Light => "300",
                         Weight::Hairline => "100"
-                    }, interaction.size)
+                    }, input.size)
                 }
             }).as_str());
-        state.context.set_text_align(match interaction.align {
+        state.context.set_text_align(match input.align {
             Align::Center => TextAlign::Center,
             Align::End => TextAlign::End,
             Align::Start => TextAlign::Start,
         });
-        state.context.set_text_baseline(match interaction.origin {
+        state.context.set_text_baseline(match input.origin {
             Origin::Top => TextBaseline::Top,
             Origin::Baseline => TextBaseline::Alphabetic,
             Origin::Middle => TextBaseline::Middle,
         });
         state
             .context
-            .set_fill_style_color(&interaction.color.to_rgba_color());
+            .set_fill_style_color(&input.color.to_rgba_color());
     }
     fn fill_text_with_spacing(&self, text: &'_ str, position: Vector, spacing: f64) {
         if text == "" {
@@ -489,38 +489,38 @@ impl CanvasFrame {
         } {}
         spaced_width - spacing
     }
-    fn draw_text(&self, matrix: [f64; 6], interaction: &Text) {
+    fn draw_text(&self, matrix: [f64; 6], input: &Text) {
         let state = self.state.read().unwrap();
         state.context.restore();
         state.context.save();
         state.context.transform(
             matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
         );
-        let mut lines: Vec<String> = interaction
+        let mut lines: Vec<String> = input
             .content
             .split('\n')
             .map(std::borrow::ToOwned::to_owned)
             .collect();
-        self.update_text_style(&interaction);
-        if interaction.max_width.is_some() {
-            lines = self.wrap_text(&interaction);
+        self.update_text_style(&input);
+        if input.max_width.is_some() {
+            lines = self.wrap_text(&input);
         }
         for (index, line) in lines.iter().enumerate() {
-            if interaction.letter_spacing != 0. {
+            if input.letter_spacing != 0. {
                 self.fill_text_with_spacing(
                     line,
                     (
                         0.,
-                        (u32::from(interaction.line_height) * index as u32).into(),
+                        (u32::from(input.line_height) * index as u32).into(),
                     )
                         .into(),
-                    interaction.letter_spacing,
+                    input.letter_spacing,
                 );
             } else {
                 state.context.fill_text(
                     line,
                     0.,
-                    (u32::from(interaction.line_height) * index as u32).into(),
+                    (u32::from(input.line_height) * index as u32).into(),
                     None,
                 );
             }
@@ -530,10 +530,10 @@ impl CanvasFrame {
         let state = self.state.read().unwrap();
         state.canvas.clone()
     }
-    fn measure_text_height(&self, interaction: Text) -> f64 {
-        let font = match interaction.font {
+    fn measure_text_height(&self, input: Text) -> f64 {
+        let font = match input.font {
             Font::SystemFont => {
-                format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if interaction.italic { "italic " } else { "" }, match interaction.weight {
+                format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
                     Weight::Normal => "400",
                     Weight::Medium => "500",
                     Weight::SemiBold => "600",
@@ -543,7 +543,7 @@ impl CanvasFrame {
                     Weight::Thin => "200",
                     Weight::Light => "300",
                     Weight::Hairline => "100"
-                }, interaction.size)
+                }, input.size)
             }
         };
         (js! {
@@ -561,13 +561,13 @@ impl CanvasFrame {
         .try_into()
         .unwrap()
     }
-    fn wrap_text(&self, interaction: &Text) -> Vec<String> {
-        let mut lines: Vec<String> = interaction
+    fn wrap_text(&self, input: &Text) -> Vec<String> {
+        let mut lines: Vec<String> = input
             .content
             .split('\n')
             .map(std::borrow::ToOwned::to_owned)
             .collect();
-        match interaction.wrap {
+        match input.wrap {
             Wrap::Normal => {
                 let mut test_string = "".to_owned();
                 lines.reverse();
@@ -583,8 +583,8 @@ impl CanvasFrame {
                             for (index, word) in words.iter().cloned().enumerate() {
                                 if self.measure_text_with_spacing(
                                     &(test_string.clone() + word),
-                                    interaction.letter_spacing,
-                                ) <= f64::from(interaction.max_width.unwrap())
+                                    input.letter_spacing,
+                                ) <= f64::from(input.max_width.unwrap())
                                 {
                                     test_string += &format!(" {}", word);
                                 } else {
@@ -652,7 +652,7 @@ impl Frame for CanvasFrame {
                 let matrix = object.orientation.to_matrix();
                 match &object.content {
                     Rasterizable::Path(path) => self.draw_path(matrix, &path),
-                    Rasterizable::Text(interaction) => self.draw_text(matrix, &interaction),
+                    Rasterizable::Text(input) => self.draw_text(matrix, &input),
                 };
             });
     }
@@ -689,27 +689,27 @@ impl Frame for CanvasFrame {
         self.draw();
         Box::new(state.canvas.clone())
     }
-    fn measure(&self, interaction: Rasterizable) -> Vector {
-        match interaction {
-            Rasterizable::Text(interaction) => {
-                self.update_text_style(&interaction);
-                let origin = interaction.origin;
-                let mut size: Vector = if interaction.max_width.is_some() {
-                    let lines = self.wrap_text(&interaction);
+    fn measure(&self, input: Rasterizable) -> Vector {
+        match input {
+            Rasterizable::Text(input) => {
+                self.update_text_style(&input);
+                let origin = input.origin;
+                let mut size: Vector = if input.max_width.is_some() {
+                    let lines = self.wrap_text(&input);
                     (
-                        f64::from(interaction.max_width.unwrap()),
+                        f64::from(input.max_width.unwrap()),
                         (f64::from((lines.len() - 1).max(0) as u32)
-                            * f64::from(interaction.line_height))
-                            + f64::from(interaction.size),
+                            * f64::from(input.line_height))
+                            + f64::from(input.size),
                     )
                         .into()
                 } else {
                     (
                         self.measure_text_with_spacing(
-                            &interaction.content,
-                            interaction.letter_spacing,
+                            &input.content,
+                            input.letter_spacing,
                         ),
-                        self.measure_text_height(*interaction),
+                        self.measure_text_height(*input),
                     )
                         .into()
                 };
@@ -718,7 +718,7 @@ impl Frame for CanvasFrame {
                 }
                 size
             }
-            Rasterizable::Path(interaction) => interaction.bounds().size,
+            Rasterizable::Path(input) => input.bounds().size,
         }
     }
     fn box_clone(&self) -> Box<dyn Frame> {
@@ -739,9 +739,9 @@ struct CanvasState {
 }
 
 impl Rasterizer for Canvas {
-    fn rasterize(&self, interaction: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
+    fn rasterize(&self, input: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
         let mut frame = CanvasFrame::new();
-        if let Rasterizable::Text(text) = &interaction {
+        if let Rasterizable::Text(text) = &input {
             match &text.origin {
                 Origin::Top => {
                     frame.set_viewport(Rect::new(Vector::default(), size));
@@ -755,7 +755,7 @@ impl Rasterizer for Canvas {
             }
         }
         frame.resize(size);
-        frame.add(interaction.into());
+        frame.add(input.into());
         frame.draw();
         Box::new(frame.element())
     }
