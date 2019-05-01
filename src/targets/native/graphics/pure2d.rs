@@ -210,6 +210,75 @@ impl CairoFrame {
         pangocairo::functions::update_layout(&context, &layout);
         pangocairo::functions::show_layout(&context, &layout);
     }
+    fn draw_shadows(&self, matrix: [f64; 6], entity: &Path) {
+        let state = self.state.read().unwrap();
+        let context = state.context.lock().unwrap();
+        for shadow in &entity.shadows {
+            context.restore();
+            context.save();
+            context.transform(Matrix {
+                xx: matrix[0],
+                yx: matrix[2],
+                xy: matrix[1],
+                yy: matrix[3],
+                x0: matrix[4],
+                y0: matrix[5],
+            });
+            let size = entity.bounds().size;
+            let scale = (size + shadow.spread) / size;
+            let segments = entity.segments.iter();
+            let offset: Vector = (
+                state.viewport.size.x + state.viewport.position.x,
+                state.viewport.size.y + state.viewport.position.y,
+            )
+                .into();
+            let new_size = size + shadow.spread;
+            let scale_offset = (size - new_size) / 2.;
+            context.translate(scale_offset.x, scale_offset.y);
+            context.scale(scale.x, scale.y);
+            context.move_to(-offset.x, -offset.y);
+            context.translate(-offset.x / scale.x, -offset.y / scale.y);
+            segments.for_each(|segment| match segment {
+                Segment::LineTo(point) => {
+                    context.line_to(point.x, point.y);
+                }
+                Segment::MoveTo(point) => {
+                    context.move_to(point.x, point.y);
+                }
+                Segment::CubicTo(point, handle_1, handle_2) => {
+                    context.curve_to(
+                        handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
+                    );
+                }
+                Segment::QuadraticTo(point, handle) => {
+                    context.curve_to(handle.x, handle.y, handle.x, handle.y, point.x, point.y);
+                }
+            });
+            if entity.closed {
+                context.close_path();
+            }
+            /*
+            context.set_shadow_blur(shadow.blur * state.pixel_ratio);
+            context.set_shadow_color(&shadow.color.to_rgba_color());
+            context.set_shadow_offset_x((shadow.offset.x + offset.x) * state.pixel_ratio);
+            context.set_shadow_offset_y((shadow.offset.y + offset.y) * state.pixel_ratio);
+            context.set_fill_style_color("rgba(255,255,255,1)");
+            context.fill(FillRule::NonZero);
+            */
+        }
+        context.restore();
+        context.save();
+        context.transform(Matrix {
+            xx: matrix[0],
+            yx: matrix[2],
+            xy: matrix[1],
+            yy: matrix[3],
+            x0: matrix[4],
+            y0: matrix[5],
+        });
+        context.set_shadow_color("rgba(255,255,255,0)");
+    }
+
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
         let context = state.context.lock().unwrap();
@@ -223,6 +292,7 @@ impl CairoFrame {
             x0: matrix[4],
             y0: matrix[5],
         });
+        self.draw_shadows(matrix, &entity);
         let segments = entity.segments.iter();
         context.move_to(0., 0.);
         segments.for_each(|segment| match segment {
