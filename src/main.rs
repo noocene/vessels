@@ -1,6 +1,6 @@
 use vitruvia::graphics_2d;
 use vitruvia::graphics_2d::{Color, Content, Transform};
-use vitruvia::path::{Shadow, Path, Primitive};
+use vitruvia::path::{Path, Primitive, Shadow};
 use vitruvia::text::Text;
 
 fn main() {
@@ -20,5 +20,7 @@ fn main() {
         .with_transform((200., 200.).into()),
     );
     let ctx = gfx.start(root);
-    ctx.run(Box::new(|_| {}));
+    ctx.run(Box::new(|mut ctx| {
+        ctx.bind(Box::new(|delta| println!("{}", delta)));
+    }));
 }
