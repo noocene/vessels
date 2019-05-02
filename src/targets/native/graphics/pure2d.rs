@@ -716,14 +716,14 @@ impl InactiveContextGraphics for Cairo {
             let state = self.state.read().unwrap();
             let size = state.size.get();
             let size = LogicalSize::new(size.x, size.y);
-            let mut el = glutin::EventsLoop::new();
+            let el = glutin::EventsLoop::new();
             let wb = glutin::WindowBuilder::new().with_dimensions(size);
             let windowed_context = glutin::ContextBuilder::new()
                 .with_vsync(true)
                 .build_windowed(wb, &el)
                 .unwrap();
             let dpi_factor = windowed_context.get_hidpi_factor();
-            let mut frame = state.root_frame.clone().unwrap();
+            let frame = state.root_frame.clone().unwrap();
             frame.set_pixel_ratio(dpi_factor);
             let size = size.to_physical(dpi_factor);
             let size = (size.width, size.height).into();
