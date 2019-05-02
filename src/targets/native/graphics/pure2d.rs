@@ -865,15 +865,16 @@ void main()
 
             if state.size.is_dirty() {
                 let size = state.size.get();
-                let root_frame = state.root_frame.as_ref().unwrap();
-                root_frame.set_viewport(Rect::new((0., 0.), size));
-                root_frame.resize(size);
-                surface_pointer = root_frame
+                frame.set_viewport(Rect::new((0., 0.), size));
+                frame.resize(size);
+                surface_pointer = frame
                     .to_image()
                     .as_any()
                     .downcast::<CairoImage>()
                     .unwrap()
                     .get_data_ptr();
+            } else {
+                frame.draw();
             }
 
             let size = state.size.get();

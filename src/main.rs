@@ -28,7 +28,5 @@ fn main() {
         .with_transform((200., 200.).into()),
     );
     let ctx = gfx.start(root);
-    ctx.run(Box::new(|mut ctx| {
-        ctx.bind(Box::new(|delta| println!("{}", delta)));
-    }));
+    ctx.run(Box::new(|_| {}));
 }

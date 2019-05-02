@@ -510,11 +510,7 @@ impl CanvasFrame {
             if input.letter_spacing != 0. {
                 self.fill_text_with_spacing(
                     line,
-                    (
-                        0.,
-                        input.line_height * f64::from(index as u32),
-                    )
-                        .into(),
+                    (0., input.line_height * f64::from(index as u32)).into(),
                     input.letter_spacing,
                 );
             } else {
@@ -699,17 +695,13 @@ impl Frame for CanvasFrame {
                     let lines = self.wrap_text(&input);
                     (
                         input.max_width.unwrap(),
-                        (f64::from((lines.len() - 1).max(0) as u32)
-                            * input.line_height)
+                        (f64::from((lines.len() - 1).max(0) as u32) * input.line_height)
                             + input.size,
                     )
                         .into()
                 } else {
                     (
-                        self.measure_text_with_spacing(
-                            &input.content,
-                            input.letter_spacing,
-                        ),
+                        self.measure_text_with_spacing(&input.content, input.letter_spacing),
                         self.measure_text_height(*input),
                     )
                         .into()
