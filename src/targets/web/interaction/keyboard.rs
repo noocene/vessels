@@ -8,8 +8,7 @@ use stdweb::traits::IKeyboardEvent;
 use stdweb::web::event::{IEvent, KeyDownEvent, KeyUpEvent};
 use stdweb::web::{document, IEventTarget};
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 use std::collections::HashMap;
 
@@ -140,13 +139,13 @@ pub(crate) struct KeyboardState {
 }
 
 pub(crate) struct Keyboard {
-    state: Rc<RefCell<KeyboardState>>,
+    state: Arc<RwLock<KeyboardState>>,
 }
 
 impl interaction::Source for Keyboard {
     type Event = Event;
-    fn bind(&self, handler: Box<dyn Fn(Event) + 'static + Sync + Send>) {
-        self.state.borrow_mut().handlers.push(handler);
+    fn bind(&self, handler: Box<dyn Fn(Event) + 'static + Send + Sync>) {
+        self.state.write().unwrap().handlers.push(handler);
     }
 }
 
@@ -154,7 +153,7 @@ impl keyboard::Keyboard for Keyboard {}
 
 impl keyboard::State for Keyboard {
     fn poll(&mut self, key: Key) -> bool {
-        let mut state = self.state.borrow_mut();
+        let mut state = self.state.write().unwrap();
         let entry = state.keys.entry(key).or_insert(false);
         *entry
     }
@@ -170,7 +169,7 @@ impl Keyboard {
     #[allow(clippy::new_ret_no_self)]
     pub(crate) fn new() -> Box<dyn interaction::Keyboard> {
         let keyboard = Keyboard {
-            state: Rc::new(RefCell::new(KeyboardState {
+            state: Arc::new(RwLock::new(KeyboardState {
                 handlers: vec![],
                 keys: HashMap::new(),
             })),
@@ -184,7 +183,7 @@ impl Keyboard {
         let body = document().body().unwrap();
         body.add_event_listener(move |e: KeyDownEvent| {
             let send_state = state.clone();
-            let mut state = state.borrow_mut();
+            let mut state = state.write().unwrap();
             e.prevent_default();
             let key = e.key();
             let k = parse_code(e.code().as_str());
@@ -205,7 +204,7 @@ impl Keyboard {
         });
         body.add_event_listener(move |e: KeyUpEvent| {
             let send_state = up_state.clone();
-            let mut state = up_state.borrow_mut();
+            let mut state = up_state.write().unwrap();
             e.prevent_default();
             let key = e.key();
             let k = parse_code(e.code().as_str());
