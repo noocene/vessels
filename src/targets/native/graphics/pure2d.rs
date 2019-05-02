@@ -17,7 +17,7 @@ use glutin::ContextTrait;
 use cairo::Status;
 use cairo::{
     Format, Gradient, ImageSurface, LineCap, LineJoin, LinearGradient, Matrix, Pattern,
-    RadialGradient,
+    RadialGradient, FontOptions, Antialias, SubpixelOrder, HintStyle
 };
 
 use pango::{FontDescription, Layout, LayoutExt};
@@ -83,6 +83,10 @@ impl Clone for CairoImage {
 
 fn pixels_to_pango_points(pixels: f64) -> i32 {
     (pixels * 0.75 * f64::from(pango::SCALE)) as i32
+}
+
+fn pixels_to_pango_pixels(pixels: f64) -> i32 {
+    (pixels * f64::from(pango::SCALE)) as i32
 }
 
 impl ImageRepresentation for CairoImage {
@@ -183,8 +187,14 @@ impl CairoFrame {
         });
         let layout = pangocairo::functions::create_layout(&context).unwrap();
         layout.set_text(&entity.content);
+        let mut font_options = FontOptions::new();
+        font_options.set_antialias(Antialias::Gray);
+        font_options.set_hint_style(HintStyle::Full);
+        font_options.set_subpixel_order(SubpixelOrder::Rgb);
+        context.set_font_options(&font_options);
+        context.set_antialias(Antialias::Gray);
         let mut font = FontDescription::new();
-        font.set_size(pixels_to_pango_points(f64::from(entity.size)));
+        font.set_absolute_size(f64::from(pixels_to_pango_pixels(entity.size)));
         font.set_family("San Francisco");
         font.set_weight(match entity.weight {
             Weight::Bold => pango::Weight::Bold,
@@ -199,14 +209,12 @@ impl CairoFrame {
         });
         layout.set_font_description(&font);
         if entity.max_width.is_some() {
-            layout.set_width(pixels_to_pango_points(f64::from(entity.max_width.unwrap())));
+            layout.set_width(pixels_to_pango_pixels(entity.max_width.unwrap()));
         }
-        match entity.wrap {
-            Wrap::Normal => {
-                layout.set_wrap(pango::WrapMode::Word);
-            }
-            _ => {}
+        if let Wrap::Normal = entity.wrap {
+            layout.set_wrap(pango::WrapMode::Word);
         }
+        layout.set_spacing(pixels_to_pango_pixels(entity.line_height - entity.size));
         let attribute_list = pango::AttrList::new();
         attribute_list.insert(
             pango::Attribute::new_letter_spacing(pixels_to_pango_points(entity.letter_spacing))
@@ -393,7 +401,6 @@ impl CairoFrame {
                         });;
                         context.set_source(&Pattern::RadialGradient(canvas_gradient));
                     }
-                    _ => {}
                 }
                 context.set_line_width(f64::from(stroke.width));
                 if entity.fill.is_some() {
@@ -462,7 +469,6 @@ impl CairoFrame {
                         });
                         context.set_source(&Pattern::RadialGradient(canvas_gradient));
                     }
-                    _ => {}
                 }
                 context.fill();
                 if let Texture::Image(_image) = &fill.content {
