@@ -145,7 +145,7 @@ pub(crate) struct Keyboard {
 
 impl interaction::Source for Keyboard {
     type Event = Event;
-    fn bind(&self, handler: Box<dyn Fn(Event) + 'static>) {
+    fn bind(&self, handler: Box<dyn Fn(Event) + 'static + Sync + Send>) {
         self.state.borrow_mut().handlers.push(handler);
     }
 }

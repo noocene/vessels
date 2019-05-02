@@ -39,7 +39,7 @@ impl Window {
 
 impl interaction::Source for Window {
     type Event = Event;
-    fn bind(&self, handler: Box<dyn Fn(Event) + 'static>) {
+    fn bind(&self, handler: Box<dyn Fn(Event) + 'static + Sync + Send>) {
         self.state.borrow_mut().handlers.push(handler);
     }
 }
