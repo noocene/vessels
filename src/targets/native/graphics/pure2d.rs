@@ -1,9 +1,13 @@
-use crate::graphics_2d::*;
-use crate::interaction::*;
+use crate::graphics_2d::{
+    Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics, Image,
+    ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
+    Texture2D, Ticker, Transform, Vector,
+};
+use crate::interaction::{Context, Keyboard, Mouse, Window};
 use crate::interaction::{Event, Source};
-use crate::path::*;
+use crate::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
 use crate::targets::native;
-use crate::text::*;
+use crate::text::{Text, Weight, Wrap};
 use crate::util::ObserverCell;
 
 use std::any::Any;
@@ -21,7 +25,7 @@ use cairo::{
     LinearGradient, Matrix, Pattern, RadialGradient, SubpixelOrder,
 };
 
-use pango::{FontDescription, Layout, LayoutExt};
+use pango::{FontDescription, LayoutExt};
 
 use gl::types::*;
 
