@@ -13,7 +13,7 @@ pub trait Source {
     /// The associated event type.
     type Event: Event;
     /// Binds the provided handler to be called when an event occurs.
-    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static>);
+    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Send + Sync>);
 }
 
 /// A class of events.

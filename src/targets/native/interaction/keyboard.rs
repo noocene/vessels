@@ -18,7 +18,7 @@ pub(crate) struct Keyboard {
 
 impl interaction::Source for Keyboard {
     type Event = Event;
-    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static>) {
+    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Sync + Send>) {
         self.state.borrow_mut().handlers.push(handler);
     }
 }
@@ -40,15 +40,21 @@ impl keyboard::State for KeyboardState {
 }
 
 impl Keyboard {
-    pub(crate) fn new() -> Box<dyn interaction::Keyboard> {
+    pub(crate) fn new(
+        event_handler: Box<dyn interaction::Source<Event = glutin::Event>>,
+    ) -> Box<dyn interaction::Keyboard> {
         let keyboard = Keyboard {
             state: Rc::new(RefCell::new(KeyboardState {
                 handlers: vec![],
                 keys: HashMap::new(),
             })),
         };
-        keyboard.initialize();
+        keyboard.initialize(event_handler);
         Box::new(keyboard)
     }
-    fn initialize(&self) {}
+    fn initialize(&self, event_handler: Box<dyn interaction::Source<Event = glutin::Event>>) {
+        event_handler.bind(Box::new(move |event: glutin::Event| match event {
+            _ => (),
+        }));
+    }
 }

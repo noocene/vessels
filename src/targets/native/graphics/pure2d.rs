@@ -1,5 +1,6 @@
 use crate::graphics_2d::*;
 use crate::interaction::*;
+use crate::interaction::{Event, Source};
 use crate::path::*;
 use crate::targets::native;
 use crate::text::*;
@@ -24,6 +25,8 @@ use pango::{FontDescription, Layout, LayoutExt};
 use gl::types::*;
 
 use cairo_sys;
+
+impl Event for glutin::Event {}
 
 struct CairoSurface(ImageSurface);
 
@@ -606,19 +609,41 @@ impl Object for CairoObject {
 }
 
 struct EventHandler {
+    state: Arc<RwLock<EventHandlerState>>,
+}
+
+struct EventHandlerState {
     handlers: Vec<Box<dyn Fn(glutin::Event) + Send + Sync>>,
+}
+
+impl Source for EventHandler {
+    type Event = glutin::Event;
+
+    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Send + Sync>) {
+        self.state.write().unwrap().handlers.push(handler);
+    }
+}
+
+impl Clone for EventHandler {
+    fn clone(&self) -> EventHandler {
+        EventHandler {
+            state: self.state.clone(),
+        }
+    }
 }
 
 impl EventHandler {
     fn new() -> EventHandler {
-        EventHandler { handlers: vec![] }
+        EventHandler {
+            state: Arc::new(RwLock::new(EventHandlerState { handlers: vec![] })),
+        }
     }
 
-    fn bind_event_handler<F>(&mut self, handler: F)
-    where
-        F: Fn(glutin::Event) + Send + Sync + 'static,
-    {
-        self.handlers.push(Box::new(handler));
+    fn call_handlers(&self, event: glutin::Event) {
+        let state = self.state.read().unwrap();
+        for handler in state.handlers.iter() {
+            handler(event.clone());
+        }
     }
 }
 
@@ -663,7 +688,9 @@ impl Context for Cairo {
         native::interaction::Mouse::new()
     }
     fn keyboard(&self) -> Box<dyn Keyboard> {
-        native::interaction::Keyboard::new()
+        native::interaction::Keyboard::new(Box::new(
+            self.state.read().unwrap().event_handler.clone(),
+        ))
     }
     fn window(&self) -> Box<dyn Window> {
         native::interaction::Window::new()
@@ -793,7 +820,7 @@ void main()
             el.poll_events(|event| {
                 //temporary event handling
                 //println!("{:?}", event);
-                if let glutin::Event::WindowEvent { event, .. } = event {
+                if let glutin::Event::WindowEvent { event, .. } = event.clone() {
                     match event {
                         glutin::WindowEvent::CloseRequested => running = false,
                         glutin::WindowEvent::Resized(logical_size) => {
@@ -809,6 +836,7 @@ void main()
                         _ => (),
                     }
                 }
+                state.event_handler.call_handlers(event);
             });
             let state = self.state.read().unwrap();
 

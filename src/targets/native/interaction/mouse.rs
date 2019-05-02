@@ -16,7 +16,7 @@ pub(crate) struct Mouse {
 
 impl interaction::Source for Mouse {
     type Event = Event;
-    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static>) {
+    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Sync + Send>) {
         self.state.borrow_mut().handlers.push(handler);
     }
 }

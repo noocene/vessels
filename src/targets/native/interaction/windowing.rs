@@ -5,7 +5,7 @@ pub(crate) struct Window {}
 
 impl interaction::Source for Window {
     type Event = Event;
-    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static>) {}
+    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Sync + Send>) {}
 }
 
 impl interaction::Window for Window {
