@@ -1,6 +1,5 @@
 use vitruvia::graphics_2d;
 use vitruvia::graphics_2d::{Color, Content, Transform};
-use vitruvia::interaction::keyboard::Event;
 use vitruvia::path::{Path, Primitive, Shadow};
 use vitruvia::text::Text;
 
