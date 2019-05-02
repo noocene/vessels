@@ -6,38 +6,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 fn parse_code(scancode: u32) -> Key {
-    match scancode {
-        1 => Key::Escape,
-        2 => Key::Number(Number::One),
-        3 => Key::Number(Number::Two),
-        4 => Key::Number(Number::Three),
-        5 => Key::Number(Number::Four),
-        6 => Key::Number(Number::Five),
-        7 => Key::Number(Number::Six),
-        8 => Key::Number(Number::Seven),
-        9 => Key::Number(Number::Eight),
-        10 => Key::Number(Number::Nine),
-        11 => Key::Number(Number::Zero),
-        12 => Key::Dash,
-        13 => Key::Equal,
-        14 => Key::Backspace,
-        15 => Key::Tab,
-        16 => Key::Alpha(Alpha::Q),
-        17 => Key::Alpha(Alpha::W),
-        18 => Key::Alpha(Alpha::E),
-        19 => Key::Alpha(Alpha::R),
-        20 => Key::Alpha(Alpha::T),
-        21 => Key::Alpha(Alpha::Y),
-        22 => Key::Alpha(Alpha::U),
-        23 => Key::Alpha(Alpha::I),
-        24 => Key::Alpha(Alpha::O),
-        25 => Key::Alpha(Alpha::P),
-        26 => Key::OpenBracket,
-        27 => Key::CloseBracket,
-        28 => Key::Enter,
-        29 => Key::Control(Location::Left),
-        _ => Key::Unknown,
-    }
+
 }
 
 pub(crate) struct KeyboardState {
