@@ -1,26 +1,31 @@
-use crate::graphics_2d::*;
-use crate::interaction::*;
+use crate::graphics_2d::{
+    Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics, Image,
+    ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
+    Texture2D, Ticker, Transform, Vector,
+};
+use crate::interaction::{Context, Keyboard, Mouse, Window};
 use crate::interaction::{Event, Source};
-use crate::path::*;
+use crate::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
 use crate::targets::native;
-use crate::text::*;
+use crate::text::{Text, Weight, Wrap};
 use crate::util::ObserverCell;
 
 use std::any::Any;
 use std::ffi::{c_void, CString};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::SystemTime;
 
 use glutin::dpi::LogicalSize;
 use glutin::ContextTrait;
 
 use cairo::Status;
 use cairo::{
-    Format, Gradient, ImageSurface, LineCap, LineJoin, LinearGradient, Matrix, Pattern,
-    RadialGradient, FontOptions, Antialias, SubpixelOrder, HintStyle
+    Antialias, FontOptions, Format, Gradient, HintStyle, ImageSurface, LineCap, LineJoin,
+    LinearGradient, Matrix, Pattern, RadialGradient, SubpixelOrder,
 };
 
-use pango::{FontDescription, Layout, LayoutExt};
+use pango::{FontDescription, LayoutExt};
 
 use gl::types::*;
 
@@ -244,20 +249,17 @@ impl CairoFrame {
                 x0: matrix[4],
                 y0: matrix[5],
             });
+            let spread = shadow.spread * 2.;
             let size = entity.bounds().size;
-            let scale = (size + shadow.spread) / size;
+            let scale = (size + spread) / size;
             let segments = entity.segments.iter();
-            let offset: Vector = (
-                state.viewport.size.x + state.viewport.position.x,
-                state.viewport.size.y + state.viewport.position.y,
-            )
-                .into();
-            let new_size = size + shadow.spread;
+            let new_size = size + spread;
             let scale_offset = (size - new_size) / 2.;
-            context.translate(scale_offset.x, scale_offset.y);
+            context.translate(
+                scale_offset.x + shadow.offset.x,
+                scale_offset.y + shadow.offset.y,
+            );
             context.scale(scale.x, scale.y);
-            context.move_to(-offset.x, -offset.y);
-            context.translate(-offset.x / scale.x, -offset.y / scale.y);
             segments.for_each(|segment| match segment {
                 Segment::LineTo(point) => {
                     context.line_to(point.x, point.y);
@@ -282,9 +284,15 @@ impl CairoFrame {
             context.set_shadow_color(&shadow.color.to_rgba_color());
             context.set_shadow_offset_x((shadow.offset.x + offset.x) * state.pixel_ratio);
             context.set_shadow_offset_y((shadow.offset.y + offset.y) * state.pixel_ratio);
-            context.set_fill_style_color("rgba(255,255,255,1)");
             context.fill(FillRule::NonZero);
             */
+            context.set_source_rgba(
+                f64::from(shadow.color.r) / 255.,
+                f64::from(shadow.color.g) / 255.,
+                f64::from(shadow.color.b) / 255.,
+                f64::from(shadow.color.a) / 255.,
+            );
+            context.fill();
         }
         context.restore();
         context.save();
@@ -653,6 +661,7 @@ impl EventHandler {
     }
 }
 
+#[derive(Clone)]
 struct Cairo {
     state: Arc<RwLock<CairoState>>,
 }
@@ -670,11 +679,14 @@ fn new_shader(source: &str, kind: GLenum) -> GLuint {
 struct CairoState {
     root_frame: Option<Box<dyn Frame>>,
     event_handler: EventHandler,
+    tick_handlers: Vec<Box<dyn FnMut(f64) + Send + Sync>>,
     size: ObserverCell<Vector>,
 }
 
 impl Ticker for Cairo {
-    fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>) {}
+    fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>) {
+        self.state.write().unwrap().tick_handlers.push(handler);
+    }
 }
 
 impl Rasterizer for Cairo {
@@ -707,25 +719,23 @@ impl ContextGraphics for Cairo {}
 
 impl InactiveContextGraphics for Cairo {
     fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
-        let state = self.state.read().unwrap();
-        let size = state.size.get();
-        let size = LogicalSize::new(size.x, size.y);
-        let mut el = glutin::EventsLoop::new();
-        let wb = glutin::WindowBuilder::new().with_dimensions(size);
-        let windowed_context = glutin::ContextBuilder::new()
-            .with_vsync(true)
-            .build_windowed(wb, &el)
-            .unwrap();
-        let dpi_factor = windowed_context.get_hidpi_factor();
-        state
-            .root_frame
-            .as_ref()
-            .unwrap()
-            .set_pixel_ratio(dpi_factor);
-        let size = size.to_physical(dpi_factor);
-        let frame = state.root_frame.as_ref().unwrap();
-
-        let size = (size.width, size.height).into();
+        let (mut el, frame, size, windowed_context) = {
+            let state = self.state.read().unwrap();
+            let size = state.size.get();
+            let size = LogicalSize::new(size.x, size.y);
+            let el = glutin::EventsLoop::new();
+            let wb = glutin::WindowBuilder::new().with_dimensions(size);
+            let windowed_context = glutin::ContextBuilder::new()
+                .with_vsync(true)
+                .build_windowed(wb, &el)
+                .unwrap();
+            let dpi_factor = windowed_context.get_hidpi_factor();
+            let frame = state.root_frame.clone().unwrap();
+            frame.set_pixel_ratio(dpi_factor);
+            let size = size.to_physical(dpi_factor);
+            let size = (size.width, size.height).into();
+            (el, frame, size, windowed_context)
+        };
 
         frame.resize(size);
         frame.set_viewport(Rect::new((0., 0.), size));
@@ -742,15 +752,12 @@ impl InactiveContextGraphics for Cairo {
 
         let mut surface_pointer: *const c_void;
 
-        {
-            let root_frame = state.root_frame.as_ref().unwrap();
-            surface_pointer = root_frame
-                .to_image()
-                .as_any()
-                .downcast::<CairoImage>()
-                .unwrap()
-                .get_data_ptr();
-        }
+        surface_pointer = frame
+            .to_image()
+            .as_any()
+            .downcast::<CairoImage>()
+            .unwrap()
+            .get_data_ptr();
 
         let vert_id = new_shader(
             r#"#version 330 core
@@ -822,8 +829,11 @@ void main()
         }
 
         let mut running = true;
+        let mut last_time = SystemTime::now();
+        cb(self.clone());
         while running {
             el.poll_events(|event| {
+                let state = self.state.read().unwrap();
                 //temporary event handling
                 //println!("{:?}", event);
                 if let glutin::Event::WindowEvent { event, .. } = event.clone() {
@@ -833,17 +843,24 @@ void main()
                             let dpi_factor = windowed_context.get_hidpi_factor();
                             let true_size = logical_size.to_physical(dpi_factor);
                             windowed_context.resize(true_size);
-                            self.state
-                                .read()
-                                .unwrap()
-                                .size
-                                .set((true_size.width, true_size.height).into());
+
+                            state.size.set((true_size.width, true_size.height).into());
                         }
                         _ => (),
                     }
                 }
                 state.event_handler.call_handlers(event);
             });
+
+            {
+                let mut state = self.state.write().unwrap();
+                let now = SystemTime::now();
+                state.tick_handlers.iter_mut().for_each(|handler| {
+                    (handler)(now.duration_since(last_time).unwrap().as_nanos() as f64 / 1_000_000.)
+                });
+                last_time = now;
+            }
+
             let state = self.state.read().unwrap();
 
             if state.size.is_dirty() {
@@ -903,14 +920,6 @@ impl Graphics for Cairo {
     }
 }
 
-impl Clone for Cairo {
-    fn clone(&self) -> Cairo {
-        Cairo {
-            state: self.state.clone(),
-        }
-    }
-}
-
 pub(crate) fn new() -> Box<dyn ContextualGraphics> {
     let window = Cairo {
         state: Arc::new(RwLock::new(CairoState {
@@ -918,6 +927,7 @@ pub(crate) fn new() -> Box<dyn ContextualGraphics> {
             size: ObserverCell::new((700., 700.).into()),
             event_handler: EventHandler::new(),
             root_frame: None,
+            tick_handlers: vec![],
         })),
     };
 

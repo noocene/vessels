@@ -165,8 +165,9 @@ impl CanvasFrame {
             state.context.transform(
                 matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
             );
+            let spread = shadow.spread * 2.;
             let size = entity.bounds().size;
-            let scale = (size + shadow.spread) / size;
+            let scale = (size + spread) / size;
             state.context.begin_path();
             let segments = entity.segments.iter();
             let offset: Vector = (
@@ -174,7 +175,7 @@ impl CanvasFrame {
                 state.viewport.size.y + state.viewport.position.y,
             )
                 .into();
-            let new_size = size + shadow.spread;
+            let new_size = size + spread;
             let scale_offset = (size - new_size) / 2.;
             state.context.translate(scale_offset.x, scale_offset.y);
             state.context.scale(scale.x, scale.y);
