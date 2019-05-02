@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use std::sync::{Arc, RwLock};
+
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
@@ -291,7 +293,7 @@ pub struct Event {
     /// The associated layout-dependant printable character of the relevant key if applicable.
     pub printable: Option<char>,
     /// A [State] to permit polling of the associated keyboard.
-    pub state: Rc<RefCell<dyn State>>,
+    pub state: Arc<RwLock<dyn State>>,
 }
 
 impl Debug for Event {
