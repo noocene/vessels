@@ -117,6 +117,9 @@ impl Object for CanvasObject {
     fn update(&mut self, input: Rasterizable) {
         self.state.write().unwrap().content = input;
     }
+    fn box_clone(&self) -> Box<dyn Object> {
+        Box::new(self.clone())
+    }
 }
 
 struct CanvasFrameState {

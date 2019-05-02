@@ -620,6 +620,9 @@ impl Object for CairoObject {
     fn set_depth(&mut self, depth: u32) {
         self.state.write().unwrap().depth = depth;
     }
+    fn box_clone(&self) -> Box<dyn Object> {
+        Box::new(self.clone())
+    }
 }
 
 struct EventHandler {

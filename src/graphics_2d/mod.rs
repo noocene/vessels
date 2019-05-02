@@ -290,6 +290,14 @@ pub trait Object: Sync + Send {
     fn set_depth(&mut self, depth: u32);
     /// Replaces the contents of the [Object] with new Rasterizable content. This may be costly.
     fn update(&mut self, content: Rasterizable);
+    #[doc(hidden)]
+    fn box_clone(&self) -> Box<dyn Object>;
+}
+
+impl Clone for Box<dyn Object> {
+    fn clone(&self) -> Box<dyn Object> {
+        self.box_clone()
+    }
 }
 
 /// An isolated rendering context.
