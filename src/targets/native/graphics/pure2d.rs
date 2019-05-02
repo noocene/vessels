@@ -249,20 +249,17 @@ impl CairoFrame {
                 x0: matrix[4],
                 y0: matrix[5],
             });
+            let spread = shadow.spread * 2.;
             let size = entity.bounds().size;
-            let scale = (size + shadow.spread) / size;
+            let scale = (size + spread) / size;
             let segments = entity.segments.iter();
-            let offset: Vector = (
-                state.viewport.size.x + state.viewport.position.x,
-                state.viewport.size.y + state.viewport.position.y,
-            )
-                .into();
-            let new_size = size + shadow.spread;
+            let new_size = size + spread;
             let scale_offset = (size - new_size) / 2.;
-            context.translate(scale_offset.x, scale_offset.y);
+            context.translate(
+                scale_offset.x + shadow.offset.x,
+                scale_offset.y + shadow.offset.y,
+            );
             context.scale(scale.x, scale.y);
-            context.move_to(-offset.x, -offset.y);
-            context.translate(-offset.x / scale.x, -offset.y / scale.y);
             segments.for_each(|segment| match segment {
                 Segment::LineTo(point) => {
                     context.line_to(point.x, point.y);
@@ -287,9 +284,15 @@ impl CairoFrame {
             context.set_shadow_color(&shadow.color.to_rgba_color());
             context.set_shadow_offset_x((shadow.offset.x + offset.x) * state.pixel_ratio);
             context.set_shadow_offset_y((shadow.offset.y + offset.y) * state.pixel_ratio);
-            context.set_fill_style_color("rgba(255,255,255,1)");
             context.fill(FillRule::NonZero);
             */
+            context.set_source_rgba(
+                f64::from(shadow.color.r) / 255.,
+                f64::from(shadow.color.g) / 255.,
+                f64::from(shadow.color.b) / 255.,
+                f64::from(shadow.color.a) / 255.,
+            );
+            context.fill();
         }
         context.restore();
         context.save();

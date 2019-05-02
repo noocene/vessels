@@ -8,7 +8,12 @@ fn main() {
     let mut root = gfx.frame();
     let path: Path = Primitive::rounded_square(200., 10.)
         .fill(Color::black().with_alpha(30).into())
-        .shadow(Shadow::new(Color::black().with_alpha(200)).blur(10.))
+        .shadow(
+            Shadow::new(Color::black().with_alpha(200))
+                .spread(50.)
+                .offset((50., 50.))
+                .blur(10.),
+        )
         .finalize();
     let mut object = root.add(path.into());
     let translate: Transform = (200., 200.).into();
