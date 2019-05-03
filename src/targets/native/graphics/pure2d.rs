@@ -360,7 +360,7 @@ impl CairoFrame {
         font_options.set_hint_style(HintStyle::Full);
         font_options.set_subpixel_order(SubpixelOrder::Rgb);
         context.set_font_options(&font_options);
-        context.set_antialias(Antialias::Gray);
+        context.set_antialias(Antialias::Best);
         let mut font = FontDescription::new();
         font.set_absolute_size(f64::from(pixels_to_pango_pixels(entity.size)));
         font.set_family("San Francisco");
