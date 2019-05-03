@@ -778,7 +778,10 @@ impl Ticker for Canvas {
 impl ContextGraphics for Canvas {}
 
 impl InactiveContextGraphics for Canvas {
-    fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
+    fn run(self: Box<Self>) {
+        self.run_with(Box::new(|_| {}));
+    }
+    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
         {
             let state = self.state.read().unwrap();
             state.root_frame.as_ref().unwrap().show();

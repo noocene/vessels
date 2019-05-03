@@ -439,8 +439,10 @@ pub trait ContextGraphics: Graphics + Context + Ticker {}
 
 /// An inactive [ContextualGraphics] context.
 pub trait InactiveContextGraphics: ContextGraphics {
+    /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate. Calls the provided callback once upon execution and moves an active context graphics into it.
+    fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>);
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
-    fn run(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>);
+    fn run(self: Box<Self>);
 }
 
 /// A type that permits the binding of tick handlers.

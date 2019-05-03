@@ -16,6 +16,8 @@ use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::SystemTime;
 
+use std::f64::consts::PI;
+
 use glutin::dpi::LogicalSize;
 use glutin::ContextTrait;
 
@@ -59,11 +61,172 @@ impl Deref for CairoContext {
 
 struct CairoImage(Arc<Mutex<CairoSurface>>);
 
+fn boxes_for_gauss(sigma: f64, n: u32) -> Vec<u32> {
+    let nf = f64::from(n);
+    let mut wl = ((12. * sigma * sigma / nf) + 1.).sqrt().floor() as u32;
+    if wl % 2 == 0 {
+        wl -= 1;
+    }
+    let wu = wl + 2;
+    let wl = f64::from(wl);
+    let m = ((12. * sigma * sigma - nf * wl * wl - 4. * nf * wl - 3. * nf) / (-4. * wl - 4.))
+        .round() as u32;
+    let mut sizes = vec![];
+    for i in 0..n {
+        sizes.push(if i < m { wl as u32 } else { wu })
+    }
+    sizes
+}
+
 impl CairoImage {
     fn new(surface: CairoSurface) -> CairoImage {
         CairoImage(Arc::new(Mutex::new(surface)))
     }
-
+    fn box_blur(&self, data: &mut [[u8; 4]], width: u32, height: u32, radius: u32, channel: usize) {
+        let mut target = vec![[0, 0, 0, 0]; data.len()];
+        target.copy_from_slice(data);
+        self.box_blur_h(
+            data,
+            &mut target,
+            width as i32,
+            height as i32,
+            radius as i32,
+            channel,
+        );
+        self.box_blur_t(
+            &mut target,
+            data,
+            width as i32,
+            height as i32,
+            radius as i32,
+            channel,
+        );
+    }
+    fn box_blur_h(
+        &self,
+        source: &mut [[u8; 4]],
+        target: &mut [[u8; 4]],
+        width: i32,
+        height: i32,
+        radius: i32,
+        channel: usize,
+    ) {
+        let iarr = 1. / f64::from(radius + radius + 1);
+        for i in 0..height {
+            let mut ti = i * width;
+            let mut li = ti;
+            let mut ri = ti + radius;
+            let fv = i32::from(source[ti as usize][channel]);
+            let lv = i32::from(source[(ti + width - 1) as usize][channel]);
+            let mut val = (radius + 1) * fv;
+            for j in 0..radius {
+                val += i32::from(source[(ti + j) as usize][channel]);
+            }
+            for _ in 0..radius {
+                val += i32::from(source[ri as usize][channel]) - fv;
+                ri += 1;
+                target[ti as usize][channel] = (f64::from(val) * iarr).round() as u8;
+                ti += 1;
+            }
+            for _ in radius + 1..width - radius {
+                val += i32::from(source[ri as usize][channel])
+                    - i32::from(source[li as usize][channel]);
+                ri += 1;
+                li += 1;
+                target[ti as usize][channel] = (f64::from(val) * iarr).round() as u8;
+                ti += 1;
+            }
+            for _ in width - radius..width {
+                val += lv - i32::from(source[li as usize][channel]);
+                li += 1;
+                target[ti as usize][channel] = (f64::from(val) * iarr).round() as u8;
+                ti += 1;
+            }
+        }
+    }
+    fn box_blur_t(
+        &self,
+        source: &mut [[u8; 4]],
+        target: &mut [[u8; 4]],
+        width: i32,
+        height: i32,
+        radius: i32,
+        channel: usize,
+    ) {
+        let iarr = 1. / f64::from(radius + radius + 1);
+        for i in 0..width {
+            let mut ti = i;
+            let mut li = ti;
+            let mut ri = ti + radius * width;
+            let fv = i32::from(source[ti as usize][channel]);
+            let lv = i32::from(source[(ti + width * (height - 1)) as usize][channel]);
+            let mut val = (radius + 1) * fv;
+            for j in 0..radius {
+                val += i32::from(source[(ti + j * width) as usize][channel]);
+            }
+            for _ in 0..radius {
+                val += i32::from(source[ri as usize][channel]) - fv;
+                target[ti as usize][channel] = (f64::from(val) * iarr).round() as u8;
+                ri += width;
+                ti += width;
+            }
+            for _ in radius + 1..height - radius {
+                val += i32::from(source[ri as usize][channel])
+                    - i32::from(source[li as usize][channel]);
+                target[ti as usize][channel] = (f64::from(val) * iarr).round() as u8;
+                li += width;
+                ti += width;
+                ri += width;
+            }
+            for _ in height - radius..height {
+                val += lv - i32::from(source[li as usize][channel]);
+                target[ti as usize][channel] = (f64::from(val) * iarr).round() as u8;
+                li += width;
+                ti += width;
+            }
+        }
+    }
+    fn blur(&self, radius: f64) {
+        let surface = &self.0.lock().unwrap().0;
+        let data: &mut [[u8; 4]] = unsafe {
+            cairo_sys::cairo_surface_flush(surface.to_raw_none());
+            match Status::from(cairo_sys::cairo_surface_status(surface.to_raw_none())) {
+                Status::Success => (),
+                status => panic!("Cairo Surface borrow error!"),
+            }
+            if cairo_sys::cairo_image_surface_get_data(surface.to_raw_none()).is_null() {
+                panic!("Cairo Surface borrow error!");
+            }
+            std::slice::from_raw_parts_mut(
+                cairo_sys::cairo_image_surface_get_data(surface.to_raw_none()) as *mut [u8; 4],
+                (surface.get_height() * surface.get_width()) as usize,
+            )
+        };
+        let boxes = boxes_for_gauss(radius, 3);
+        for channel in 0..=2 {
+            self.box_blur(
+                data,
+                surface.get_width() as u32,
+                surface.get_height() as u32,
+                (boxes[0] - 1) / 2,
+                channel,
+            );
+            self.box_blur(
+                data,
+                surface.get_width() as u32,
+                surface.get_height() as u32,
+                (boxes[1] - 1) / 2,
+                channel,
+            );
+            self.box_blur(
+                data,
+                surface.get_width() as u32,
+                surface.get_height() as u32,
+                (boxes[2] - 1) / 2,
+                channel,
+            );
+        }
+    }
     fn get_data_ptr(&self) -> *const c_void {
         let surface = &self.0.lock().unwrap().0;
         unsafe {
@@ -281,10 +444,6 @@ impl CairoFrame {
             }
             /*
             context.set_shadow_blur(shadow.blur * state.pixel_ratio);
-            context.set_shadow_color(&shadow.color.to_rgba_color());
-            context.set_shadow_offset_x((shadow.offset.x + offset.x) * state.pixel_ratio);
-            context.set_shadow_offset_y((shadow.offset.y + offset.y) * state.pixel_ratio);
-            context.fill(FillRule::NonZero);
             */
             context.set_source_rgba(
                 f64::from(shadow.color.r) / 255.,
@@ -721,7 +880,10 @@ impl Context for Cairo {
 impl ContextGraphics for Cairo {}
 
 impl InactiveContextGraphics for Cairo {
-    fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
+    fn run(self: Box<Self>) {
+        self.run_with(Box::new(|_| {}));
+    }
+    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
         let (mut el, frame, size, windowed_context) = {
             let state = self.state.read().unwrap();
             let size = state.size.get();
@@ -865,7 +1027,6 @@ void main()
             }
 
             let state = self.state.read().unwrap();
-
             if state.size.is_dirty() {
                 let size = state.size.get();
                 frame.set_viewport(Rect::new((0., 0.), size));

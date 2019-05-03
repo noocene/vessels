@@ -28,10 +28,5 @@ fn main() {
         .with_transform((200., 200.).into()),
     );
     let ctx = gfx.start(root);
-    ctx.run(Box::new(move |mut ctx| {
-        let object = object.clone();
-        ctx.bind(Box::new(move |_| {
-            object.clone().apply_transform((1., 1.).into());
-        }));
-    }));
+    ctx.run();
 }
