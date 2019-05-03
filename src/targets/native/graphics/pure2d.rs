@@ -7,7 +7,7 @@ use crate::interaction::{Context, Keyboard, Mouse, Window};
 use crate::interaction::{Event, Source};
 use crate::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
 use crate::targets::native;
-use crate::text::{Text, Weight, Wrap};
+use crate::text::{Origin, Text, Weight, Wrap};
 use crate::util::ObserverCell;
 
 use std::any::Any;
@@ -15,8 +15,6 @@ use std::ffi::{c_void, CString};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::SystemTime;
-
-use std::f64::consts::PI;
 
 use glutin::dpi::LogicalSize;
 use glutin::ContextTrait;
@@ -27,7 +25,7 @@ use cairo::{
     LinearGradient, Matrix, Pattern, RadialGradient, SubpixelOrder,
 };
 
-use pango::{FontDescription, LayoutExt};
+use pango::{FontDescription, Layout, LayoutExt};
 
 use gl::types::*;
 
@@ -340,19 +338,9 @@ impl CairoFrame {
             .unwrap(),
         )))
     }
-    fn draw_text(&self, matrix: [f64; 6], entity: &Text) {
+    fn layout_text(&self, entity: &Text) -> Layout {
         let state = self.state.read().unwrap();
         let context = state.context.lock().unwrap();
-        context.restore();
-        context.save();
-        context.transform(Matrix {
-            xx: matrix[0],
-            yx: matrix[2],
-            xy: matrix[1],
-            yy: matrix[3],
-            x0: matrix[4],
-            y0: matrix[5],
-        });
         let layout = pangocairo::functions::create_layout(&context).unwrap();
         layout.set_text(&entity.content);
         let mut font_options = FontOptions::new();
@@ -396,6 +384,31 @@ impl CairoFrame {
             f64::from(entity.color.a) / 255.,
         );
         pangocairo::functions::update_layout(&context, &layout);
+        layout
+    }
+    fn measure_text(&self, entity: &Text) -> Vector {
+        let layout = self.layout_text(entity);
+        let size = layout.get_pixel_size();
+        (f64::from(size.0), f64::from(size.1)).into()
+    }
+    fn draw_text(&self, matrix: [f64; 6], entity: &Text) {
+        {
+            let state = self.state.read().unwrap();
+            let context = state.context.lock().unwrap();
+            context.restore();
+            context.save();
+            context.transform(Matrix {
+                xx: matrix[0],
+                yx: matrix[2],
+                xy: matrix[1],
+                yy: matrix[3],
+                x0: matrix[4],
+                y0: matrix[5],
+            });
+        }
+        let layout = self.layout_text(&entity);
+        let state = self.state.read().unwrap();
+        let context = state.context.lock().unwrap();
         pangocairo::functions::show_layout(&context, &layout);
     }
     fn draw_shadows(&self, matrix: [f64; 6], entity: &Path) {
@@ -690,8 +703,16 @@ impl Frame for CairoFrame {
     }
 
     fn measure(&self, input: Rasterizable) -> Vector {
-        //temporary
-        Vector { x: 5.0, y: 5.0 }
+        match input {
+            Rasterizable::Text(input) => {
+                let mut size = self.measure_text(input.deref());
+                if input.origin == Origin::Middle {
+                    size.y = 0.;
+                }
+                size
+            }
+            Rasterizable::Path(input) => input.bounds().size,
+        }
     }
 
     fn box_clone(&self) -> Box<dyn Frame> {
