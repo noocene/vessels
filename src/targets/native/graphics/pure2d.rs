@@ -122,7 +122,7 @@ impl CairoImage {
             for j in 0..radius {
                 val += i32::from(source[(ti + j) as usize][channel]);
             }
-            for _ in 0..radius {
+            for _ in 0..=radius {
                 val += i32::from(source[ri as usize][channel]) - fv;
                 ri += 1;
                 target[ti as usize][channel] = (f64::from(val) * iarr).round() as u8;
@@ -164,7 +164,7 @@ impl CairoImage {
             for j in 0..radius {
                 val += i32::from(source[(ti + j * width) as usize][channel]);
             }
-            for _ in 0..radius {
+            for _ in 0..=radius {
                 val += i32::from(source[ri as usize][channel]) - fv;
                 target[ti as usize][channel] = (f64::from(val) * iarr).round() as u8;
                 ri += width;

@@ -12,7 +12,7 @@ fn main() {
             Shadow::new(Color::black().with_alpha(200))
                 .spread(50.)
                 .offset((50., 50.))
-                .blur(10.),
+                //.blur(10.),
         )
         .finalize();
     let mut object = root.add(path.into());
