@@ -138,9 +138,27 @@ mod scancode_macos {
                                            Key::Arrow(Arrow::Up)];
 }
 
+#[cfg(target_os = "windows")]
+mod scancode_windows {
+    use crate::interaction::keyboard::{Key, Arrow, Alpha, Location, Number, Numpad, Function};
+
+    pub static MAP: [Key; 1] = [Key::Unknown];
+}
+
+#[cfg(target_os = "linux")]
+mod scancode_linux {
+    use crate::interaction::keyboard::{Key, Arrow, Alpha, Location, Number, Numpad, Function};
+
+    pub static MAP: [Key; 1] = [Key::Unknown];
+}
+
 mod scancode {
     #[cfg(target_os = "macos")]
     pub use super::scancode_macos::MAP;
+    #[cfg(target_os = "windows")]
+    pub use super::scancode_windows::MAP;
+    #[cfg(target_os = "linux")]
+    pub use super::scancode_linux::MAP;
 }
 
 fn parse_code(code: u32) -> Key {
