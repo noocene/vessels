@@ -59,7 +59,7 @@ mod scancode_macos {
                                            Key::Period,
                                            Key::Tab,
                                            Key::Space,
-                                           Key::Unknown, //Labelled as Grave not sure what it is
+                                           Key::Backtick,
                                            Key::Backspace,
                                            Key::Numpad(Numpad::Enter),
                                            Key::Escape,
