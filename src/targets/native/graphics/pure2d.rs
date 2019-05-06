@@ -1084,6 +1084,7 @@ void main()
                 );
                 gl::UseProgram(program);
                 gl::BindVertexArray(vao);
+                gl::Enable(gl::FRAMEBUFFER_SRGB);
                 gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4);
             }
             windowed_context.swap_buffers().unwrap();
