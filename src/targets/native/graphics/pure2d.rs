@@ -913,7 +913,6 @@ impl InactiveContextGraphics for Cairo {
             let wb = glutin::WindowBuilder::new().with_dimensions(size);
             let windowed_context = glutin::ContextBuilder::new()
                 .with_vsync(true)
-                .with_srgb(true)
                 .build_windowed(wb, &el)
                 .unwrap();
             let dpi_factor = windowed_context.get_hidpi_factor();
@@ -1084,7 +1083,6 @@ void main()
                 );
                 gl::UseProgram(program);
                 gl::BindVertexArray(vao);
-                gl::Enable(gl::FRAMEBUFFER_SRGB);
                 gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4);
             }
             windowed_context.swap_buffers().unwrap();
