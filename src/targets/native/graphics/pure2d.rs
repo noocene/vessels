@@ -913,6 +913,7 @@ impl InactiveContextGraphics for Cairo {
             let wb = glutin::WindowBuilder::new().with_dimensions(size);
             let windowed_context = glutin::ContextBuilder::new()
                 .with_vsync(true)
+                .with_srgb(true)
                 .build_windowed(wb, &el)
                 .unwrap();
             let dpi_factor = windowed_context.get_hidpi_factor();
