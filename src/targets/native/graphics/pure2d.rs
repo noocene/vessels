@@ -896,7 +896,9 @@ impl Context for Cairo {
         ))
     }
     fn window(&self) -> Box<dyn Window> {
-        native::interaction::Window::new()
+        native::interaction::Window::new(Box::new(
+            self.state.read().unwrap().event_handler.clone(),
+        ))
     }
 }
 
@@ -1022,8 +1024,6 @@ void main()
         while running {
             el.poll_events(|event| {
                 let state = self.state.read().unwrap();
-                //temporary event handling
-                //println!("{:?}", event);
                 if let glutin::Event::WindowEvent { event, .. } = event.clone() {
                     match event {
                         glutin::WindowEvent::CloseRequested => running = false,

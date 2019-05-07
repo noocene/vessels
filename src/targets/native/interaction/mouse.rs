@@ -41,7 +41,6 @@ impl Mouse {
         let state = self.state.clone();
         event_handler.bind(Box::new(move |event: glutin::Event| {
             let my_state = state.clone();
-            let send_state = state.clone();
             let mut state = my_state.write().unwrap();
             if let glutin::Event::WindowEvent { event, .. } = event {
                 match event {

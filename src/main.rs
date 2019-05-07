@@ -4,6 +4,7 @@ use vitruvia::path::{Path, Primitive, Shadow};
 use vitruvia::text::Text;
 use vitruvia::interaction::keyboard;
 use vitruvia::interaction::mouse;
+use vitruvia::interaction::windowing;
 
 fn main() {
     let gfx = graphics_2d::new();
@@ -37,6 +38,10 @@ fn main() {
     let mouse = ctx.mouse();
     mouse.bind(Box::new(|event: mouse::Event| {
         println!("{:?}", event.action);
+    }));
+    let window = ctx.window();
+    window.bind(Box::new(|event: windowing::Event| {
+        println!("{:?}", event.action)
     }));
     ctx.run();
 }
