@@ -2,7 +2,8 @@ use vitruvia::graphics_2d;
 use vitruvia::graphics_2d::{Color, Content, Transform};
 use vitruvia::path::{Path, Primitive, Shadow};
 use vitruvia::text::Text;
-use vitruvia::interaction::keyboard::Event;
+use vitruvia::interaction::keyboard;
+use vitruvia::interaction::mouse;
 
 fn main() {
     let gfx = graphics_2d::new();
@@ -30,7 +31,11 @@ fn main() {
     );
     let ctx = gfx.start(root);
     let keyboard = ctx.keyboard();
-    keyboard.bind(Box::new(|event: Event| {
+    keyboard.bind(Box::new(|event: keyboard::Event| {
+        println!("{:?}", event.action);
+    }));
+    let mouse = ctx.mouse();
+    mouse.bind(Box::new(|event: mouse::Event| {
         println!("{:?}", event.action);
     }));
     ctx.run();

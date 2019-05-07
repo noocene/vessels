@@ -886,7 +886,9 @@ impl Rasterizer for Cairo {
 
 impl Context for Cairo {
     fn mouse(&self) -> Box<dyn Mouse> {
-        native::interaction::Mouse::new()
+        native::interaction::Mouse::new(Box::new(
+            self.state.read().unwrap().event_handler.clone(),
+        ))
     }
     fn keyboard(&self) -> Box<dyn Keyboard> {
         native::interaction::Keyboard::new(Box::new(
