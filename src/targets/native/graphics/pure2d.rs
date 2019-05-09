@@ -614,9 +614,7 @@ impl CairoFrame {
             Some(fill) => {
                 match &fill.content {
                     Texture::Solid(color) => {
-                        println!("{:?}", color);
                         let color = self.transform_color(color.clone());
-                        println!("{:?}", color);
                         context.set_source_rgba(
                             f64::from(color.r) / 255.,
                             f64::from(color.g) / 255.,
