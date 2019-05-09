@@ -1,3 +1,5 @@
+use crate::graphics_2d::Vector;
+
 /// An interaction event [Source](super::Source) that represents a window.
 pub trait Window: super::Source<Event = Event> {
     /// Sets the window title.
@@ -9,6 +11,8 @@ pub trait Window: super::Source<Event = Event> {
 pub enum Action {
     /// A window resize event.
     Resize,
+    /// A window move event.
+    Move(Vector),
 }
 
 /// A window event.
