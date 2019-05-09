@@ -1,16 +1,24 @@
 use vitruvia::graphics_2d;
 use vitruvia::graphics_2d::{Color, Content, Transform};
-use vitruvia::path::{Path, Primitive, Shadow};
-use vitruvia::text::Text;
 use vitruvia::interaction::keyboard;
 use vitruvia::interaction::mouse;
 use vitruvia::interaction::windowing;
+use vitruvia::path::{Path, Primitive, Shadow};
+use vitruvia::text::Text;
 
 fn main() {
     let gfx = graphics_2d::new();
     let mut root = gfx.frame();
     let path: Path = Primitive::rounded_square(200., 10.)
-        .fill(Color::black().with_alpha(30).into())
+        .fill(
+            Color {
+                r: 255,
+                g: 0,
+                b: 0,
+                a: 255,
+            }
+            .into(),
+        )
         .shadow(
             Shadow::new(Color::black().with_alpha(200))
                 .spread(50.)

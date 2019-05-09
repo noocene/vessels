@@ -66,9 +66,9 @@ impl Profile {
     }
     pub(crate) fn transform(&self, color: Color) -> Color {
         let t = Transform::new(
-            &self.display_profile,
-            PixelFormat::RGBA_8,
             &self.srgb_profile,
+            PixelFormat::RGBA_8,
+            &self.display_profile,
             PixelFormat::RGBA_8,
             Intent::Perceptual,
         )

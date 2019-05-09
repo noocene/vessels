@@ -1,5 +1,5 @@
 use crate::interaction;
-use crate::interaction::windowing::{Event, Action};
+use crate::interaction::windowing::{Action, Event};
 
 use std::sync::{Arc, RwLock};
 
@@ -24,7 +24,9 @@ impl interaction::Window for Window {
 }
 
 impl Window {
-    pub(crate) fn new(event_handler: Box<dyn interaction::Source<Event = glutin::Event>>) -> Box<dyn interaction::Window> {
+    pub(crate) fn new(
+        event_handler: Box<dyn interaction::Source<Event = glutin::Event>>,
+    ) -> Box<dyn interaction::Window> {
         let window = Window {
             state: Arc::new(RwLock::new(WindowState { handlers: vec![] })),
         };

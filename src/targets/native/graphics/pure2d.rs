@@ -614,7 +614,9 @@ impl CairoFrame {
             Some(fill) => {
                 match &fill.content {
                     Texture::Solid(color) => {
+                        println!("{:?}", color);
                         let color = self.transform_color(color.clone());
+                        println!("{:?}", color);
                         context.set_source_rgba(
                             f64::from(color.r) / 255.,
                             f64::from(color.g) / 255.,
@@ -907,9 +909,7 @@ impl Rasterizer for Cairo {
 
 impl Context for Cairo {
     fn mouse(&self) -> Box<dyn Mouse> {
-        native::interaction::Mouse::new(Box::new(
-            self.state.read().unwrap().event_handler.clone(),
-        ))
+        native::interaction::Mouse::new(Box::new(self.state.read().unwrap().event_handler.clone()))
     }
     fn keyboard(&self) -> Box<dyn Keyboard> {
         native::interaction::Keyboard::new(Box::new(
@@ -917,9 +917,7 @@ impl Context for Cairo {
         ))
     }
     fn window(&self) -> Box<dyn Window> {
-        native::interaction::Window::new(Box::new(
-            self.state.read().unwrap().event_handler.clone(),
-        ))
+        native::interaction::Window::new(Box::new(self.state.read().unwrap().event_handler.clone()))
     }
 }
 
