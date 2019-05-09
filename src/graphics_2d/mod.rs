@@ -322,6 +322,8 @@ pub trait Frame: Sync + Send {
     fn draw(&self);
     #[doc(hidden)]
     fn set_pixel_ratio(&self, ratio: f64);
+    #[doc(hidden)]
+    fn as_any(&self) -> Box<dyn Any>;
 }
 
 impl Clone for Box<dyn Frame> {

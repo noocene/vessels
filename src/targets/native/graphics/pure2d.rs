@@ -1,3 +1,4 @@
+use super::cm::Profile;
 use crate::graphics_2d::{
     Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics, Image,
     ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
@@ -298,6 +299,7 @@ struct CairoFrameState {
     context: Mutex<CairoContext>,
     contents: Vec<CairoObject>,
     viewport: Rect,
+    color_profile: Option<Profile>,
     size: Vector,
     pixel_ratio: f64,
 }
@@ -315,6 +317,7 @@ impl CairoFrame {
                 context: Mutex::new(CairoContext(cairo::Context::new(&surface))),
                 contents: vec![],
                 size: size,
+                color_profile: None,
                 viewport: Rect {
                     size: Vector::default(),
                     position: (0., 0.).into(),
@@ -322,6 +325,13 @@ impl CairoFrame {
                 pixel_ratio: 1.,
             })),
         })
+    }
+    fn transform_color(&self, color: Color) -> Color {
+        let state = self.state.read().unwrap();
+        state
+            .color_profile
+            .as_ref()
+            .map_or(color, |profile| profile.transform(color))
     }
     fn surface(&self) -> Box<CairoImage> {
         self.draw();
@@ -337,6 +347,10 @@ impl CairoFrame {
             )
             .unwrap(),
         )))
+    }
+    fn set_color_profile(&self, profile: Profile) {
+        let mut state = self.state.write().unwrap();
+        state.color_profile = Some(profile);
     }
     fn layout_text(&self, entity: &Text) -> Layout {
         let state = self.state.read().unwrap();
@@ -377,11 +391,12 @@ impl CairoFrame {
                 .unwrap(),
         );
         layout.set_attributes(&attribute_list);
+        let color = self.transform_color(entity.color);
         context.set_source_rgba(
-            f64::from(entity.color.r) / 255.,
-            f64::from(entity.color.g) / 255.,
-            f64::from(entity.color.b) / 255.,
-            f64::from(entity.color.a) / 255.,
+            f64::from(color.r) / 255.,
+            f64::from(color.g) / 255.,
+            f64::from(color.b) / 255.,
+            f64::from(color.a) / 255.,
         );
         pangocairo::functions::update_layout(&context, &layout);
         layout
@@ -458,11 +473,12 @@ impl CairoFrame {
             /*
             context.set_shadow_blur(shadow.blur * state.pixel_ratio);
             */
+            let color = self.transform_color(shadow.color);
             context.set_source_rgba(
-                f64::from(shadow.color.r) / 255.,
-                f64::from(shadow.color.g) / 255.,
-                f64::from(shadow.color.b) / 255.,
-                f64::from(shadow.color.a) / 255.,
+                f64::from(color.r) / 255.,
+                f64::from(color.g) / 255.,
+                f64::from(color.b) / 255.,
+                f64::from(color.a) / 255.,
             );
             context.fill();
         }
@@ -476,7 +492,6 @@ impl CairoFrame {
             x0: matrix[4],
             y0: matrix[5],
         });
-        //context.set_shadow_color("rgba(255,255,255,0)");
     }
 
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
@@ -530,6 +545,7 @@ impl CairoFrame {
                 });
                 match &stroke.content {
                     Texture::Solid(color) => {
+                        let color = self.transform_color(color.clone());
                         context.set_source_rgba(
                             f64::from(color.r) / 255.,
                             f64::from(color.g) / 255.,
@@ -598,6 +614,7 @@ impl CairoFrame {
             Some(fill) => {
                 match &fill.content {
                     Texture::Solid(color) => {
+                        let color = self.transform_color(color.clone());
                         context.set_source_rgba(
                             f64::from(color.r) / 255.,
                             f64::from(color.g) / 255.,
@@ -672,6 +689,10 @@ impl Frame for CairoFrame {
     fn set_pixel_ratio(&self, ratio: f64) {
         let mut state = self.state.write().unwrap();
         state.pixel_ratio = ratio;
+    }
+
+    fn as_any(&self) -> Box<dyn Any> {
+        Box::new(self.clone())
     }
 
     fn add(&mut self, content: Content) -> Box<dyn Object> {
@@ -922,6 +943,14 @@ impl InactiveContextGraphics for Cairo {
             let size = (size.width, size.height).into();
             (el, frame, size, windowed_context)
         };
+
+        let profile = Profile::from_window(windowed_context.window());
+
+        frame
+            .as_any()
+            .downcast::<CairoFrame>()
+            .unwrap()
+            .set_color_profile(profile.unwrap());
 
         frame.resize(size);
         frame.set_viewport(Rect::new((0., 0.), size));

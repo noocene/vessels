@@ -722,6 +722,11 @@ impl Frame for CanvasFrame {
             state: self.state.clone(),
         })
     }
+    fn as_any(&self) -> Box<dyn Any> {
+        Box::new(CanvasFrame {
+            state: self.state.clone(),
+        })
+    }
 }
 
 struct Canvas {
