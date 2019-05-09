@@ -946,11 +946,13 @@ impl InactiveContextGraphics for Cairo {
 
         let profile = Profile::from_window(windowed_context.window());
 
-        frame
-            .as_any()
-            .downcast::<CairoFrame>()
-            .unwrap()
-            .set_color_profile(profile.unwrap());
+        if let Ok(profile) = profile {
+            frame
+                .as_any()
+                .downcast::<CairoFrame>()
+                .unwrap()
+                .set_color_profile(profile);
+        }
 
         frame.resize(size);
         frame.set_viewport(Rect::new((0., 0.), size));
