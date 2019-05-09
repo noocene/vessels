@@ -34,7 +34,7 @@ fn main() {
             Text::new("Correct wrap now text wrap works lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.")
                 .with_color(Color::black())
                 .wrap()
-                .with_max_width(200.),
+                .with_max_width(200.).with_baseline_origin(),
         )
         .with_transform((200., 200.).into()),
     );

@@ -427,7 +427,7 @@ impl CairoFrame {
         match entity.origin {
             Origin::Baseline => {
                 let baseline = layout.get_baseline();
-                context.translate(0., f64::from(-baseline));
+                context.translate(0., f64::from(-baseline / pango::SCALE));
             }
             Origin::Middle => {
                 let size = layout.get_pixel_size();
