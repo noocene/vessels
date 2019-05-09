@@ -424,6 +424,17 @@ impl CairoFrame {
         let layout = self.layout_text(&entity);
         let state = self.state.read().unwrap();
         let context = state.context.lock().unwrap();
+        match entity.origin {
+            Origin::Baseline => {
+                let baseline = layout.get_baseline();
+                context.translate(0., f64::from(-baseline));
+            }
+            Origin::Middle => {
+                let size = layout.get_pixel_size();
+                context.translate(0., -(f64::from(size.1) / 2.));
+            }
+            _ => {}
+        }
         pangocairo::functions::show_layout(&context, &layout);
     }
     fn draw_shadows(&self, matrix: [f64; 6], entity: &Path) {
