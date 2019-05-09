@@ -20,10 +20,11 @@ impl interaction::Source for Window {
 
 impl interaction::Window for Window {
     //TODO
-    fn set_title(&mut self, title: &'_ str) {}
+    fn set_title(&mut self, _title: &'_ str) {}
 }
 
 impl Window {
+    #[allow(clippy::new_ret_no_self)]
     pub(crate) fn new(
         event_handler: Box<dyn interaction::Source<Event = glutin::Event>>,
     ) -> Box<dyn interaction::Window> {
@@ -37,8 +38,8 @@ impl Window {
     fn initialize(&self, event_handler: Box<dyn interaction::Source<Event = glutin::Event>>) {
         let state = self.state.clone();
         event_handler.bind(Box::new(move |event: glutin::Event| {
-            let my_state = state.clone();
-            let mut state = my_state.write().unwrap();
+            let cloned_state = state.clone();
+            let state = cloned_state.write().unwrap();
             if let glutin::Event::WindowEvent { event, .. } = event {
                 let action: Option<Action> = match event {
                     glutin::WindowEvent::Resized(_) => Some(Action::Resize),

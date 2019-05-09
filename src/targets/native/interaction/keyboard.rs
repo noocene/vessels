@@ -1,6 +1,6 @@
 use crate::interaction;
 use crate::interaction::keyboard;
-use crate::interaction::keyboard::{Action, Alpha, Event, Key, Location, Number};
+use crate::interaction::keyboard::{Action, Event, Key};
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -9,7 +9,7 @@ use std::sync::{Arc, RwLock};
 mod scancode_macos {
     use crate::interaction::keyboard::{Alpha, Arrow, Function, Key, Location, Number, Numpad};
 
-    pub static MAP: [Key; 127] = [
+    pub(crate) static MAP: [Key; 127] = [
         Key::Alpha(Alpha::A),
         Key::Alpha(Alpha::S),
         Key::Alpha(Alpha::D),
@@ -144,23 +144,23 @@ mod scancode_macos {
 mod scancode_windows {
     use crate::interaction::keyboard::{Alpha, Arrow, Function, Key, Location, Number, Numpad};
 
-    pub static MAP: [Key; 1] = [Key::Unknown];
+    pub(crate) static MAP: [Key; 1] = [Key::Unknown];
 }
 
 #[cfg(target_os = "linux")]
 mod scancode_linux {
     use crate::interaction::keyboard::{Alpha, Arrow, Function, Key, Location, Number, Numpad};
 
-    pub static MAP: [Key; 1] = [Key::Unknown];
+    pub(crate) static MAP: [Key; 1] = [Key::Unknown];
 }
 
 mod scancode {
     #[cfg(target_os = "linux")]
-    pub use super::scancode_linux::MAP;
+    pub(crate) use super::scancode_linux::MAP;
     #[cfg(target_os = "macos")]
-    pub use super::scancode_macos::MAP;
+    pub(crate) use super::scancode_macos::MAP;
     #[cfg(target_os = "windows")]
-    pub use super::scancode_windows::MAP;
+    pub(crate) use super::scancode_windows::MAP;
 }
 
 fn parse_code(code: u32) -> Key {
@@ -204,6 +204,7 @@ impl keyboard::State for KeyboardState {
 }
 
 impl Keyboard {
+    #[allow(clippy::new_ret_no_self)]
     pub(crate) fn new(
         event_handler: Box<dyn interaction::Source<Event = glutin::Event>>,
     ) -> Box<dyn interaction::Keyboard> {
@@ -223,7 +224,7 @@ impl Keyboard {
             let send_state = state.clone();
             let mut state = my_state.write().unwrap();
             if let glutin::Event::WindowEvent { event, .. } = event {
-                if let glutin::WindowEvent::KeyboardInput { device_id, input } = event {
+                if let glutin::WindowEvent::KeyboardInput { input, .. } = event {
                     let key = parse_code(input.scancode);
                     match input.state {
                         glutin::ElementState::Pressed => state.keys.insert(key, true),

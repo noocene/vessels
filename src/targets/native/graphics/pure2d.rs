@@ -191,7 +191,7 @@ impl CairoImage {
             cairo_sys::cairo_surface_flush(surface.to_raw_none());
             match Status::from(cairo_sys::cairo_surface_status(surface.to_raw_none())) {
                 Status::Success => (),
-                status => panic!("Cairo Surface borrow error!"),
+                _ => panic!("Cairo Surface borrow error!"),
             }
             if cairo_sys::cairo_image_surface_get_data(surface.to_raw_none()).is_null() {
                 panic!("Cairo Surface borrow error!");
@@ -232,7 +232,7 @@ impl CairoImage {
             cairo_sys::cairo_surface_flush(surface.to_raw_none());
             match Status::from(cairo_sys::cairo_surface_status(surface.to_raw_none())) {
                 Status::Success => (),
-                status => panic!("Cairo Surface borrow error!"),
+                _ => panic!("Cairo Surface borrow error!"),
             }
             if cairo_sys::cairo_image_surface_get_data(surface.to_raw_none()).is_null() {
                 panic!("Cairo Surface borrow error!");

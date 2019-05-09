@@ -27,7 +27,10 @@ impl interaction::Mouse for Mouse {
 }
 
 impl Mouse {
-    pub(crate) fn new(event_handler: Box<dyn interaction::Source<Event = glutin::Event>>) -> Box<dyn interaction::Mouse> {
+    #[allow(clippy::new_ret_no_self)]
+    pub(crate) fn new(
+        event_handler: Box<dyn interaction::Source<Event = glutin::Event>>,
+    ) -> Box<dyn interaction::Mouse> {
         let mouse = Mouse {
             state: Arc::new(RwLock::new(MouseState {
                 handlers: vec![],
@@ -44,8 +47,9 @@ impl Mouse {
             let mut state = my_state.write().unwrap();
             if let glutin::Event::WindowEvent { event, .. } = event {
                 match event {
-                    glutin::WindowEvent::CursorMoved {device_id, position, modifiers} => {
-                        let movement: Vector = Vector::from((position.x, position.y)) - state.position;
+                    glutin::WindowEvent::CursorMoved { position, .. } => {
+                        let movement: Vector =
+                            Vector::from((position.x, position.y)) - state.position;
                         state.position = (position.x, position.y).into();
                         state.handlers.iter().for_each(|handler| {
                             handler(Event {
@@ -53,41 +57,38 @@ impl Mouse {
                                 position: state.position,
                             })
                         })
-                    },
-                    glutin::WindowEvent::CursorEntered {device_id} => (),
-                    glutin::WindowEvent::CursorLeft {device_id} => (),
-                    glutin::WindowEvent::MouseInput {device_id, state: element_state, button, modifiers} => {
-                        state.handlers.iter().for_each(|handler| {
-                            handler(Event {
-                                action: match element_state {
-                                    glutin::ElementState::Pressed => {
-                                        Action::Down(match button {
-                                            glutin::MouseButton::Left => Button::Left,
-                                            glutin::MouseButton::Right => Button::Right,
-                                            glutin::MouseButton::Middle => Button::Middle,
-                                            glutin::MouseButton::Other(x) => Button::Auxiliary(x),
-                                        })
-                                    },
-                                    glutin::ElementState::Released => {
-                                        Action::Up(match button {
-                                            glutin::MouseButton::Left => Button::Left,
-                                            glutin::MouseButton::Right => Button::Right,
-                                            glutin::MouseButton::Middle => Button::Middle,
-                                            glutin::MouseButton::Other(x) => Button::Auxiliary(x),    
-                                        })
-                                    },
-                                },
-                                position: state.position,
-                            })
-                            
+                    }
+                    glutin::WindowEvent::CursorEntered { .. } => (),
+                    glutin::WindowEvent::CursorLeft { .. } => (),
+                    glutin::WindowEvent::MouseInput {
+                        state: element_state,
+                        button,
+                        ..
+                    } => state.handlers.iter().for_each(|handler| {
+                        handler(Event {
+                            action: match element_state {
+                                glutin::ElementState::Pressed => Action::Down(match button {
+                                    glutin::MouseButton::Left => Button::Left,
+                                    glutin::MouseButton::Right => Button::Right,
+                                    glutin::MouseButton::Middle => Button::Middle,
+                                    glutin::MouseButton::Other(x) => Button::Auxiliary(x),
+                                }),
+                                glutin::ElementState::Released => Action::Up(match button {
+                                    glutin::MouseButton::Left => Button::Left,
+                                    glutin::MouseButton::Right => Button::Right,
+                                    glutin::MouseButton::Middle => Button::Middle,
+                                    glutin::MouseButton::Other(x) => Button::Auxiliary(x),
+                                }),
+                            },
+                            position: state.position,
                         })
-                    },
-                    glutin::WindowEvent::MouseWheel {device_id, delta, phase, modifiers} => {
+                    }),
+                    glutin::WindowEvent::MouseWheel { delta, .. } => {
                         let pixel_delta: Vector = match delta {
-                            glutin::MouseScrollDelta::LineDelta(x, y) => {
+                            glutin::MouseScrollDelta::LineDelta(_x, _y) => {
                                 println!("LineDelta is not handled");
                                 (0., 0.).into()
-                            },
+                            }
                             glutin::MouseScrollDelta::PixelDelta(p) => (p.x, p.y).into(),
                         };
                         state.handlers.iter().for_each(|handler| {
@@ -96,7 +97,7 @@ impl Mouse {
                                 position: state.position,
                             })
                         })
-                    },
+                    }
                     _ => (),
                 }
             }
