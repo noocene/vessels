@@ -716,7 +716,7 @@ impl Frame for CairoFrame {
 
     fn get_size(&self) -> Vector {
         let state = self.state.read().unwrap();
-        state.size
+        state.size / state.pixel_ratio
     }
 
     fn to_image(&self) -> Box<dyn ImageRepresentation> {
