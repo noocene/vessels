@@ -47,6 +47,7 @@ pub(crate) struct Profile {
 }
 
 impl Profile {
+    #[cfg(target_os = "macos")]
     fn from_window_macos(window: &Window) -> Result<Profile, ()> {
         use glutin::os::macos::WindowExt;
         let os_window = window.get_nswindow();
