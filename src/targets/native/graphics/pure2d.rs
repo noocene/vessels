@@ -35,7 +35,7 @@ use cairo_sys;
 #[cfg(target_os = "windows")]
 static SYSTEM_FONT: &str = "Segoe UI";
 #[cfg(target_os = "macos")]
-static SYSTEM_FONT: &str = "Segoe UI";
+static SYSTEM_FONT: &str = "San Francisco";
 #[cfg(target_os = "linux")]
 static SYSTEM_FONT: &str = "DejaVu Sans";
 
