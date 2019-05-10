@@ -32,6 +32,13 @@ use gl::types::*;
 
 use cairo_sys;
 
+#[cfg(target_os = "windows")]
+static SYSTEM_FONT: &str = "Segoe UI";
+#[cfg(target_os = "macos")]
+static SYSTEM_FONT: &str = "Segoe UI";
+#[cfg(target_os = "linux")]
+static SYSTEM_FONT: &str = "DejaVu Sans";
+
 impl Event for glutin::Event {}
 
 struct CairoSurface(ImageSurface);
@@ -365,7 +372,7 @@ impl CairoFrame {
         context.set_antialias(Antialias::Best);
         let mut font = FontDescription::new();
         font.set_absolute_size(f64::from(pixels_to_pango_pixels(entity.size)));
-        font.set_family("San Francisco");
+        font.set_family(SYSTEM_FONT);
         font.set_weight(match entity.weight {
             Weight::Bold => pango::Weight::Bold,
             Weight::Hairline => pango::Weight::Ultralight,
