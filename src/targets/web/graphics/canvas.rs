@@ -1,6 +1,6 @@
 use crate::graphics_2d::{
-    Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics, Image,
-    ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
+    ActiveContextGraphics, Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics,
+    Image, ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
     Texture2D, Ticker, Transform, Vector,
 };
 use crate::interaction::Context;
@@ -782,11 +782,17 @@ impl Ticker for Canvas {
 
 impl ContextGraphics for Canvas {}
 
+impl ActiveContextGraphics for Canvas {
+    fn box_clone(&self) -> Box<dyn ActiveContextGraphics> {
+        Box::new(self.clone())
+    }
+}
+
 impl InactiveContextGraphics for Canvas {
     fn run(self: Box<Self>) {
         self.run_with(Box::new(|_| {}));
     }
-    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
+    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveContextGraphics>) + 'static>) {
         {
             let state = self.state.read().unwrap();
             state.root_frame.as_ref().unwrap().show();

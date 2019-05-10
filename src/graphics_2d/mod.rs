@@ -436,13 +436,25 @@ pub trait Graphics: Rasterizer {
     fn frame(&self) -> Box<dyn Frame>;
 }
 
-/// A post-activation graphics context.
+/// An aggregated context with bound graphics.
 pub trait ContextGraphics: Graphics + Context + Ticker {}
+
+impl Clone for Box<dyn ActiveContextGraphics> {
+    fn clone(&self) -> Box<dyn ActiveContextGraphics> {
+        self.box_clone()
+    }
+}
+
+/// An active [ContextualGraphics] context.
+pub trait ActiveContextGraphics: ContextGraphics {
+    #[doc(hidden)]
+    fn box_clone(&self) -> Box<dyn ActiveContextGraphics>;
+}
 
 /// An inactive [ContextualGraphics] context.
 pub trait InactiveContextGraphics: ContextGraphics {
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate. Calls the provided callback once upon execution and moves an active context graphics into it.
-    fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>);
+    fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ActiveContextGraphics>) + 'static>);
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
     fn run(self: Box<Self>);
 }

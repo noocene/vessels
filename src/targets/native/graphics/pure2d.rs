@@ -1,7 +1,7 @@
 use super::cm::Profile;
 use crate::graphics_2d::{
-    Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics, Image,
-    ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
+    ActiveContextGraphics, Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics,
+    Image, ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
     Texture2D, Ticker, Transform, Vector,
 };
 use crate::interaction::{Context, Keyboard, Mouse, Window};
@@ -932,11 +932,17 @@ impl Context for Cairo {
 
 impl ContextGraphics for Cairo {}
 
+impl ActiveContextGraphics for Cairo {
+    fn box_clone(&self) -> Box<dyn ActiveContextGraphics> {
+        Box::new(self.clone())
+    }
+}
+
 impl InactiveContextGraphics for Cairo {
     fn run(self: Box<Self>) {
         self.run_with(Box::new(|_| {}));
     }
-    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
+    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveContextGraphics>) + 'static>) {
         let (mut el, frame, size, windowed_context) = {
             let state = self.state.read().unwrap();
             let size = state.size.get();
