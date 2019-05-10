@@ -39,6 +39,26 @@ mod cm_backing {
     }
 }
 
+#[cfg(target_os = "windows")]
+mod cm_backing {
+    use libc::c_void;
+    use std::ffi::CString;
+    extern "C" {
+        fn GetDC(hwnd: *const c_void) -> *const c_void;
+        fn GetICMProfileA(hdc: *const c_void, buf_size: u32, filename: *mut u8) -> bool;
+        fn GetLastError() -> u32;
+    }
+    pub(crate) fn get_profile_data<'a>(window: *const c_void) -> Result<&'a [u8], ()> {
+        unsafe {
+            let dc = GetDC(window);
+            let buf: &mut [u8; 100] = &mut [0; 100];
+            println!("{}", GetICMProfileA(dc, 100, buf.as_ptr() as *mut u8));
+            println!("{}", GetLastError());
+        }
+        Err(())
+    }
+}
+
 unsafe impl Sync for Profile {}
 
 pub(crate) struct Profile {
@@ -59,10 +79,19 @@ impl Profile {
             srgb_profile: lcms2::Profile::new_srgb(),
         })
     }
+    #[cfg(target_os = "windows")]
+    fn from_window_windows(window: &Window) -> Result<Profile, ()> {
+        use glutin::os::windows::WindowExt;
+        let os_window = window.get_hwnd();
+        cm_backing::get_profile_data(os_window)?;
+        Err(())
+    }
     pub(crate) fn from_window(window: &Window) -> Result<Profile, ()> {
         #[cfg(target_os = "macos")]
         return Profile::from_window_macos(window);
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "windows")]
+        return Profile::from_window_windows(window);
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         Err(())
     }
     pub(crate) fn transform(&self, color: Color) -> Color {

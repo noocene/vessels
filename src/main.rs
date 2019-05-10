@@ -41,15 +41,15 @@ fn main() {
     let ctx = gfx.start(root);
     let keyboard = ctx.keyboard();
     keyboard.bind(Box::new(|event: keyboard::Event| {
-        println!("{:?}", event.action);
+        //println!("{:?}", event.action);
     }));
     let mouse = ctx.mouse();
     mouse.bind(Box::new(|event: mouse::Event| {
-        println!("{:?}", event.action);
+        //println!("{:?}", event.action);
     }));
     let window = ctx.window();
     window.bind(Box::new(|event: windowing::Event| {
-        println!("{:?}", event.action)
+        //println!("{:?}", event.action)
     }));
     ctx.run();
 }

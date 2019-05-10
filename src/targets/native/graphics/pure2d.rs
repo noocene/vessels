@@ -950,6 +950,11 @@ impl InactiveContextGraphics for Cairo {
         self.run_with(Box::new(|_| {}));
     }
     fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveContextGraphics>) + 'static>) {
+        #[cfg(target_os = "windows")]
+        let rt = {
+            use winrt::RuntimeContext;
+            RuntimeContext::init()
+        };
         let (mut el, frame, size, windowed_context) = {
             let state = self.state.read().unwrap();
             let size = state.size.get();
@@ -1140,6 +1145,8 @@ void main()
             }
             windowed_context.swap_buffers().unwrap();
         }
+        #[cfg(target_os = "windows")]
+        rt.uninit();
     }
 }
 
