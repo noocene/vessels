@@ -1,13 +1,12 @@
 use crate::graphics_2d::Color;
 use lcms2::{Intent, PixelFormat, Transform};
-use libc::c_void;
 
 use glutin::Window;
 
 #[cfg(target_os = "macos")]
 mod cm_backing {
     use libc::c_void;
-    use std::ffi::CString;
+    use std::{ffi::CString, slice};
     extern "C" {
         fn objc_msgSend(id: *const c_void, sel: *const c_void, ...) -> *const c_void;
         fn sel_registerName(name: *const i8) -> *const c_void;
@@ -31,7 +30,7 @@ mod cm_backing {
         let profile_data_bytes = msg_send(profile_data, "bytes").ok_or_else(|| ())?;
 
         Ok(unsafe {
-            std::slice::from_raw_parts(
+            slice::from_raw_parts(
                 profile_data_bytes as *const u8,
                 profile_data_length as usize,
             )
@@ -42,20 +41,30 @@ mod cm_backing {
 #[cfg(target_os = "windows")]
 mod cm_backing {
     use libc::c_void;
-    use std::ffi::CString;
+    use std::fs;
     extern "C" {
-        fn GetDC(hwnd: *const c_void) -> *const c_void;
-        fn GetICMProfileA(hdc: *const c_void, buf_size: u32, filename: *mut u8) -> bool;
-        fn GetLastError() -> u32;
+        fn GetDC(window_handle: *const c_void) -> *const c_void;
+        fn GetICMProfileW(
+            device_context_handle: *const c_void,
+            buffer_size: *const u32,
+            buffer: *mut u16,
+        ) -> bool;
     }
-    pub(crate) fn get_profile_data<'a>(window: *const c_void) -> Result<&'a [u8], ()> {
-        unsafe {
-            let dc = GetDC(window);
-            let buf: &mut [u8; 100] = &mut [0; 100];
-            println!("{}", GetICMProfileA(dc, 100, buf.as_ptr() as *mut u8));
-            println!("{}", GetLastError());
+    pub(crate) fn get_profile_data<'a>(window: *const c_void) -> Result<Vec<u8>, ()> {
+        let dc = unsafe { GetDC(window) };
+        let mut size: u32 = 0;
+        unsafe { GetICMProfileW(dc, &mut size as *const u32, 0x0 as *mut u16) };
+        let mut buf: Vec<u16> = Vec::with_capacity(size as usize);
+        if !unsafe { GetICMProfileW(dc, &(buf.capacity() as u32) as *const u32, buf.as_mut_ptr()) }
+        {
+            return Err(());
         }
-        Err(())
+        unsafe {
+            buf.set_len(size as usize);
+        }
+        let path = String::from_utf16_lossy(&buf);
+        let path = path.trim_end_matches(char::from(0));
+        fs::read(path).map_err(|_| ())
     }
 }
 
@@ -83,8 +92,12 @@ impl Profile {
     fn from_window_windows(window: &Window) -> Result<Profile, ()> {
         use glutin::os::windows::WindowExt;
         let os_window = window.get_hwnd();
-        cm_backing::get_profile_data(os_window)?;
-        Err(())
+        let display_profile =
+            lcms2::Profile::new_icc(&cm_backing::get_profile_data(os_window)?).map_err(|_| ())?;
+        Ok(Profile {
+            display_profile,
+            srgb_profile: lcms2::Profile::new_srgb(),
+        })
     }
     pub(crate) fn from_window(window: &Window) -> Result<Profile, ()> {
         #[cfg(target_os = "macos")]
