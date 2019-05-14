@@ -3,6 +3,8 @@ use lcms2::{Intent, PixelFormat, Transform};
 
 use glutin::Window;
 
+use libc::c_void;
+
 #[cfg(target_os = "macos")]
 mod cm_backing {
     use libc::c_void;
