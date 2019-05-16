@@ -1,4 +1,6 @@
-use crate::graphics_2d::Color;
+use crate::graphics_2d::{Rasterizable, Color};
+use crate::path::{Fill, GradientStop, Path, Texture};
+use std::sync::{Arc, RwLock};
 use lcms2::{Intent, PixelFormat, Transform};
 use libc::c_void;
 
@@ -39,11 +41,17 @@ mod cm_backing {
     }
 }
 
+unsafe impl Send for Profile {}
 unsafe impl Sync for Profile {}
 
-pub(crate) struct Profile {
+struct ProfileState {
     display_profile: lcms2::Profile,
     srgb_profile: lcms2::Profile,
+}
+
+#[derive(Clone)]
+pub(crate) struct Profile {
+    state: Arc<RwLock<ProfileState>>
 }
 
 impl Profile {
@@ -55,8 +63,10 @@ impl Profile {
             lcms2::Profile::new_icc(cm_backing::get_profile_data(os_window as *const c_void)?)
                 .map_err(|_| ())?;
         Ok(Profile {
-            display_profile,
-            srgb_profile: lcms2::Profile::new_srgb(),
+            state: Arc::new(RwLock::new(ProfileState { 
+                display_profile,
+                srgb_profile: lcms2::Profile::new_srgb(),
+            })),
         })
     }
     pub(crate) fn from_window(window: &Window) -> Result<Profile, ()> {
@@ -66,10 +76,11 @@ impl Profile {
         Err(())
     }
     pub(crate) fn transform(&self, color: Color) -> Color {
+        let state = self.state.read().unwrap();
         let t = Transform::new(
-            &self.srgb_profile,
+            &state.srgb_profile,
             PixelFormat::RGBA_8,
-            &self.display_profile,
+            &state.display_profile,
             PixelFormat::RGBA_8,
             Intent::Perceptual,
         )
@@ -82,5 +93,49 @@ impl Profile {
             source_pixels[0][2],
             source_pixels[0][3],
         )
+    }
+    pub(crate) fn transform_texture(&self, texture: Texture) -> Texture {
+        match texture {
+            Texture::Solid(color) => Texture::Solid(self.transform(color)),
+            Texture::LinearGradient(mut gradient) => {
+                gradient.stops = gradient.stops.iter().map(|stop| GradientStop {
+                    offset: stop.offset,
+                    color: self.transform(stop.color),
+                }).collect();
+                Texture::LinearGradient(gradient)
+            },
+            Texture::RadialGradient(mut gradient) => {
+                gradient.stops = gradient.stops.iter().map(|stop| GradientStop {
+                    offset: stop.offset,
+                    color: self.transform(stop.color),
+                }).collect();
+                Texture::RadialGradient(gradient)
+            },
+            texture => texture,
+        }
+    }
+    pub(crate) fn transform_content(&self, content: Rasterizable) -> Rasterizable {
+        match content {
+            Rasterizable::Text(mut text) => Rasterizable::Text({
+                text.color = self.transform(text.color);
+                text
+            }),
+            Rasterizable::Path(path) => Rasterizable::Path(Box::new(Path {
+                segments: path.segments,
+                stroke: path.stroke.map(|mut stroke| {
+                    stroke.content = self.transform_texture(stroke.content);
+                    stroke
+                }),
+                fill: path.fill.map(|fill| Fill {
+                    content: self.transform_texture(fill.content)
+                }),
+                shadows: path.shadows.iter().map(|shadow| {
+                    let mut corrected_shadow = shadow.clone();
+                    corrected_shadow.color = self.transform(shadow.color);
+                    corrected_shadow
+                }).collect(),
+                closed: path.closed,
+            })) 
+        }
     }
 }

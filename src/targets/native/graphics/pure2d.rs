@@ -398,12 +398,11 @@ impl CairoFrame {
                 .unwrap(),
         );
         layout.set_attributes(&attribute_list);
-        let color = self.transform_color(entity.color);
         context.set_source_rgba(
-            f64::from(color.r) / 255.,
-            f64::from(color.g) / 255.,
-            f64::from(color.b) / 255.,
-            f64::from(color.a) / 255.,
+            f64::from(entity.color.r) / 255.,
+            f64::from(entity.color.g) / 255.,
+            f64::from(entity.color.b) / 255.,
+            f64::from(entity.color.a) / 255.,
         );
         pangocairo::functions::update_layout(&context, &layout);
         layout
@@ -491,12 +490,11 @@ impl CairoFrame {
             /*
             context.set_shadow_blur(shadow.blur * state.pixel_ratio);
             */
-            let color = self.transform_color(shadow.color);
             context.set_source_rgba(
-                f64::from(color.r) / 255.,
-                f64::from(color.g) / 255.,
-                f64::from(color.b) / 255.,
-                f64::from(color.a) / 255.,
+                f64::from(shadow.color.r) / 255.,
+                f64::from(shadow.color.g) / 255.,
+                f64::from(shadow.color.b) / 255.,
+                f64::from(shadow.color.a) / 255.,
             );
             context.fill();
         }
@@ -563,7 +561,6 @@ impl CairoFrame {
                 });
                 match &stroke.content {
                     Texture::Solid(color) => {
-                        let color = self.transform_color(color.clone());
                         context.set_source_rgba(
                             f64::from(color.r) / 255.,
                             f64::from(color.g) / 255.,
@@ -632,7 +629,6 @@ impl CairoFrame {
             Some(fill) => {
                 match &fill.content {
                     Texture::Solid(color) => {
-                        let color = self.transform_color(color.clone());
                         context.set_source_rgba(
                             f64::from(color.r) / 255.,
                             f64::from(color.g) / 255.,
@@ -714,7 +710,7 @@ impl Frame for CairoFrame {
     }
 
     fn add(&mut self, content: Content) -> Box<dyn Object> {
-        let object = CairoObject::new(content.content, content.transform, content.depth);
+        let object = CairoObject::new(content.content, content.transform, content.depth, self.state.read().unwrap().color_profile.clone());
         let mut state = self.state.write().unwrap();
         state.contents.push(object.clone());
         Box::new(object)
@@ -806,16 +802,21 @@ struct CairoObjectState {
 #[derive(Clone)]
 struct CairoObject {
     state: Arc<RwLock<CairoObjectState>>,
+    color_profile: Option<Profile>,
 }
 
 impl CairoObject {
-    fn new(content: Rasterizable, orientation: Transform, depth: u32) -> CairoObject {
+    fn new(content: Rasterizable, orientation: Transform, depth: u32, color_profile: Option<Profile>) -> CairoObject {
         CairoObject {
             state: Arc::new(RwLock::new(CairoObjectState {
                 orientation,
-                content,
+                content: match color_profile.clone() {
+                    Some(color_profile) => color_profile.transform_content(content),
+                    None => content,
+                },
                 depth,
             })),
+            color_profile,
         }
     }
 }
@@ -831,7 +832,10 @@ impl Object for CairoObject {
         self.state.write().unwrap().orientation = transform;
     }
     fn update(&mut self, input: Rasterizable) {
-        self.state.write().unwrap().content = input;
+        self.state.write().unwrap().content = match self.color_profile.clone() {
+            Some(color_profile) => color_profile.transform_content(input),
+            None => input,
+        };
     }
     fn get_depth(&self) -> u32 {
         self.state.read().unwrap().depth
