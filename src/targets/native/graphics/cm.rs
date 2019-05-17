@@ -1,6 +1,7 @@
 use crate::graphics_2d::{Rasterizable, Color};
 use crate::path::{Fill, GradientStop, Path, Texture};
 use std::sync::{Arc, RwLock};
+use std::collections::{HashMap, VecDeque};
 use lcms2::{Intent, PixelFormat, Transform};
 
 use glutin::Window;
@@ -78,6 +79,8 @@ unsafe impl Send for Profile {}
 struct ProfileState {
     display_profile: lcms2::Profile,
     srgb_profile: lcms2::Profile,
+    color_cache: HashMap<Color, Color>,
+    color_cache_queue: VecDeque<Color>,
 }
 
 #[derive(Clone)]
@@ -97,6 +100,8 @@ impl Profile {
             state: Arc::new(RwLock::new(ProfileState { 
                 display_profile,
                 srgb_profile: lcms2::Profile::new_srgb(),
+                color_cache: HashMap::with_capacity(10),
+                color_cache_queue: VecDeque::with_capacity(10),
             })),
         })
     }
@@ -121,6 +126,9 @@ impl Profile {
     }
     pub(crate) fn transform(&self, color: Color) -> Color {
         let state = self.state.read().unwrap();
+        if let Some(transformed_color) = state.color_cache.get(&color) {
+            return transformed_color.clone();
+        }
         let t = Transform::new(
             &state.srgb_profile,
             PixelFormat::RGBA_8,
@@ -131,12 +139,21 @@ impl Profile {
         .unwrap();
         let source_pixels: &mut [[u8; 4]] = &mut [[color.r, color.g, color.b, color.a]];
         t.transform_in_place(source_pixels);
-        Color::rgba(
+        let transformed_color = Color::rgba(
             source_pixels[0][0],
             source_pixels[0][1],
             source_pixels[0][2],
             source_pixels[0][3],
-        )
+        );
+        drop(state);
+        let mut state = self.state.write().unwrap();
+        if state.color_cache_queue.len() >= state.color_cache_queue.capacity()  {
+            let rm_color = state.color_cache_queue.pop_front().unwrap();
+            state.color_cache.remove(&rm_color).unwrap();
+        }
+        state.color_cache_queue.push_back(color);
+        state.color_cache.insert(color, transformed_color);
+        transformed_color
     }
     pub(crate) fn transform_texture(&self, texture: Texture) -> Texture {
         match texture {
