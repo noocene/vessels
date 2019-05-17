@@ -125,26 +125,28 @@ impl Profile {
         Err(())
     }
     pub(crate) fn transform(&self, color: Color) -> Color {
-        let state = self.state.read().unwrap();
-        if let Some(transformed_color) = state.color_cache.get(&color) {
-            return transformed_color.clone();
+        {
+            let state = self.state.read().unwrap();
+            if let Some(transformed_color) = state.color_cache.get(&color) {
+                return transformed_color.clone();
+            }
+            let t = Transform::new(
+                &state.srgb_profile,
+                PixelFormat::RGBA_8,
+                &state.display_profile,
+                PixelFormat::RGBA_8,
+                Intent::Perceptual,
+            )
+            .unwrap();
+            let source_pixels: &mut [[u8; 4]] = &mut [[color.r, color.g, color.b, color.a]];
+            t.transform_in_place(source_pixels);
+            let transformed_color = Color::rgba(
+                source_pixels[0][0],
+                source_pixels[0][1],
+                source_pixels[0][2],
+                source_pixels[0][3],
+            );
         }
-        let t = Transform::new(
-            &state.srgb_profile,
-            PixelFormat::RGBA_8,
-            &state.display_profile,
-            PixelFormat::RGBA_8,
-            Intent::Perceptual,
-        )
-        .unwrap();
-        let source_pixels: &mut [[u8; 4]] = &mut [[color.r, color.g, color.b, color.a]];
-        t.transform_in_place(source_pixels);
-        let transformed_color = Color::rgba(
-            source_pixels[0][0],
-            source_pixels[0][1],
-            source_pixels[0][2],
-            source_pixels[0][3],
-        );
         let mut state = self.state.write().unwrap();
         if state.color_cache_queue.len() >= state.color_cache_queue.capacity()  {
             let rm_color = state.color_cache_queue.pop_front().unwrap();
