@@ -152,7 +152,7 @@ impl Profile {
             state.color_cache.remove(&rm_color).unwrap();
         }
         state.color_cache_queue.push_back(color);
-        state.color_cache.insert(color, transformed_color).unwrap();
+        state.color_cache.insert(color, transformed_color);
         transformed_color
     }
     pub(crate) fn transform_texture(&self, texture: Texture) -> Texture {
