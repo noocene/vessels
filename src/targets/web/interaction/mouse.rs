@@ -14,6 +14,7 @@ pub(crate) struct MouseState {
     position: Vector,
 }
 
+#[derive(Clone)]
 pub(crate) struct Mouse {
     state: Arc<RwLock<MouseState>>,
 }
@@ -22,6 +23,9 @@ impl interaction::Source for Mouse {
     type Event = Event;
     fn bind(&self, handler: Box<dyn Fn(Event) + 'static + Sync + Send>) {
         self.state.write().unwrap().handlers.push(handler);
+    }
+    fn box_clone(&self) -> Box<dyn interaction::Source<Event=Event>> {
+        Box::new(self.clone())
     }
 }
 

@@ -10,6 +10,7 @@ pub(crate) struct WindowState {
     handlers: Vec<Box<dyn Fn(Event)>>,
 }
 
+#[derive(Clone)]
 pub(crate) struct Window {
     state: Arc<RwLock<WindowState>>,
 }
@@ -40,6 +41,9 @@ impl interaction::Source for Window {
     type Event = Event;
     fn bind(&self, handler: Box<dyn Fn(Event) + 'static + Send + Sync>) {
         self.state.write().unwrap().handlers.push(handler);
+    }
+    fn box_clone(&self) -> Box<dyn interaction::Source<Event=Event>> {
+        Box::new(self.clone())
     }
 }
 

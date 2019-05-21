@@ -138,6 +138,7 @@ pub(crate) struct KeyboardState {
     keys: HashMap<Key, bool>,
 }
 
+#[derive(Clone)]
 pub(crate) struct Keyboard {
     state: Arc<RwLock<KeyboardState>>,
 }
@@ -146,6 +147,9 @@ impl interaction::Source for Keyboard {
     type Event = Event;
     fn bind(&self, handler: Box<dyn Fn(Event) + 'static + Send + Sync>) {
         self.state.write().unwrap().handlers.push(handler);
+    }
+    fn box_clone(&self) -> Box<dyn interaction::Source<Event=Event>> {
+        Box::new(self.clone())
     }
 }
 
