@@ -15,11 +15,12 @@ pub trait Source {
     /// Binds the provided handler to be called when an event occurs.
     fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Send + Sync>);
     #[doc(hidden)]
-    fn box_clone(&self) -> Box<dyn Source<Event=Self::Event>>;
+    fn box_clone(&self) -> Box<dyn Source<Event = Self::Event>>;
 }
 
-impl<T> Clone for Box<dyn Source<Event=T>> where T: Event {
-    fn clone(&self) -> Self {
+impl<T> Clone for Box<dyn Source<Event = T>> where T: Event
+{
+    fn clone(&self) -> Box<dyn Source<Event = T>> {
         self.box_clone()
     }
 }
