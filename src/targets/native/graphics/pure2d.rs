@@ -862,6 +862,9 @@ impl Source for EventHandler {
     fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Send + Sync>) {
         self.state.write().unwrap().handlers.push(handler);
     }
+    fn box_clone(&self) -> Box<dyn Source<Event=glutin::Event>> {
+        Box::new(self.clone())
+    }
 }
 
 impl Clone for EventHandler {
