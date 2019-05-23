@@ -323,7 +323,7 @@ impl CairoFrame {
             state: Arc::new(RwLock::new(CairoFrameState {
                 context: Mutex::new(CairoContext(cairo::Context::new(&surface))),
                 contents: vec![],
-                size: size,
+                size,
                 color_profile: None,
                 viewport: Rect {
                     size: Vector::default(),
@@ -332,13 +332,6 @@ impl CairoFrame {
                 pixel_ratio: 1.,
             })),
         })
-    }
-    fn transform_color(&self, color: Color) -> Color {
-        let state = self.state.read().unwrap();
-        state
-            .color_profile
-            .as_ref()
-            .map_or(color, |profile| profile.transform(color))
     }
     fn surface(&self) -> Box<CairoImage> {
         self.draw();
@@ -710,7 +703,12 @@ impl Frame for CairoFrame {
     }
 
     fn add(&mut self, content: Content) -> Box<dyn Object> {
-        let object = CairoObject::new(content.content, content.transform, content.depth, self.state.read().unwrap().color_profile.clone());
+        let object = CairoObject::new(
+            content.content,
+            content.transform,
+            content.depth,
+            self.state.read().unwrap().color_profile.clone(),
+        );
         let mut state = self.state.write().unwrap();
         state.contents.push(object.clone());
         Box::new(object)
@@ -806,7 +804,12 @@ struct CairoObject {
 }
 
 impl CairoObject {
-    fn new(content: Rasterizable, orientation: Transform, depth: u32, color_profile: Option<Profile>) -> CairoObject {
+    fn new(
+        content: Rasterizable,
+        orientation: Transform,
+        depth: u32,
+        color_profile: Option<Profile>,
+    ) -> CairoObject {
         CairoObject {
             state: Arc::new(RwLock::new(CairoObjectState {
                 orientation,
@@ -861,9 +864,6 @@ impl Source for EventHandler {
 
     fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Send + Sync>) {
         self.state.write().unwrap().handlers.push(handler);
-    }
-    fn box_clone(&self) -> Box<dyn Source<Event=glutin::Event>> {
-        Box::new(self.clone())
     }
 }
 

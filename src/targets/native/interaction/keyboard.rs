@@ -186,24 +186,22 @@ impl interaction::Source for Keyboard {
     fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Sync + Send>) {
         self.state.write().unwrap().handlers.push(handler);
     }
-    fn box_clone(&self) -> Box<dyn interaction::Source<Event=Event>> {
+}
+
+impl keyboard::Keyboard for Keyboard {
+    fn state(&self) -> Box<dyn keyboard::State> {
         Box::new(self.clone())
     }
 }
 
-impl keyboard::Keyboard for Keyboard {}
-
 impl keyboard::State for Keyboard {
+    fn box_clone(&self) -> Box<dyn keyboard::State> {
+        Box::new(self.clone())
+    }
     fn poll(&mut self, key: Key) -> bool {
         let mut state = self.state.write().unwrap();
         let entry = state.keys.entry(key).or_insert(false);
         *entry
-    }
-}
-
-impl keyboard::State for KeyboardState {
-    fn poll(&mut self, key: Key) -> bool {
-        *self.keys.entry(key).or_insert(false)
     }
 }
 
@@ -222,11 +220,11 @@ impl Keyboard {
         Box::new(keyboard)
     }
     fn initialize(&self, event_handler: Box<dyn interaction::Source<Event = glutin::Event>>) {
-        let state = self.state.clone();
+        let state = self.clone();
         event_handler.bind(Box::new(move |event: glutin::Event| {
-            let my_state = state.clone();
-            let send_state = state.clone();
-            let mut state = my_state.write().unwrap();
+            let c_state = state.clone();
+            let send_state = Box::new(state.clone());
+            let mut state = c_state.state.write().unwrap();
             if let glutin::Event::WindowEvent { event, .. } = event {
                 if let glutin::WindowEvent::KeyboardInput { input, .. } = event {
                     let key = parse_code(input.scancode);

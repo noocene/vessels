@@ -19,9 +19,6 @@ impl interaction::Source for Mouse {
     fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Sync + Send>) {
         self.state.write().unwrap().handlers.push(handler);
     }
-    fn box_clone(&self) -> Box<dyn interaction::Source<Event=Event>> {
-        Box::new(self.clone())
-    }
 }
 
 impl interaction::Mouse for Mouse {

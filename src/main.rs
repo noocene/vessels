@@ -16,5 +16,7 @@ fn main() {
     root.add(Primitive::square(100.).fill(Color::rgba(0, 0, 255, 255).into()).finalize().into())
         .apply_transform(Transform::default().with_position((500., 0.)));
     let mut ctx = gfx.start(root);
+    let key = ctx.keyboard();
+    key.state();
     ctx.run();
 }

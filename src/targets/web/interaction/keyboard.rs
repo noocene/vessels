@@ -148,12 +148,13 @@ impl interaction::Source for Keyboard {
     fn bind(&self, handler: Box<dyn Fn(Event) + 'static + Send + Sync>) {
         self.state.write().unwrap().handlers.push(handler);
     }
-    fn box_clone(&self) -> Box<dyn interaction::Source<Event=Event>> {
+}
+
+impl keyboard::Keyboard for Keyboard {
+    fn state(&self) -> Box<dyn keyboard::State> {
         Box::new(self.clone())
     }
 }
-
-impl keyboard::Keyboard for Keyboard {}
 
 impl keyboard::State for Keyboard {
     fn poll(&mut self, key: Key) -> bool {
@@ -161,11 +162,8 @@ impl keyboard::State for Keyboard {
         let entry = state.keys.entry(key).or_insert(false);
         *entry
     }
-}
-
-impl keyboard::State for KeyboardState {
-    fn poll(&mut self, key: Key) -> bool {
-        *self.keys.entry(key).or_insert(false)
+    fn box_clone(&self) -> Box<dyn keyboard::State> {
+        Box::new(self.clone())
     }
 }
 
@@ -182,12 +180,12 @@ impl Keyboard {
         Box::new(keyboard)
     }
     fn initialize(&self) {
-        let state = self.state.clone();
-        let up_state = state.clone();
+        let state = self.clone();
+        let u_state = state.clone();
         let body = document().body().unwrap();
         body.add_event_listener(move |e: KeyDownEvent| {
-            let send_state = state.clone();
-            let mut state = state.write().unwrap();
+            let send_state = Box::new(state.clone());
+            let mut state = state.state.write().unwrap();
             e.prevent_default();
             let key = e.key();
             let k = parse_code(e.code().as_str());
@@ -207,8 +205,8 @@ impl Keyboard {
             });
         });
         body.add_event_listener(move |e: KeyUpEvent| {
-            let send_state = up_state.clone();
-            let mut state = up_state.write().unwrap();
+            let send_state = Box::new(u_state.clone());
+            let mut state = u_state.state.write().unwrap();
             e.prevent_default();
             let key = e.key();
             let k = parse_code(e.code().as_str());
