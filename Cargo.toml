@@ -40,10 +40,6 @@ cairo-sys-rs = "0.8.0"
 pango = "0.6.0"
 itertools = "0.8.0"
 
-[target.'cfg(target_os="windows")'.dependencies.winrt]
-version = "0.5.1"
-features = ["windows-graphics", "windows-ui"]
-
 [profile.release]
 lto = true
 debug = false
