@@ -20,8 +20,6 @@ check:
 
 docs:
   stage: deploy
-  only:
-    - master
   script:
     - cargo rustdoc --target wasm32-unknown-emscripten
     - rm -rf public
