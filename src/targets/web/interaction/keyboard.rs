@@ -134,7 +134,7 @@ fn parse_code(code: &str) -> Key {
 }
 
 pub(crate) struct KeyboardState {
-    handlers: Vec<Box<dyn Fn(Event)>>,
+    handlers: Vec<Box<dyn Fn(Event) + Send + Sync>>,
     keys: HashMap<Key, bool>,
 }
 
