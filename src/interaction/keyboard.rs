@@ -7,7 +7,7 @@ pub trait Keyboard: super::Source<Event = Event> + State {
 }
 
 /// A context that permits active polling of key states.
-pub trait State {
+pub trait State: Sync + Send {
     /// Returns a [bool] representing whether the provided key is pressed.
     fn poll(&mut self, key: Key) -> bool;
     #[doc(hidden)]
