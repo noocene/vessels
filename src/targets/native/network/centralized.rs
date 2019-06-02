@@ -11,7 +11,7 @@ use crate::errors::Error;
 
 use crate::network::{
     self,
-    centralized::socket::{self, ListenConfig},
+    centralized::socket::{self, ConnectConfig, ListenConfig},
     DataChannel,
 };
 
@@ -55,6 +55,56 @@ impl Connection {
             c_sender,
             send: Some(send),
             task,
+        }
+    }
+    fn connect(
+        config: ConnectConfig,
+    ) -> impl Future<Item = Box<dyn DataChannel + 'static>, Error = Error> {
+        lazy(move || {
+            let (sender, receiver) = unbounded();
+            let task = Arc::new(RwLock::new(AtomicTask::new()));
+            let mut socket = WebSocket::new(ConnectionFactory::new(sender, task.clone())).unwrap();
+            socket
+                .connect(
+                    format!("ws://{}:{}", config.address.ip(), config.address.port())
+                        .parse()
+                        .unwrap(),
+                )
+                .expect("TODO implement failure on connection");
+            spawn(move || socket.run());
+            ClientConnection::wait(receiver, task)
+        })
+    }
+}
+
+struct ClientConnection {
+    task: Arc<RwLock<AtomicTask>>,
+    receiver: Receiver<Connection>,
+}
+
+impl ClientConnection {
+    fn wait(
+        receiver: Receiver<Connection>,
+        task: Arc<RwLock<AtomicTask>>,
+    ) -> impl Future<Item = Box<dyn DataChannel + 'static>, Error = Error> {
+        ClientConnection { task, receiver }
+    }
+}
+
+impl Future for ClientConnection {
+    type Item = Box<dyn DataChannel + 'static>;
+    type Error = Error;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        match self.receiver.try_recv() {
+            Ok(connection) => Ok(Async::Ready(Box::new(connection))),
+            Err(err) => match err {
+                TryRecvError::Disconnected => panic!("Server connection channel disconnected!"),
+                TryRecvError::Empty => {
+                    self.task.read().unwrap().register();
+                    Ok(Async::NotReady)
+                }
+            },
         }
     }
 }
@@ -177,4 +227,10 @@ impl Stream for Server {
 
 pub(crate) fn listen(config: ListenConfig) -> impl Future<Item = socket::Server, Error = Error> {
     Server::listen(config)
+}
+
+pub(crate) fn connect(
+    config: ConnectConfig,
+) -> impl Future<Item = Box<dyn DataChannel + 'static>, Error = Error> {
+    Connection::connect(config)
 }

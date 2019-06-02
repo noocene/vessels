@@ -25,9 +25,22 @@ where
     }
 }
 
+impl<T> From<T> for ConnectConfig
+where
+    T: Into<SocketAddr>,
+{
+    fn from(addr: T) -> ConnectConfig {
+        ConnectConfig {
+            address: addr.into(),
+        }
+    }
+}
+
 /// A socket connection configuration.
-#[derive(Clone, Debug, Default, Copy)]
-pub struct ConnectConfig {}
+#[derive(Clone, Debug, Copy)]
+pub struct ConnectConfig {
+    pub address: SocketAddr
+}
 
 /// A socket connection state.
 #[derive(Clone, Debug, Copy)]
@@ -44,4 +57,9 @@ where
 {
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     targets::native::network::centralized::listen(config.into())
+}
+
+pub fn connect<T>(config: T) -> impl Future<Item=Box<dyn DataChannel + 'static>, Error=Error> where T: Into<ConnectConfig> {
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    targets::native::network::centralized::connect(config.into())
 }
