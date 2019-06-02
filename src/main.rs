@@ -14,13 +14,12 @@ fn main() {
             server
                 .map_err(|e| eprintln!("connect failed: {:?}", e))
                 .for_each(|connection| {
-                    connection.on_open().and_then(|connection| {
-                        println!("connected");
-                        connection.on_close().and_then(|connection| {
-                            println!("disconnected");
+                    connection
+                        .map_err(|e| eprintln!("malformed message: {:?}", e))
+                        .for_each(|message| {
+                            println!("{:?}", message);
                             Ok(())
                         })
-                    })
                 })
         });
 

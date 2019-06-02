@@ -4,8 +4,6 @@ use std::sync::RwLock;
 
 use futures::Future;
 
-pub type BoxedFuture<T> = Box<dyn Future<Item = Box<T>, Error = Error>>;
-
 trait TryFrom<T>: Sized {
     type Error;
     fn try_from(value: T) -> Result<Self, Self::Error>;

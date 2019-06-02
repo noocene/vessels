@@ -7,8 +7,6 @@ pub struct Error {
     ctx: Context<ErrorKind>,
 }
 
-pub(crate) type Result<T> = std::result::Result<T, Error>;
-
 impl Error {
     pub fn kind(&self) -> &ErrorKind {
         self.ctx.get_context()

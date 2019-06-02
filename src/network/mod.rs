@@ -1,4 +1,5 @@
-use futures::Future;
+use crate::errors::Error;
+use futures::Stream;
 
 /// Provides peer-to-peer mesh networking functionality.
 pub mod mesh;
@@ -19,24 +20,8 @@ impl Default for ConnectionStatus {
     }
 }
 
-pub trait Connection {
+pub trait Connection: Stream<Item = Vec<u8>, Error = Error> + Send {
     type TransportDetails;
-    fn transport_details(&self) -> Self::TransportDetails;
+    fn transport_details(&self) -> &Self::TransportDetails;
     fn status(&self) -> ConnectionStatus;
-    fn on_open(
-        &self,
-    ) -> Box<
-        dyn Future<
-                Item = Box<dyn Connection<TransportDetails = Self::TransportDetails>>,
-                Error = (),
-            > + Send,
-    >;
-    fn on_close(
-        &self,
-    ) -> Box<
-        dyn Future<
-                Item = Box<dyn Connection<TransportDetails = Self::TransportDetails>>,
-                Error = (),
-            > + Send,
-    >;
 }

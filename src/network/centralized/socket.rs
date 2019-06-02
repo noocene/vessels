@@ -1,15 +1,16 @@
 use crate::network::Connection;
 
-use crate::errors::{Error, Result};
+use crate::errors::Error;
 use crate::targets;
+
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
 use futures::Future;
 
 /// A socket server configuration.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ListenConfig {
-    pub port: u16,
-    pub address: String,
+    pub address: SocketAddr,
 }
 
 impl<T> From<T> for ListenConfig
@@ -19,8 +20,7 @@ where
     fn from(port: T) -> ListenConfig {
         let port: u16 = port.into();
         ListenConfig {
-            port,
-            address: "127.0.0.1".to_owned(),
+            address: SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), port).into(),
         }
     }
 }
@@ -30,9 +30,9 @@ where
 pub struct ConnectConfig {}
 
 /// A socket connection state.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ConnectionDetails {
-    pub address: String,
+    pub address: SocketAddr,
 }
 
 pub type Server = super::Server<ConnectionDetails>;
