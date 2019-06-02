@@ -33,9 +33,11 @@ mod errors;
 pub mod graphics_2d;
 /// Provides interfaces to user interaction/HID APIs.
 pub mod interaction;
+/// Provides interfaces to abstracted networking APIs.
+pub mod network;
 /// Provides helper types that allow ergonomic construction and styling of 2D vector graphics.
 pub mod path;
 mod targets;
-/// Contains types to help represent and construct styled text.
+/// Provides types to help represent and construct styled text.
 pub mod text;
 mod util;

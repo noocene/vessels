@@ -1,22 +1,28 @@
-use vitruvia::path::Primitive;
-use vitruvia::graphics_2d;
-use vitruvia::graphics_2d::{Transform, Color};
+use futures::{Future, Stream};
+
+use vitruvia::network::{
+    centralized::socket::{self, Server},
+    Connection,
+};
+
+static PORT: u16 = 8080;
 
 fn main() {
-    let gfx = graphics_2d::new();
-    let mut root = gfx.frame();
-    let mut squares = vec![];
-    for i in 0..100_000 {
-        squares.push({
-            let mut object = root.add(Primitive::square(1.).fill(Color::rgba(0, 255, 0, 255).into()).finalize().into());
-            object.apply_transform(Transform::default().with_position(i as f64));
-            object
+    let server = socket::listen(PORT)
+        .map_err(|e| eprintln!("listen failed: {:?}", e))
+        .and_then(|server| {
+            server
+                .map_err(|e| eprintln!("connect failed: {:?}", e))
+                .for_each(|connection| {
+                    connection.on_open().and_then(|connection| {
+                        println!("connected");
+                        connection.on_close().and_then(|connection| {
+                            println!("disconnected");
+                            Ok(())
+                        })
+                    })
+                })
         });
-    }
-    root.add(Primitive::square(100.).fill(Color::rgba(0, 0, 255, 255).into()).finalize().into())
-        .apply_transform(Transform::default().with_position((500., 0.)));
-    let mut ctx = gfx.start(root);
-    let key = ctx.keyboard();
-    key.state();
-    ctx.run();
+
+    tokio::run(server);
 }

@@ -7,6 +7,8 @@ pub struct Error {
     ctx: Context<ErrorKind>,
 }
 
+pub(crate) type Result<T> = std::result::Result<T, Error>;
+
 impl Error {
     pub fn kind(&self) -> &ErrorKind {
         self.ctx.get_context()
@@ -14,6 +16,10 @@ impl Error {
 
     pub(crate) fn color_stop() -> Error {
         Error::from(ErrorKind::ColorStopOffsetError)
+    }
+
+    pub(crate) fn port_in_use() -> Error {
+        Error::from(ErrorKind::PortInUseError)
     }
 }
 
@@ -36,6 +42,7 @@ impl fmt::Display for Error {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum ErrorKind {
     ColorStopOffsetError,
+    PortInUseError,
 
     #[doc(hidden)]
     __Nonexhaustive,
@@ -47,6 +54,7 @@ impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             ErrorKind::ColorStopOffsetError => write!(f, "Colorstop offset out of bounds"),
+            ErrorKind::PortInUseError => write!(f, "Port in use"),
             ErrorKind::__Nonexhaustive => panic!("Invalid Error!"),
         }
     }

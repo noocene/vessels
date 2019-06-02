@@ -6,6 +6,8 @@ version = "0.1.0"
 
 [dependencies]
 failure = "0.1.5"
+futures = "0.1.27"
+tokio = "0.1.21"
 
 [target.wasm32-unknown-unknown.dependencies]
 stdweb = "0.4.13"
@@ -39,6 +41,7 @@ pangocairo = "0.7.0"
 cairo-sys-rs = "0.8.0"
 pango = "0.6.0"
 itertools = "0.8.0"
+ws = "0.8.1"
 
 [profile.release]
 lto = true
