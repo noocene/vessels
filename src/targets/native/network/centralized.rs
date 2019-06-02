@@ -3,7 +3,7 @@ use std::thread::spawn;
 
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 
-use futures::{lazy, task::AtomicTask, Async, Future, Poll, Stream};
+use futures::{lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream};
 
 use ws::{CloseCode, Factory, Handler, Handshake, Message, WebSocket};
 
@@ -12,41 +12,50 @@ use crate::errors::Error;
 use crate::network::{
     self,
     centralized::socket::{self, ListenConfig},
-    ConnectionStatus,
+    DataChannel,
 };
 
 struct ConnectionHandler {
     sender: ws::Sender,
     c_sender: Sender<Vec<u8>>,
+    send: Option<Box<dyn FnOnce() + Send>>,
     task: Arc<RwLock<AtomicTask>>,
 }
 
 pub(crate) struct Connection {
-    status: ConnectionStatus,
-    details: socket::ConnectionDetails,
+    sender: ws::Sender,
     receiver: Receiver<Vec<u8>>,
     task: Arc<RwLock<AtomicTask>>,
 }
 
 impl Connection {
-    fn new(sender: ws::Sender) -> (Connection, ConnectionHandler) {
+    fn create(
+        sender: ws::Sender,
+        r_sender: Sender<Connection>,
+        r_task: Arc<RwLock<AtomicTask>>,
+    ) -> ConnectionHandler {
         let (c_sender, receiver) = unbounded();
         let task = Arc::new(RwLock::new(AtomicTask::new()));
-        (
-            Connection {
-                receiver,
-                status: ConnectionStatus::default(),
-                details: socket::ConnectionDetails {
-                    address: ListenConfig::from(0u16).address,
-                },
-                task: task.clone(),
-            },
-            ConnectionHandler {
-                sender,
-                c_sender,
-                task,
-            },
-        )
+        let send: Box<dyn FnOnce() + Send> = {
+            let sender = sender.clone();
+            let task = task.clone();
+            Box::new(move || {
+                r_sender
+                    .send(Connection {
+                        receiver,
+                        sender,
+                        task: task.clone(),
+                    })
+                    .expect("Server connection channel disconnected!");
+                r_task.read().unwrap().notify();
+            })
+        };
+        ConnectionHandler {
+            sender,
+            c_sender,
+            send: Some(send),
+            task,
+        }
     }
 }
 
@@ -62,9 +71,13 @@ impl Handler for ConnectionHandler {
         Ok(())
     }
     fn on_open(&mut self, _: Handshake) -> ws::Result<()> {
+        let mut send = None;
+        std::mem::swap(&mut send, &mut self.send);
+        let send = send.unwrap();
+        send();
         Ok(())
     }
-    fn on_close(&mut self, code: CloseCode, reason: &str) {}
+    fn on_close(&mut self, _code: CloseCode, _reason: &str) {}
 }
 
 impl Stream for Connection {
@@ -85,15 +98,19 @@ impl Stream for Connection {
     }
 }
 
-impl network::Connection for Connection {
-    type TransportDetails = socket::ConnectionDetails;
-    fn transport_details(&self) -> &Self::TransportDetails {
-        &self.details
+impl Sink for Connection {
+    type SinkItem = Vec<u8>;
+    type SinkError = Error;
+    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        self.sender.send(item).unwrap();
+        Ok(AsyncSink::Ready)
     }
-    fn status(&self) -> ConnectionStatus {
-        self.status
+    fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
+        Ok(Async::Ready(()))
     }
 }
+
+impl DataChannel for Connection {}
 
 pub(crate) struct Server {
     receiver: Receiver<Connection>,
@@ -136,15 +153,12 @@ impl ConnectionFactory {
 impl Factory for ConnectionFactory {
     type Handler = ConnectionHandler;
     fn connection_made(&mut self, ws: ws::Sender) -> Self::Handler {
-        let (conn, handler) = Connection::new(ws);
-        self.sender.send(conn).unwrap();
-        self.task.read().unwrap().notify();
-        handler
+        Connection::create(ws, self.sender.clone(), self.task.clone())
     }
 }
 
 impl Stream for Server {
-    type Item = Box<dyn network::Connection<TransportDetails = socket::ConnectionDetails>>;
+    type Item = Box<dyn DataChannel>;
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {

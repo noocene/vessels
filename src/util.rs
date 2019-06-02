@@ -1,8 +1,4 @@
-use crate::errors::Error;
-
 use std::sync::RwLock;
-
-use futures::Future;
 
 trait TryFrom<T>: Sized {
     type Error;

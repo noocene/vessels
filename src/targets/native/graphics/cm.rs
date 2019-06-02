@@ -1,10 +1,11 @@
-use crate::graphics_2d::{Rasterizable, Color};
+use crate::graphics_2d::{Color, Rasterizable};
 use crate::path::{Fill, GradientStop, Path, Texture};
-use std::sync::{Arc, RwLock};
-use std::collections::{HashMap, VecDeque};
-use lcms2::{Intent, PixelFormat, Transform};
 
 use glutin::Window;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, RwLock};
+
+use lcms2::{PixelFormat, Intent, Transform};
 
 use libc::c_void;
 
@@ -85,7 +86,7 @@ struct ProfileState {
 
 #[derive(Clone)]
 pub(crate) struct Profile {
-    state: Arc<RwLock<ProfileState>>
+    state: Arc<RwLock<ProfileState>>,
 }
 
 impl Profile {
@@ -97,7 +98,7 @@ impl Profile {
             lcms2::Profile::new_icc(cm_backing::get_profile_data(os_window as *const c_void)?)
                 .map_err(|_| ())?;
         Ok(Profile {
-            state: Arc::new(RwLock::new(ProfileState { 
+            state: Arc::new(RwLock::new(ProfileState {
                 display_profile,
                 srgb_profile: lcms2::Profile::new_srgb(),
                 color_cache: HashMap::with_capacity(10),
@@ -127,7 +128,7 @@ impl Profile {
     pub(crate) fn transform(&self, color: Color) -> Color {
         let state = self.state.read().unwrap();
         if let Some(transformed_color) = state.color_cache.get(&color) {
-            return transformed_color.clone();
+            return *transformed_color;
         }
         let t = Transform::new(
             &state.srgb_profile,
@@ -147,7 +148,7 @@ impl Profile {
         );
         drop(state);
         let mut state = self.state.write().unwrap();
-        if state.color_cache_queue.len() >= state.color_cache_queue.capacity()  {
+        if state.color_cache_queue.len() >= state.color_cache_queue.capacity() {
             let rm_color = state.color_cache_queue.pop_front().unwrap();
             state.color_cache.remove(&rm_color).unwrap();
         }
@@ -159,19 +160,27 @@ impl Profile {
         match texture {
             Texture::Solid(color) => Texture::Solid(self.transform(color)),
             Texture::LinearGradient(mut gradient) => {
-                gradient.stops = gradient.stops.iter().map(|stop| GradientStop {
-                    offset: stop.offset,
-                    color: self.transform(stop.color),
-                }).collect();
+                gradient.stops = gradient
+                    .stops
+                    .iter()
+                    .map(|stop| GradientStop {
+                        offset: stop.offset,
+                        color: self.transform(stop.color),
+                    })
+                    .collect();
                 Texture::LinearGradient(gradient)
-            },
+            }
             Texture::RadialGradient(mut gradient) => {
-                gradient.stops = gradient.stops.iter().map(|stop| GradientStop {
-                    offset: stop.offset,
-                    color: self.transform(stop.color),
-                }).collect();
+                gradient.stops = gradient
+                    .stops
+                    .iter()
+                    .map(|stop| GradientStop {
+                        offset: stop.offset,
+                        color: self.transform(stop.color),
+                    })
+                    .collect();
                 Texture::RadialGradient(gradient)
-            },
+            }
             texture => texture,
         }
     }
@@ -188,15 +197,19 @@ impl Profile {
                     stroke
                 }),
                 fill: path.fill.map(|fill| Fill {
-                    content: self.transform_texture(fill.content)
+                    content: self.transform_texture(fill.content),
                 }),
-                shadows: path.shadows.iter().map(|shadow| {
-                    let mut corrected_shadow = shadow.clone();
-                    corrected_shadow.color = self.transform(shadow.color);
-                    corrected_shadow
-                }).collect(),
+                shadows: path
+                    .shadows
+                    .iter()
+                    .map(|shadow| {
+                        let mut corrected_shadow = *shadow;
+                        corrected_shadow.color = self.transform(shadow.color);
+                        corrected_shadow
+                    })
+                    .collect(),
                 closed: path.closed,
-            })) 
+            })),
         }
     }
 }

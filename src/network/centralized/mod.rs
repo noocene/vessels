@@ -1,8 +1,7 @@
-use super::Connection;
+use super::DataChannel;
 use crate::errors::Error;
 use futures::Stream;
 
 pub mod socket;
 
-pub type Server<T> =
-    Box<dyn Stream<Item = Box<dyn Connection<TransportDetails = T>>, Error = Error> + Send>;
+pub type Server = Box<dyn Stream<Item = Box<dyn DataChannel>, Error = Error> + Send>;

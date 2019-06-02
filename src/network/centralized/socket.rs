@@ -1,4 +1,4 @@
-use crate::network::Connection;
+use crate::network::DataChannel;
 
 use crate::errors::Error;
 use crate::targets;
@@ -8,7 +8,7 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use futures::Future;
 
 /// A socket server configuration.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct ListenConfig {
     pub address: SocketAddr,
 }
@@ -30,12 +30,12 @@ where
 pub struct ConnectConfig {}
 
 /// A socket connection state.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct ConnectionDetails {
     pub address: SocketAddr,
 }
 
-pub type Server = super::Server<ConnectionDetails>;
+pub type Server = super::Server;
 
 /// Opens a socket server using the provided configuration.
 pub fn listen<T>(config: T) -> impl Future<Item = Server, Error = Error>
