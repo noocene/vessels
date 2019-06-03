@@ -10,13 +10,11 @@ use ws::{CloseCode, Factory, Handler, Handshake, Message, WebSocket};
 use crate::errors::Error;
 
 use crate::network::{
-    self,
     centralized::socket::{self, ConnectConfig, ListenConfig},
     DataChannel,
 };
 
 struct ConnectionHandler {
-    sender: ws::Sender,
     c_sender: Sender<Vec<u8>>,
     send: Option<Box<dyn FnOnce() + Send>>,
     task: Arc<RwLock<AtomicTask>>,
@@ -51,7 +49,6 @@ impl Connection {
             })
         };
         ConnectionHandler {
-            sender,
             c_sender,
             send: Some(send),
             task,
@@ -164,7 +161,6 @@ impl DataChannel for Connection {}
 
 pub(crate) struct Server {
     receiver: Receiver<Connection>,
-    broadcaster: ws::Sender,
     task: Arc<RwLock<AtomicTask>>,
 }
 
@@ -174,11 +170,7 @@ impl Server {
             let (sender, receiver) = unbounded();
             let task = Arc::new(RwLock::new(AtomicTask::new()));
             let socket = WebSocket::new(ConnectionFactory::new(sender, task.clone())).unwrap();
-            let server = Server {
-                receiver,
-                broadcaster: socket.broadcaster(),
-                task,
-            };
+            let server = Server { receiver, task };
             let socket = socket
                 .bind(config.address)
                 .map_err(|_| Error::port_in_use())?;

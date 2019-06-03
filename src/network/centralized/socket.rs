@@ -10,6 +10,7 @@ use futures::Future;
 /// A socket server configuration.
 #[derive(Clone, Debug, Copy)]
 pub struct ListenConfig {
+    /// The address and port on which to bind.
     pub address: SocketAddr,
 }
 
@@ -39,15 +40,18 @@ where
 /// A socket connection configuration.
 #[derive(Clone, Debug, Copy)]
 pub struct ConnectConfig {
-    pub address: SocketAddr
+    /// The address and port of the target server.
+    pub address: SocketAddr,
 }
 
 /// A socket connection state.
 #[derive(Clone, Debug, Copy)]
 pub struct ConnectionDetails {
+    /// The address and port of the remote peer.
     pub address: SocketAddr,
 }
 
+/// A socket server.
 pub type Server = super::Server;
 
 /// Opens a socket server using the provided configuration.
@@ -59,7 +63,11 @@ where
     targets::native::network::centralized::listen(config.into())
 }
 
-pub fn connect<T>(config: T) -> impl Future<Item=Box<dyn DataChannel + 'static>, Error=Error> where T: Into<ConnectConfig> {
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+/// Connects to a remote socket server using the provided configuration.
+pub fn connect<T>(config: T) -> impl Future<Item = Box<dyn DataChannel + 'static>, Error = Error>
+where
+    T: Into<ConnectConfig>,
+{
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     targets::native::network::centralized::connect(config.into())
 }
