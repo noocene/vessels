@@ -1,6 +1,6 @@
 use futures::{Future, Sink, Stream};
 
-use vitruvia::network::centralized::socket;
+use vitruvia::{executor::run, network::centralized::socket};
 
 static PORT: u16 = 8080;
 
@@ -28,5 +28,5 @@ fn main() {
                 })
         });
 
-    tokio::run(server);
+    run(server);
 }

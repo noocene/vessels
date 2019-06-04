@@ -36,6 +36,8 @@ pub mod interaction;
 /// Provides interfaces to abstracted networking APIs.
 pub mod network;
 /// Provides helper types that allow ergonomic construction and styling of 2D vector graphics.
+pub mod executor;
+/// Provides a cross-platform abstracted asynchronous executor.
 pub mod path;
 mod targets;
 /// Provides types to help represent and construct styled text.
