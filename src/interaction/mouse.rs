@@ -1,6 +1,6 @@
 use crate::graphics_2d::Vector;
 
-/// An interaction event [Source](super::Source) that represents a mouse.
+/// An interaction event source that represents a mouse.
 pub trait Mouse: super::Source<Event = Event> {
     /// Returns the current mouse position.
     fn position(&self) -> Vector;

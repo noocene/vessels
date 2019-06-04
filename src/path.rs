@@ -506,7 +506,7 @@ pub struct StyleHelper {
 }
 
 impl StyleHelper {
-    /// Creates a new [StyleHelper].
+    /// Creates a new style helper.
     pub fn new(geometry: Vec<Segment>) -> Self {
         StyleHelper {
             closed: false,
@@ -536,7 +536,7 @@ impl StyleHelper {
         self.shadows.push(shadow);
         self
     }
-    /// Finalizes the styling and returns a styled [Path].
+    /// Finalizes the styling and returns a styled path.
     pub fn finalize(self) -> Path {
         Path {
             closed: self.closed,
@@ -555,7 +555,7 @@ pub struct StrokeBuilder {
 }
 
 impl StrokeBuilder {
-    /// Creates a new [StrokeBuilder] with the provided stroke contents and stroke width.
+    /// Creates a new stroke builder with the provided stroke contents and stroke width.
     pub fn new(content: Texture, width: f32) -> Self {
         let mut builder = StrokeBuilder {
             stroke: Stroke::default(),
@@ -579,7 +579,7 @@ impl StrokeBuilder {
         self.stroke.join = StrokeJoinType::Round;
         self
     }
-    /// Finalizes the style and returns a completed [Stroke].
+    /// Finalizes the style and returns a completed stroke.
     pub fn finalize(self) -> Stroke {
         self.stroke
     }

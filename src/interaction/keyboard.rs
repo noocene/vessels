@@ -1,15 +1,15 @@
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
-/// An interaction event [Source](super::Source) that represents a keyboard.
+/// An interaction event source that represents a keyboard.
 pub trait Keyboard: super::Source<Event = Event> + State {
-    /// Returns a keyboard [State] that provides polling support.
+    /// Returns a keyboard state that provides polling support.
     fn state(&self) -> Box<dyn State>;
 }
 
 /// A context that permits active polling of key states.
 pub trait State: Sync + Send {
-    /// Returns a [bool] representing whether the provided key is pressed.
+    /// Returns a boolean value representing whether the provided key is pressed.
     fn poll(&mut self, key: Key) -> bool;
     #[doc(hidden)]
     fn box_clone(&self) -> Box<dyn State>;
@@ -298,7 +298,7 @@ pub struct Event {
     pub action: Action,
     /// The associated layout-dependant printable character of the relevant key if applicable.
     pub printable: Option<char>,
-    /// A [State] to permit polling of the associated keyboard.
+    /// A state to permit polling of the associated keyboard.
     pub state: Box<dyn State>,
 }
 

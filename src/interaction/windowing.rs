@@ -1,6 +1,6 @@
 use crate::graphics_2d::Vector;
 
-/// An interaction event [Source](super::Source) that represents a window.
+/// An interaction event source that represents a window.
 pub trait Window: super::Source<Event = Event> {
     /// Sets the window title.
     fn set_title(&mut self, title: &'_ str);

@@ -21,11 +21,11 @@ pub trait ImageRepresentation: Any + Sync + Send {
     fn box_clone(&self) -> Box<dyn ImageRepresentation>;
     #[doc(hidden)]
     fn as_any(&self) -> Box<dyn Any>;
-    /// Returns the 2-d cartesian pixel size of the image.
+    /// Returns the 2-dimensional cartesian pixel size of the image.
     fn get_size(&self) -> Vector;
-    /// Returns a conversion of the image to [Image<Color, Texture2D>]. This operation may be expensive.
+    /// Returns a conversion of the image to `Image<Color, Texture2D>`. This operation may be expensive.
     fn as_texture(&self) -> Image<Color, Texture2D>;
-    /// Creates an image in the associated format from an [Image<Color, Texture2D>]. This operation may be expensive.
+    /// Creates an image in the associated format from an `Image<Color, Texture2D>`. This operation may be expensive.
     fn from_texture(texture: Image<Color, Texture2D>) -> Self
     where
         Self: Sized;
@@ -170,7 +170,7 @@ pub struct Texture2D {
 
 impl ImageFormat for Texture2D {}
 
-/// A concrete image composed of format data and a flat [Vec] of pixels
+/// A concrete image composed of format data and a flat vec of pixels
 #[derive(Clone, Debug)]
 pub struct Image<T: PixelFormat, U: ImageFormat> {
     /// Pixel data.
@@ -213,7 +213,7 @@ impl Transform {
         self
     }
     /// Creates a 3 by 2 matrix of floats representing the first two rows of the
-    /// 2-dimensional affine transformation contained in the [Transform].
+    /// 2-dimensional affine transformation contained in the transform.
     pub fn to_matrix(&self) -> [f64; 6] {
         [
             self.scale.x * self.rotation.cos(),
@@ -278,17 +278,17 @@ impl From<(f64, f64)> for Transform {
 
 /// Represents content optimized and cached for rendering.
 pub trait Object: Sync + Send {
-    /// Composes a transformation with the existing transformation of the [Object].
+    /// Composes a transformation with the existing transformation.
     fn apply_transform(&mut self, transform: Transform);
-    /// Gets the current trasnformation of the [Object].
+    /// Gets the current transformation.
     fn get_transform(&self) -> Transform;
-    /// Sets the current transfomration of the [Object].
+    /// Sets the current transformation.
     fn set_transform(&mut self, transform: Transform);
-    /// Gets the current z-depth of the [Object].
+    /// Gets the current z-depth.
     fn get_depth(&self) -> u32;
-    /// Sets the current z-depth of the [Object].
+    /// Sets the current z-depth.
     fn set_depth(&mut self, depth: u32);
-    /// Replaces the contents of the [Object] with new Rasterizable content. This may be costly.
+    /// Replaces contents with new Rasterizable content. This may be costly.
     fn update(&mut self, content: Rasterizable);
     #[doc(hidden)]
     fn box_clone(&self) -> Box<dyn Object>;
@@ -302,13 +302,13 @@ impl Clone for Box<dyn Object> {
 
 /// An isolated rendering context.
 pub trait Frame: Sync + Send {
-    /// Adds content to the [Frame].
+    /// Adds content to the frame.
     fn add(&mut self, content: Content) -> Box<dyn Object>;
-    /// Resizes the [Frame]. This does not resize the viewport.
+    /// Resizes the frame. This does not resize the viewport.
     fn resize(&self, size: Vector);
     /// Sets the viewport.
     fn set_viewport(&self, viewport: Rect);
-    /// Returns the size of the [Frame].
+    /// Returns the size of the frame.
     fn get_size(&self) -> Vector;
     /// Returns an image that is a still rasterization of any rendered content.
     fn to_image(&self) -> Box<dyn ImageRepresentation>;
@@ -396,9 +396,9 @@ impl From<Content> for Rasterizable {
 /// A type that can rasterized.
 #[derive(Debug, Clone)]
 pub enum Rasterizable {
-    /// Some [Text].
+    /// Some text.
     Text(Box<Text>),
-    /// Some [Path].
+    /// Some path.
     Path(Box<Path>),
 }
 
@@ -432,7 +432,7 @@ pub trait Rasterizer: Sync + Send {
 
 /// Provides 2-dimensional euclidean rendering capabilities.
 pub trait Graphics: Rasterizer {
-    /// Returns a new [Frame].
+    /// Returns a new frame.
     fn frame(&self) -> Box<dyn Frame>;
 }
 
@@ -445,13 +445,13 @@ impl Clone for Box<dyn ActiveContextGraphics> {
     }
 }
 
-/// An active [ContextualGraphics] context.
+/// An active contextual graphics context.
 pub trait ActiveContextGraphics: ContextGraphics {
     #[doc(hidden)]
     fn box_clone(&self) -> Box<dyn ActiveContextGraphics>;
 }
 
-/// An inactive [ContextualGraphics] context.
+/// An inactive contextual graphics context.
 pub trait InactiveContextGraphics: ContextGraphics {
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate. Calls the provided callback once upon execution and moves an active context graphics into it.
     fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ActiveContextGraphics>) + 'static>);
@@ -467,7 +467,7 @@ pub trait Ticker {
 
 /// A graphics context that can provide interaction and windowing.
 pub trait ContextualGraphics: Graphics {
-    /// Starts a windowed context using the provided [Frame] as the document root.
+    /// Starts a windowed context using the provided frame as the document root.
     fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics>;
 }
 
@@ -616,7 +616,7 @@ pub struct Rect {
 }
 
 impl Rect {
-    /// Creates a new [Rect] from the provided position and size
+    /// Creates a new rect from the provided position and size
     pub fn new<T, U>(position: T, size: U) -> Self
     where
         T: Into<Vector>,
