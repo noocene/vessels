@@ -1,4 +1,7 @@
-use std::sync::{Arc, RwLock};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, RwLock,
+};
 use std::thread::spawn;
 
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
@@ -17,13 +20,15 @@ use crate::network::{
 struct ConnectionHandler {
     c_sender: Sender<Vec<u8>>,
     send: Option<Box<dyn FnOnce() + Send>>,
-    task: Arc<RwLock<AtomicTask>>,
+    task: Arc<AtomicTask>,
 }
 
 pub(crate) struct Connection {
     sender: ws::Sender,
     receiver: Receiver<Vec<u8>>,
-    task: Arc<RwLock<AtomicTask>>,
+    task: Arc<AtomicTask>,
+    send_task: Arc<AtomicTask>,
+    queue_size: Arc<AtomicUsize>,
 }
 
 impl Connection {
@@ -33,7 +38,7 @@ impl Connection {
         r_task: Arc<RwLock<AtomicTask>>,
     ) -> ConnectionHandler {
         let (c_sender, receiver) = unbounded();
-        let task = Arc::new(RwLock::new(AtomicTask::new()));
+        let task = Arc::new(AtomicTask::new());
         let send: Box<dyn FnOnce() + Send> = {
             let sender = sender.clone();
             let task = task.clone();
@@ -41,6 +46,8 @@ impl Connection {
                 r_sender
                     .send(Connection {
                         receiver,
+                        send_task: Arc::new(AtomicTask::new()),
+                        queue_size: Arc::new(AtomicUsize::new(0)),
                         sender,
                         task: task.clone(),
                     })
@@ -114,7 +121,7 @@ impl Handler for ConnectionHandler {
                 Message::Text(_) => message.into_data(),
             })
             .unwrap();
-        self.task.read().unwrap().notify();
+        self.task.notify();
         Ok(())
     }
     fn on_open(&mut self, _: Handshake) -> ws::Result<()> {
@@ -137,7 +144,7 @@ impl Stream for Connection {
             Err(err) => match err {
                 TryRecvError::Disconnected => panic!("Server connection channel disconnected!"),
                 TryRecvError::Empty => {
-                    self.task.read().unwrap().register();
+                    self.task.register();
                     Ok(Async::NotReady)
                 }
             },
@@ -149,11 +156,25 @@ impl Sink for Connection {
     type SinkItem = Vec<u8>;
     type SinkError = Error;
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        self.sender.send(item).unwrap();
+        self.queue_size.fetch_add(1, Ordering::SeqCst);
+        let send_task = self.send_task.clone();
+        let sender = self.sender.clone();
+        let queue_size = self.queue_size.clone();
+        tokio::spawn(lazy(move || {
+            sender.send(item).unwrap();
+            if queue_size.fetch_sub(1, Ordering::SeqCst) == 0 {
+                send_task.notify();
+            };
+            Ok(())
+        }));
         Ok(AsyncSink::Ready)
     }
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        Ok(Async::Ready(()))
+        if self.queue_size.load(Ordering::SeqCst) == 0 {
+            Ok(Async::Ready(()))
+        } else {
+            Ok(Async::NotReady)
+        }
     }
 }
 
