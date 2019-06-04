@@ -16,7 +16,7 @@ impl Error {
         Error::from(ErrorKind::ColorStopOffsetError)
     }
 
-    pub(crate) fn port_in_use() -> Error {
+    pub(crate) fn address_in_use() -> Error {
         Error::from(ErrorKind::SocketError(SocketError::AddressInUse))
     }
 
