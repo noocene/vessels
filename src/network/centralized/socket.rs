@@ -59,6 +59,9 @@ pub fn listen<T>(config: T) -> impl Future<Item = Server, Error = Error>
 where
     T: Into<ListenConfig>,
 {
+    #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
+    return targets::web::network::centralized::listen(config.into());
+
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     targets::native::network::centralized::listen(config.into())
 }
@@ -68,6 +71,9 @@ pub fn connect<T>(config: T) -> impl Future<Item = Box<dyn DataChannel + 'static
 where
     T: Into<ConnectConfig>,
 {
+    #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
+    return targets::web::network::centralized::connect(config.into());
+
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     targets::native::network::centralized::connect(config.into())
 }
