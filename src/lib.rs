@@ -19,25 +19,16 @@
 #[macro_use]
 extern crate stdweb;
 
-#[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
-extern crate cairo;
-#[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
-extern crate cairo_sys;
-#[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
-extern crate gl;
-#[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
-extern crate glutin;
-
 mod errors;
 /// Provides interfaces to 2D graphics APIs.
+pub mod executor;
+/// Provides a cross-platform abstracted asynchronous executor.
 pub mod graphics_2d;
 /// Provides interfaces to user interaction/HID APIs.
 pub mod interaction;
 /// Provides interfaces to abstracted networking APIs.
 pub mod network;
 /// Provides helper types that allow ergonomic construction and styling of 2D vector graphics.
-pub mod executor;
-/// Provides a cross-platform abstracted asynchronous executor.
 pub mod path;
 mod targets;
 /// Provides types to help represent and construct styled text.

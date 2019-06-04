@@ -42,7 +42,7 @@ pub fn run<F>(future: F)
 where
     F: Future<Item = (), Error = ()> + Send + 'static,
 {
-    #[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     tokio::run(future);
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
     {
