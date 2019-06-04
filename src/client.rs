@@ -12,10 +12,7 @@ extern crate stdweb;
 
 use stdweb::web::set_timeout;
 
-use std::{
-    fmt::Debug,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 static PORT: u16 = 8080;
 
