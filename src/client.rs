@@ -20,7 +20,7 @@ use std::{
 static PORT: u16 = 8080;
 
 struct Notifier<T> {
-    me: Mutex<Option<NotifyHandle>>,
+    handle: Mutex<Option<NotifyHandle>>,
     task: Arc<Mutex<Spawn<T>>>,
 }
 
@@ -28,28 +28,18 @@ unsafe impl<T> Send for Notifier<T> {}
 unsafe impl<T> Sync for Notifier<T> {}
 impl<T: 'static> Notify for Notifier<T>
 where
-    T: Future,
-    T::Item: Debug,
-    T::Error: Debug,
+    T: Future<Item = (), Error = ()>,
 {
     fn notify(&self, _: usize) {
-        // This method is first called at initialization, then later whenever something calls
-        // the `Task::notify()` method of the `futures` crate.
         let task = self.task.clone();
-        let me = self.me.lock().unwrap().as_ref().unwrap().clone();
-        // We use `set_timeout` with a timeout of 0 in order to schedule the closure to be executed
-        // immediately after we return.
+        let handle = self.handle.lock().unwrap().as_ref().unwrap().clone();
         set_timeout(
             move || {
-                // Calling `poll_future_notify` will poll the future to see whether it's ready.
-                // If the future is not ready, we are guaranteed that the task (which is `me` here, and is
-                // also the same as `future_task` that we created at the start) is saved somewhere, and
-                // `notify` will be called on it later.
-                let val = task.lock().unwrap().poll_future_notify(&me, 0);
+                let val = task.lock().unwrap().poll_future_notify(&handle, 0);
                 match val {
-                    Ok(Async::Ready(item)) => println!("finished: {:?}", item), // You decide what to do here
+                    Ok(Async::Ready(_)) => (),
                     Ok(Async::NotReady) => (),
-                    Err(err) => console!(log, format!("error: {:?}", err)), // You decide what to do here
+                    Err(_) => (),
                 }
             },
             0,
@@ -81,10 +71,10 @@ fn main() {
     let task = spawn(client);
 
     let notifier = Arc::new(Notifier {
-        me: Mutex::new(None),
+        handle: Mutex::new(None),
         task: Arc::new(Mutex::new(task)),
     });
     let notify_handle = NotifyHandle::from(notifier.clone());
-    *notifier.me.lock().unwrap() = Some(notify_handle.clone());
+    *notifier.handle.lock().unwrap() = Some(notify_handle.clone());
     notify_handle.notify(0);
 }
