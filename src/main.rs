@@ -1,14 +1,14 @@
 use futures::Future;
 
 use base64::encode;
-use vitruvia::{executor::run, network::mesh};
+use vitruvia::protocol::protocol;
 
-use stdweb::unstable::TryInto;
+/*use stdweb::unstable::TryInto;
 
 #[macro_use]
-extern crate stdweb;
+extern crate stdweb;*/
 
-fn main() {
+/*fn main() {
     let connection = mesh::offer().map_err(|e| ()).and_then(|(offer, answer)| {
         console!(log, encode(&offer));
         let a: String = js! {
@@ -26,4 +26,15 @@ fn main() {
     });
 
     run(connection);
+}*/
+
+pub struct NoSer {}
+
+#[protocol]
+pub trait Hello {
+    fn test(&self, t: NoSer);
+}
+
+fn main() {
+    
 }
