@@ -1,0 +1,16 @@
+[package]
+authors = ["Izzy Swart", "Tyler Poon"]
+edition = "2018"
+name = "vitruvia_derive"
+version = "0.1.0"
+
+[lib]
+proc-macro = true
+
+[dev-dependencies.vitruvia]
+version = "0.1.0"
+path = ".."
+
+[dependencies]
+syn = "0.15.34"
+quote = "0.6.12"

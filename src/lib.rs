@@ -19,9 +19,6 @@
 #[macro_use]
 extern crate stdweb;
 
-#[macro_use]
-extern crate serde_derive;
-
 mod errors;
 /// Provides interfaces to 2D graphics APIs.
 pub mod executor;
@@ -33,6 +30,8 @@ pub mod interaction;
 pub mod network;
 /// Provides helper types that allow ergonomic construction and styling of 2D vector graphics.
 pub mod path;
+/// Provides functionality for generating APIs and other RPC protocols.
+pub mod protocol;
 mod targets;
 /// Provides types to help represent and construct styled text.
 pub mod text;

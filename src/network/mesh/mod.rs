@@ -3,6 +3,7 @@ use crate::{errors::Error, targets};
 use super::DataChannel;
 
 use futures::{Future, Sink, Stream};
+use serde::{Serialize, Deserialize};
 
 /// A peer-to-peer session initialization offer.
 pub type Offer = String;
