@@ -16,8 +16,8 @@ fn impl_protocol(ast: &syn::DeriveInput) -> TokenStream {
     gen.into()
 }
 
-#[proc_macro_derive(Protocol)]
-pub fn protocol_derive(input: TokenStream) -> TokenStream {
-    let ast = syn::parse(input).unwrap();
+#[proc_macro_attribute]
+pub fn protocol(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let ast = syn::parse(item).unwrap();
     impl_protocol(&ast)
 }
