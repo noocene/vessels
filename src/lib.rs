@@ -19,6 +19,9 @@
 #[macro_use]
 extern crate stdweb;
 
+#[macro_use]
+extern crate serde_derive;
+
 mod errors;
 /// Provides interfaces to 2D graphics APIs.
 pub mod executor;

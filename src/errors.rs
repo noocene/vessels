@@ -27,6 +27,10 @@ impl Error {
     pub(crate) fn feature_unavailable() -> Error {
         Error::from(ErrorKind::UnavailableFeatureError)
     }
+
+    pub(crate) fn offer_generation_failed() -> Error {
+        Error::from(ErrorKind::PeerError(PeerError::OfferGenerationFailed))
+    }
 }
 
 impl Fail for Error {
@@ -46,6 +50,11 @@ impl fmt::Display for Error {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Copy)]
+pub enum PeerError {
+    OfferGenerationFailed,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug, Copy)]
 pub enum SocketError {
     AddressInUse,
     ConnectionFailed,
@@ -54,6 +63,7 @@ pub enum SocketError {
 #[derive(Clone, Eq, PartialEq, Debug, Copy)]
 pub enum ErrorKind {
     SocketError(SocketError),
+    PeerError(PeerError),
     ColorStopOffsetError,
     UnavailableFeatureError,
 
@@ -66,6 +76,7 @@ impl fmt::Display for ErrorKind {
         match *self {
             ErrorKind::ColorStopOffsetError => write!(f, "Colorstop offset out of bounds"),
             ErrorKind::SocketError(error) => write!(f, "Socket error: {:?}", error),
+            ErrorKind::PeerError(error) => write!(f, "Peer error: {:?}", error),
             ErrorKind::UnavailableFeatureError => {
                 write!(f, "The requested feature is not available on this platform")
             }

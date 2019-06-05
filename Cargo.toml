@@ -8,6 +8,7 @@ version = "0.1.0"
 failure = "0.1.5"
 crossbeam-channel = "0.3.8"
 futures = "0.1.27"
+base64 = "0.10.1"
 
 [target.wasm32-unknown-unknown.dependencies]
 stdweb = "0.4.13"
@@ -49,9 +50,9 @@ lto = true
 debug = false
 
 [[bin]]
-name = "server"
+name = "offer"
 path = "src/main.rs"
 
 [[bin]]
-name = "client"
-path = "src/client.rs"
+name = "answer"
+path = "src/answer.rs"
