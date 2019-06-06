@@ -81,7 +81,8 @@ fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
         }
         stream.extend(quote! {
             fn #ident(#arg_stream) {
-                let call = _Call::#index_ident(#arg_names_stream);
+                self.queue.push_back(Call {call: _Call::#index_ident(#arg_names_stream)});
+                self.task.notify();
             }
         });
     }
@@ -94,11 +95,18 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
     let remote_impl = generate_remote_impl(methods.as_slice());
     let gen = quote! {
         mod #mod_ident {
-            use ::std::sync::mpsc::{Sender, Receiver, channel};
-            struct Remote {}
+            use ::std::{collections::VecDeque, sync::{Arc, mpsc::{Sender, Receiver, channel}}};
+            use ::futures::{Poll, Async, task::AtomicTask};
+            struct Remote {
+                task: AtomicTask,
+                queue: VecDeque<Call>
+            }
             impl Remote {
                 pub fn new() -> Remote {
-                    Remote {}
+                    Remote {
+                        task: AtomicTask::new(),
+                        queue: VecDeque::new()
+                    }
                 }
             }
             impl super::#ident for Remote {
@@ -110,14 +118,22 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
                 type Item = Call;
                 type Error = ();
 
-                fn poll(&mut self) -> ::futures::Poll<::std::option::Option<Self::Item>, Self::Error> {
-                    Ok(::futures::Async::NotReady)
+                fn poll(&mut self) -> Poll<::std::option::Option<Self::Item>, Self::Error> {
+                    match self.queue.pop_front() {
+                        Some(item) => {
+                            Ok(Async::Ready(item))
+                        },
+                        None => {
+                            self.task.register();
+                            Ok(Async::NotReady)
+                        }
+                    }
                 }
             }
             #[repr(transparent)]
             #[derive(::serde::Serialize, ::serde::Deserialize)]
             pub struct Call {
-                call_: _Call,
+                call: _Call,
             }
             #[derive(::serde::Serialize, ::serde::Deserialize)]
             enum _Call {
