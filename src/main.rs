@@ -30,7 +30,7 @@ extern crate stdweb;*/
 
 #[protocol]
 pub trait Hello {
-    fn data(&self, m: String, f: f64);
+    fn data(&mut self, m: String, f: f64);
 }
 
 fn main() {

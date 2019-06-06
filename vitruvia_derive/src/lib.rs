@@ -74,7 +74,7 @@ fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
                 #ident: #ty,
             });
             arg_names_stream.extend(quote! {
-                #ident
+                #ident,
             });
         }
         stream.extend(quote! {
@@ -167,7 +167,14 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                     compile_error!("where clause not allowed on `protocol` method");
                 });
             }
-            if let ReturnType::Type(_, ty) = &method.sig.decl.output {
+            // TODO: Disallow return type until I figure out how to handle async in the macro
+            if let ReturnType::Type(_, _) = &method.sig.decl.output {
+                return TokenStream::from(quote_spanned! {
+                    method.sig.decl.output.span() =>
+                    compile_error!("return type not allowed on `protocol` method");
+                });
+            }
+            /*if let ReturnType::Type(_, ty) = &method.sig.decl.output {
                 let ident = Ident::new(
                     &format!("_{}_{}_rt_AssertSerializeDeserialize", &input.ident, index),
                     Span::call_site(),
@@ -177,7 +184,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                     struct #ident where #ty: ::serde::Serialize + ::serde::de::DeserializeOwned;
                 }));
                 procedure.return_type = Some(*ty.clone());
-            }
+            }*/
             let mut has_receiver = false;
             for (arg_index, argument) in method.sig.decl.inputs.iter().enumerate() {
                 match argument {

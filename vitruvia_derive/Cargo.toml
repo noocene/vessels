@@ -7,10 +7,6 @@ version = "0.1.0"
 [lib]
 proc-macro = true
 
-[dev-dependencies.vitruvia]
-version = "0.1.0"
-path = ".."
-
 [dependencies]
 syn = "0.15.34"
 quote = "0.6.12"
