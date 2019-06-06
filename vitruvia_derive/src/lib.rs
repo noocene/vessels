@@ -7,7 +7,7 @@ use proc_macro2::Span;
 use syn::spanned::Spanned;
 use syn::{
     parse_macro_input, punctuated::Punctuated, token::Paren, Field, Fields, FieldsUnnamed, FnArg,
-    Ident, ItemFn, ItemTrait, ReturnType, TraitItem, Type, Variant, Visibility,
+    Ident, ItemTrait, ReturnType, TraitItem, Type, Variant, Visibility,
 };
 
 #[derive(Debug)]
