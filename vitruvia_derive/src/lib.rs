@@ -123,8 +123,8 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
             enum _Call {
                 #(#enum_variants),*
             }
-            pub fn remote() -> ::std::boxed::Box<dyn super::#ident> {
-                ::std::boxed::Box::new(Remote::new())
+            pub fn remote() -> impl super::#ident + ::vitruvia::protocol::Remote<Call> {
+                Remote::new()
             }
         }
     };
@@ -264,7 +264,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     let binds = generate_binds(ident, procedures);
     let blanket_impl: TokenStream = quote! {
         impl #ident {
-            fn remote() -> Box<dyn #ident> {
+            fn remote() -> impl #ident {
                 #mod_ident::remote()
             }
         }
