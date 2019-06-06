@@ -1,3 +1,5 @@
+#![recursion_limit = "128"]
+
 extern crate proc_macro;
 
 use crate::proc_macro::TokenStream;
@@ -79,7 +81,7 @@ fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
         }
         stream.extend(quote! {
             fn #ident(#arg_stream) {
-                let call = Procedures::#index_ident(#arg_names_stream);
+                let call = _Call::#index_ident(#arg_names_stream);
             }
         });
     }
@@ -92,7 +94,8 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
     let remote_impl = generate_remote_impl(methods.as_slice());
     let gen = quote! {
         mod #mod_ident {
-            pub struct Remote {}
+            use ::std::sync::mpsc::{Sender, Receiver, channel};
+            struct Remote {}
             impl Remote {
                 pub fn new() -> Remote {
                     Remote {}
@@ -101,9 +104,27 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
             impl super::#ident for Remote {
                 #remote_impl
             }
+            impl ::vitruvia::protocol::Remote<Call> for Remote {
+            }
+            impl ::futures::Stream for Remote {
+                type Item = Call;
+                type Error = ();
+
+                fn poll(&mut self) -> ::futures::Poll<::std::option::Option<Self::Item>, Self::Error> {
+                    Ok(::futures::Async::NotReady)
+                }
+            }
+            #[repr(transparent)]
             #[derive(::serde::Serialize, ::serde::Deserialize)]
-            enum Procedures {
+            pub struct Call {
+                call_: _Call,
+            }
+            #[derive(::serde::Serialize, ::serde::Deserialize)]
+            enum _Call {
                 #(#enum_variants),*
+            }
+            pub fn remote() -> ::std::boxed::Box<dyn super::#ident> {
+                ::std::boxed::Box::new(Remote::new())
             }
         }
     };
@@ -117,7 +138,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
             .parse()
             .unwrap();
     }
-    let mut input = {
+    let input = {
         let item = item.clone();
         parse_macro_input!(item as ItemTrait)
     };
@@ -241,14 +262,16 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     let ident = &input.ident;
     let mod_ident = Ident::new(&format!("_{}_protocol", ident), input.ident.span());
     let binds = generate_binds(ident, procedures);
-    let item: TokenStream = quote! {
-        fn remote() -> Box<dyn #ident> where Self: Sized {
-            Box::new(#mod_ident::Remote::new())
+    let blanket_impl: TokenStream = quote! {
+        impl #ident {
+            fn remote() -> Box<dyn #ident> {
+                #mod_ident::remote()
+            }
         }
     }
     .into();
-    input.items.push(parse_macro_input!(item as TraitItem));
     let mut item: TokenStream = input.into_token_stream().into();
+    item.extend(blanket_impl);
     item.extend(assert_stream);
     item.extend(binds);
     item
