@@ -94,6 +94,7 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
     let enum_variants = generate_enum(methods.as_slice());
     let remote_impl = generate_remote_impl(methods.as_slice());
     let gen = quote! {
+        #[allow(non_snake_case)]
         mod #mod_ident {
             use ::std::{collections::VecDeque, sync::{Arc, mpsc::{Sender, Receiver, channel}}};
             use ::futures::{Poll, Async, task::AtomicTask};

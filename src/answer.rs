@@ -3,13 +3,13 @@ use futures::Future;
 use base64::decode;
 use vitruvia::{executor::run, network::mesh};
 
-use stdweb::unstable::TryInto;
+/*use stdweb::unstable::TryInto;
 
 #[macro_use]
-extern crate stdweb;
+extern crate stdweb;*/
 
 fn main() {
-    let o: String = js! {
+    /*let o: String = js! {
         return prompt("offer", "");
     }
     .try_into()
@@ -18,5 +18,5 @@ fn main() {
         .map_err(|e| ())
         .and_then(|peer| Ok(()));
 
-    run(connection);
+    run(connection);*/
 }

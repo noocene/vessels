@@ -2,8 +2,8 @@ use crate::{errors::Error, targets};
 
 use super::DataChannel;
 
-use futures::{Future, Sink, Stream};
-use serde::{Serialize, Deserialize};
+use futures::{future::err, Future, Sink, Stream};
+use serde::{Deserialize, Serialize};
 
 /// A peer-to-peer session initialization offer.
 pub type Offer = String;
@@ -17,7 +17,8 @@ pub enum PeerChannel {
     DataChannel(Box<dyn DataChannel>),
 }
 
-#[derive(Serialize, Deserialize)]
+/// A peer-to-peer networking negotiation candidate.
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Candidate {
     candidate: Option<String>,
     username_fragment: String,
@@ -46,12 +47,18 @@ pub fn offer() -> impl Future<
     ),
     Error = Error,
 > {
-    targets::web::network::mesh::offer()
+    #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
+    targets::web::network::mesh::offer();
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    err(Error::connection_failed())
 }
 
 /// Accepts the provided peer to peer session offer and creates an answer.
 pub fn answer(
     offer: Offer,
 ) -> impl Future<Item = (Answer, Box<dyn Negotiation + 'static>), Error = Error> {
-    targets::web::network::mesh::answer(offer)
+    #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
+    targets::web::network::mesh::answer(offer);
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    err(Error::connection_failed())
 }
