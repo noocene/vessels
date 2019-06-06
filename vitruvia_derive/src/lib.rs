@@ -54,9 +54,11 @@ fn generate_enum(methods: &[Procedure]) -> Vec<Variant> {
 
 fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
     let mut stream = proc_macro2::TokenStream::new();
-    for method in methods {
+    for (index, method) in methods.iter().enumerate() {
+        let index_ident = Ident::new(&format!("_{}", index), Span::call_site());
         let ident = &method.ident;
         let mut arg_stream = proc_macro2::TokenStream::new();
+        let mut arg_names_stream = proc_macro2::TokenStream::new();
         if method.mut_receiver {
             arg_stream.extend(quote! {
                 &mut self,
@@ -71,9 +73,14 @@ fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
             arg_stream.extend(quote! {
                 #ident: #ty,
             });
+            arg_names_stream.extend(quote! {
+                #ident
+            });
         }
         stream.extend(quote! {
-            fn #ident(#arg_stream) {}
+            fn #ident(#arg_stream) {
+                let call = Procedures::#index_ident(#arg_names_stream);
+            }
         });
     }
     stream
@@ -94,6 +101,7 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
             impl super::#ident for Remote {
                 #remote_impl
             }
+            #[derive(::serde::Serialize, ::serde::Deserialize)]
             enum Procedures {
                 #(#enum_variants),*
             }
@@ -161,7 +169,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
             if let ReturnType::Type(_, ty) = &method.sig.decl.output {
                 let ident = Ident::new(
-                    &format!("_{}_rt_AssertSerializeDeserialize", index),
+                    &format!("_{}_{}_rt_AssertSerializeDeserialize", &input.ident, index),
                     Span::call_site(),
                 );
                 assert_stream.extend(TokenStream::from(quote_spanned! {
@@ -188,7 +196,10 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                     FnArg::Captured(argument) => {
                         let ty = &argument.ty;
                         let ident = Ident::new(
-                            &format!("_{}_arg_{}_AssertSerializeDeserialize", index, arg_index),
+                            &format!(
+                                "_{}_{}_arg_{}_AssertSerializeDeserialize",
+                                &input.ident, index, arg_index
+                            ),
                             Span::call_site(),
                         );
                         assert_stream.extend(TokenStream::from(quote_spanned! {
