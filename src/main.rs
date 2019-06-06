@@ -28,11 +28,9 @@ extern crate stdweb;*/
     run(connection);
 }*/
 
-pub struct NoSer {}
-
 #[protocol]
 pub trait Hello {
-    fn test(&self, t: NoSer);
+    fn data(&self, m: String, f: f64);
 }
 
 fn main() {
