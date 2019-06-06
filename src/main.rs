@@ -1,7 +1,5 @@
-use futures::Future;
-
-use base64::encode;
-use vitruvia::protocol::protocol;
+use futures::Stream;
+use vitruvia::{executor::run, protocol::protocol};
 
 /*use stdweb::unstable::TryInto;
 
@@ -31,8 +29,14 @@ extern crate stdweb;*/
 #[protocol]
 pub trait Hello {
     fn data(&mut self, m: String, f: f64);
+    fn test_method(&self, test: u32);
 }
 
 fn main() {
-    //let hello_remote = Hello::remote();
+    let mut hello_remote = Hello::remote();
+    hello_remote.test_method(10);
+    run(hello_remote.for_each(|call| {
+        println!("{}", serde_json::to_string(&call).unwrap());
+        Ok(())
+    }));
 }

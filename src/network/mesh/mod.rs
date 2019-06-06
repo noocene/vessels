@@ -48,7 +48,7 @@ pub fn offer() -> impl Future<
     Error = Error,
 > {
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
-    targets::web::network::mesh::offer();
+    return targets::web::network::mesh::offer();
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     err(Error::connection_failed())
 }
@@ -58,7 +58,7 @@ pub fn answer(
     offer: Offer,
 ) -> impl Future<Item = (Answer, Box<dyn Negotiation + 'static>), Error = Error> {
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
-    targets::web::network::mesh::answer(offer);
+    return targets::web::network::mesh::answer(offer);
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     err(Error::connection_failed())
 }

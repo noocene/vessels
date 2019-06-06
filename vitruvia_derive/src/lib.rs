@@ -20,44 +20,52 @@ struct Procedure {
     return_type: Option<Type>,
 }
 
-fn generate_enum(methods: &[Procedure]) -> Vec<Variant> {
+fn generate_enum(index_type: proc_macro2::TokenStream, methods: &[Procedure]) -> Vec<Variant> {
     methods
         .iter()
-        .enumerate()
-        .map(|(i, method)| {
-            let ident = Ident::new(&format!("_{}", i), Span::call_site());
-            Variant {
-                ident,
-                attrs: vec![],
-                discriminant: None,
-                fields: if method.arg_types.is_empty() {
-                    Fields::Unit
-                } else {
-                    let mut fields = Punctuated::new();
-                    for ty in &method.arg_types {
-                        fields.push(Field {
-                            attrs: vec![],
-                            ident: None,
-                            ty: ty.clone(),
-                            colon_token: None,
-                            vis: Visibility::Inherited,
-                        });
-                    }
-                    Fields::Unnamed(FieldsUnnamed {
-                        paren_token: Paren(Span::call_site()),
-                        unnamed: fields,
-                    })
-                },
-            }
-
+        .map(|method| Variant {
+            ident: method.ident.clone().unwrap(),
+            attrs: vec![],
+            discriminant: None,
+            fields: if method.arg_types.is_empty() {
+                Fields::Unit
+            } else {
+                let mut fields = Punctuated::new();
+                fields.push(Field {
+                    attrs: vec![],
+                    ident: None,
+                    colon_token: None,
+                    vis: Visibility::Inherited,
+                    ty: syn::parse2::<Type>(index_type.clone()).unwrap(),
+                });
+                for ty in &method.arg_types {
+                    fields.push(Field {
+                        attrs: vec![],
+                        ident: None,
+                        ty: ty.clone(),
+                        colon_token: None,
+                        vis: Visibility::Inherited,
+                    });
+                }
+                Fields::Unnamed(FieldsUnnamed {
+                    paren_token: Paren(Span::call_site()),
+                    unnamed: fields,
+                })
+            },
         })
         .collect::<Vec<_>>()
 }
 
-fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
+fn generate_remote_impl(
+    index_type: proc_macro2::TokenStream,
+    methods: &[Procedure],
+) -> proc_macro2::TokenStream {
     let mut stream = proc_macro2::TokenStream::new();
     for (index, method) in methods.iter().enumerate() {
-        let index_ident = Ident::new(&format!("_{}", index), Span::call_site());
+        let index_ident = method.ident.clone().unwrap();
+        let num_index_ident = quote! {
+            #index
+        };
         let ident = &method.ident;
         let mut arg_stream = proc_macro2::TokenStream::new();
         let mut arg_names_stream = proc_macro2::TokenStream::new();
@@ -81,7 +89,7 @@ fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
         }
         stream.extend(quote! {
             fn #ident(#arg_stream) {
-                self.queue.push_back(Call {call: _Call::#index_ident(#arg_names_stream)});
+                self.queue.write().unwrap().push_back(Call {call: _Call::#index_ident(#num_index_ident as #index_type, #arg_names_stream)});
                 self.task.notify();
             }
         });
@@ -91,22 +99,45 @@ fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
 
 fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
     let mod_ident = Ident::new(&format!("_{}_protocol", &ident), ident.span());
-    let enum_variants = generate_enum(methods.as_slice());
-    let remote_impl = generate_remote_impl(methods.as_slice());
+    let num_methods = methods.len() as u64;
+    let index_type;
+    if num_methods > u64::from(std::u8::MAX) {
+        if num_methods > u64::from(std::u16::MAX) {
+            if num_methods > u64::from(std::u32::MAX) {
+                index_type = quote! {
+                    u64
+                };
+            } else {
+                index_type = quote! {
+                    u32
+                };
+            }
+        } else {
+            index_type = quote! {
+                u16
+            };
+        }
+    } else {
+        index_type = quote! {
+            u8
+        };
+    }
+    let enum_variants = generate_enum(index_type.clone(), methods.as_slice());
+    let remote_impl = generate_remote_impl(index_type.clone(), methods.as_slice());
     let gen = quote! {
         #[allow(non_snake_case)]
         mod #mod_ident {
-            use ::std::{collections::VecDeque, sync::{Arc, mpsc::{Sender, Receiver, channel}}};
+            use ::std::{collections::VecDeque, sync::{RwLock, mpsc::{Sender, Receiver, channel}}};
             use ::futures::{Poll, Async, task::AtomicTask};
             struct Remote {
                 task: AtomicTask,
-                queue: VecDeque<Call>
+                queue: RwLock<VecDeque<Call>>
             }
             impl Remote {
                 pub fn new() -> Remote {
                     Remote {
                         task: AtomicTask::new(),
-                        queue: VecDeque::new()
+                        queue: RwLock::new(VecDeque::new())
                     }
                 }
             }
@@ -120,7 +151,7 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
                 type Error = ();
 
                 fn poll(&mut self) -> Poll<::std::option::Option<Self::Item>, Self::Error> {
-                    match self.queue.pop_front() {
+                    match self.queue.write().unwrap().pop_front() {
                         Some(item) => {
                             Ok(Async::Ready(Some(item)))
                         },
@@ -131,11 +162,13 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
                     }
                 }
             }
-            #[repr(transparent)]
+            #[serde(transparent)]
             #[derive(::serde::Serialize, ::serde::Deserialize)]
             pub struct Call {
                 call: _Call,
             }
+            #[allow(non_camel_case_types)]
+            #[serde(untagged)]
             #[derive(::serde::Serialize, ::serde::Deserialize)]
             enum _Call {
                 #(#enum_variants),*
