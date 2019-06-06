@@ -34,5 +34,5 @@ pub trait Hello {
 }
 
 fn main() {
-    let hello_remote = Hello::remote();
+    //let hello_remote = Hello::remote();
 }

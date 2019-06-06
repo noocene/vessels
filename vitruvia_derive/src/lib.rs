@@ -121,7 +121,7 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
                 fn poll(&mut self) -> Poll<::std::option::Option<Self::Item>, Self::Error> {
                     match self.queue.pop_front() {
                         Some(item) => {
-                            Ok(Async::Ready(item))
+                            Ok(Async::Ready(Some(item)))
                         },
                         None => {
                             self.task.register();
@@ -280,7 +280,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     let binds = generate_binds(ident, procedures);
     let blanket_impl: TokenStream = quote! {
         impl #ident {
-            fn remote() -> impl #ident {
+            fn remote() -> impl #ident + ::vitruvia::protocol::Remote<#mod_ident::Call> {
                 #mod_ident::remote()
             }
         }
