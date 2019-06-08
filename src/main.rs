@@ -34,9 +34,13 @@ pub trait Hello {
 
 fn main() {
     let mut hello_remote = Hello::remote();
-    hello_remote.test_method(10);
+    hello_remote.data("test".to_owned(), 10.0);
     run(hello_remote.for_each(|call| {
-        println!("{}", serde_json::to_string(&call).unwrap());
+        let serialized = serde_json::to_string(&call).unwrap();
+        println!("{}", serialized);
+        let deserialized: _Hello_protocol::Call = serde_json::from_str(&serialized).unwrap();
+        let serialized = serde_json::to_string(&deserialized).unwrap();
+        println!("{}", serialized);
         Ok(())
     }));
 }

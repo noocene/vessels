@@ -5,7 +5,7 @@ use glutin::Window;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, RwLock};
 
-use lcms2::{PixelFormat, Intent, Transform};
+use lcms2::{Intent, PixelFormat, Transform};
 
 use libc::c_void;
 

@@ -1,6 +1,10 @@
 use futures::Stream;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 
-pub trait Remote<T>: Stream<Item = T, Error = ()> where T: Serialize + DeserializeOwned {}
+/// A generated remote binding of a trait created by `protocol`.
+pub trait Remote: Stream<Item = <Self as Remote>::Item, Error = ()> {
+    /// The associated opaque call type used by the `protocol`.
+    type Item: Serialize + DeserializeOwned;
+}
 
 pub use vitruvia_derive::protocol;

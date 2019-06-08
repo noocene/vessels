@@ -16,7 +16,6 @@ pub trait Source {
     fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Send + Sync>);
 }
 
-
 /// A class of events.
 pub trait Event {}
 
