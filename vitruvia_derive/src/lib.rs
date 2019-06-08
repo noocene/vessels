@@ -1,4 +1,4 @@
-#![recursion_limit = "128"]
+#![recursion_limit = "256"]
 
 extern crate proc_macro;
 
@@ -20,7 +20,7 @@ struct Procedure {
     return_type: Option<Type>,
 }
 
-fn generate_enum(index_type: proc_macro2::TokenStream, methods: &[Procedure]) -> Vec<Variant> {
+fn generate_enum(methods: &[Procedure]) -> Vec<Variant> {
     methods
         .iter()
         .map(|method| Variant {
@@ -31,13 +31,6 @@ fn generate_enum(index_type: proc_macro2::TokenStream, methods: &[Procedure]) ->
                 Fields::Unit
             } else {
                 let mut fields = Punctuated::new();
-                fields.push(Field {
-                    attrs: vec![],
-                    ident: None,
-                    colon_token: None,
-                    vis: Visibility::Inherited,
-                    ty: syn::parse2::<Type>(index_type.clone()).unwrap(),
-                });
                 for ty in &method.arg_types {
                     fields.push(Field {
                         attrs: vec![],
@@ -56,16 +49,10 @@ fn generate_enum(index_type: proc_macro2::TokenStream, methods: &[Procedure]) ->
         .collect::<Vec<_>>()
 }
 
-fn generate_remote_impl(
-    index_type: proc_macro2::TokenStream,
-    methods: &[Procedure],
-) -> proc_macro2::TokenStream {
+fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
     let mut stream = proc_macro2::TokenStream::new();
-    for (index, method) in methods.iter().enumerate() {
+    for method in methods.iter() {
         let index_ident = method.ident.clone().unwrap();
-        let num_index_ident = quote! {
-            #index
-        };
         let ident = &method.ident;
         let mut arg_stream = proc_macro2::TokenStream::new();
         let mut arg_names_stream = proc_macro2::TokenStream::new();
@@ -89,7 +76,7 @@ fn generate_remote_impl(
         }
         stream.extend(quote! {
             fn #ident(#arg_stream) {
-                self.queue.write().unwrap().push_back(Call {call: _Call::#index_ident(#num_index_ident as #index_type, #arg_names_stream)});
+                self.queue.write().unwrap().push_back(Call {call: _Call::#index_ident(#arg_names_stream)});
                 self.task.notify();
             }
         });
@@ -97,38 +84,85 @@ fn generate_remote_impl(
     stream
 }
 
+fn generate_serialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let mut arms = proc_macro2::TokenStream::new();
+    for (index, method) in methods.iter().enumerate() {
+        let ident = &method.ident;
+        let mut sig = proc_macro2::TokenStream::new();
+        let mut args = proc_macro2::TokenStream::new();
+        let mut element_calls = proc_macro2::TokenStream::new();
+        let t_len = method.arg_types.len() + 1;
+        if !method.arg_types.is_empty() {
+            for (index, _) in method.arg_types.iter().enumerate() {
+                let ident = Ident::new(&format!("_{}", index), Span::call_site());
+                args.extend(quote! {
+                    #ident,
+                });
+                element_calls.extend(quote! {
+                    seq.serialize_element(#ident)?;
+                });
+            }
+            sig.extend(quote! {
+                (#args)
+            });
+        }
+        arms.extend(quote! {
+            _Call::#ident#sig => {
+                let mut seq = serializer.serialize_seq(Some(#t_len))?;
+                seq.serialize_element(&#index)?;
+                #element_calls
+                seq.end()
+            },
+        });
+    }
+    arms
+}
+
+fn generate_deserialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let mut arms = proc_macro2::TokenStream::new();
+    for (index, method) in methods.iter().enumerate() {
+        let ident = &method.ident;
+        let mut sig = proc_macro2::TokenStream::new();
+        let mut args = proc_macro2::TokenStream::new();
+        if !method.arg_types.is_empty() {
+            for (index, _) in method.arg_types.iter().enumerate() {
+                let index = index + 1;
+                args.extend(quote! {
+                    seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(#index, &self))?,
+                });
+            }
+            sig.extend(quote! {
+                (#args)
+            });
+        }
+        arms.extend(quote! {
+            #index => {
+                _Call::#ident#sig
+            }
+        });
+    }
+    quote! {
+        Ok(Call{
+            call: match index {
+                #arms,
+                _ => Err(::serde::de::Error::invalid_length(index, &self))?
+            }
+        })
+    }
+}
+
 fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
     let mod_ident = Ident::new(&format!("_{}_protocol", &ident), ident.span());
-    let num_methods = methods.len() as u64;
-    let index_type;
-    if num_methods > u64::from(std::u8::MAX) {
-        if num_methods > u64::from(std::u16::MAX) {
-            if num_methods > u64::from(std::u32::MAX) {
-                index_type = quote! {
-                    u64
-                };
-            } else {
-                index_type = quote! {
-                    u32
-                };
-            }
-        } else {
-            index_type = quote! {
-                u16
-            };
-        }
-    } else {
-        index_type = quote! {
-            u8
-        };
-    }
-    let enum_variants = generate_enum(index_type.clone(), methods.as_slice());
-    let remote_impl = generate_remote_impl(index_type.clone(), methods.as_slice());
+    let enum_variants = generate_enum(methods.as_slice());
+    let remote_impl = generate_remote_impl(methods.as_slice());
+    let serialize_impl = generate_serialize_impl(methods.as_slice());
+    let deserialize_impl = generate_deserialize_impl(methods.as_slice());
     let gen = quote! {
         #[allow(non_snake_case)]
         mod #mod_ident {
-            use ::std::{collections::VecDeque, sync::{RwLock, mpsc::{Sender, Receiver, channel}}};
+            use ::std::{collections::VecDeque, sync::{RwLock}};
             use ::futures::{Poll, Async, task::AtomicTask};
+            use ::serde::ser::SerializeSeq;
             struct Remote {
                 task: AtomicTask,
                 queue: RwLock<VecDeque<Call>>
@@ -144,7 +178,8 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
             impl super::#ident for Remote {
                 #remote_impl
             }
-            impl ::vitruvia::protocol::Remote<Call> for Remote {
+            impl ::vitruvia::protocol::Remote for Remote {
+                type Item = Call;
             }
             impl ::futures::Stream for Remote {
                 type Item = Call;
@@ -162,18 +197,39 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
                     }
                 }
             }
-            #[serde(transparent)]
-            #[derive(::serde::Serialize, ::serde::Deserialize)]
+            #[repr(transparent)]
             pub struct Call {
                 call: _Call,
             }
             #[allow(non_camel_case_types)]
-            #[serde(untagged)]
-            #[derive(::serde::Serialize, ::serde::Deserialize)]
             enum _Call {
                 #(#enum_variants),*
             }
-            pub fn remote() -> impl super::#ident + ::vitruvia::protocol::Remote<Call> {
+            impl ::serde::Serialize for Call {
+                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+                    match &self.call {
+                        #serialize_impl
+                    }
+                }
+            }
+            impl <'de> ::serde::Deserialize<'de> for Call {
+                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'de> {
+                    struct CallVisitor;
+                    impl<'de> ::serde::de::Visitor<'de> for CallVisitor {
+                        type Value = Call;
+
+                        fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                            formatter.write_str("a serialized protocol Call")
+                        }
+                        fn visit_seq<V>(self, mut seq: V) -> Result<Call, V::Error> where V: ::serde::de::SeqAccess<'de>, {
+                            let index: usize = seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?;
+                            #deserialize_impl
+                        }
+                    }
+                    deserializer.deserialize_seq(CallVisitor)
+                }
+            }
+            pub fn remote() -> impl super::#ident + ::vitruvia::protocol::Remote {
                 Remote::new()
             }
         }
@@ -314,7 +370,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     let binds = generate_binds(ident, procedures);
     let blanket_impl: TokenStream = quote! {
         impl #ident {
-            fn remote() -> impl #ident + ::vitruvia::protocol::Remote<#mod_ident::Call> {
+            fn remote() -> impl #ident + ::vitruvia::protocol::Remote {
                 #mod_ident::remote()
             }
         }
