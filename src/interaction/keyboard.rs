@@ -264,7 +264,7 @@ pub enum Key {
     /// The Scroll Lock key.
     ScrollLock,
     /// The Context Menu key.
-    ContextMenu,
+    Menu,
     /// The Print Screen key.
     PrintScreen,
     /// An alphabetic key.

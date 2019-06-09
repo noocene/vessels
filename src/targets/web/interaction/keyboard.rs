@@ -127,7 +127,7 @@ fn parse_code(code: &str) -> Key {
         "ArrowRight" => Key::Arrow(Arrow::Right),
         "End" => Key::End,
         "Delete" => Key::Delete,
-        "ContextMenu" => Key::ContextMenu,
+        "ContextMenu" => Key::Menu,
         "Backslash" => Key::Backslash,
         _ => Key::Unknown,
     }
