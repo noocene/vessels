@@ -1,4 +1,4 @@
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 
 extern crate proc_macro;
 
@@ -151,6 +151,32 @@ fn generate_deserialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream 
     }
 }
 
+fn generate_shim_forward(methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let mut calls = proc_macro2::TokenStream::new();
+    for method in methods {
+        let ident = &method.ident;
+        let mut args = proc_macro2::TokenStream::new();
+        let mut arg_names = proc_macro2::TokenStream::new();
+        if !method.arg_types.is_empty() {
+            for (index, ty) in method.arg_types.iter().enumerate() {
+                let ident = Ident::new(&format!("_{}", index), Span::call_site());
+                args.extend(quote! {
+                    #ident: #ty,
+                });
+                arg_names.extend(quote! {
+                    #ident,
+                });
+            }
+        }
+        calls.extend(quote! {
+            fn #ident(&mut self, #args) {
+                self.inner.#ident(#arg_names)
+            }
+        });
+    }
+    calls
+}
+
 fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
     let mod_ident = Ident::new(&format!("_{}_protocol", &ident), ident.span());
     let enum_variants = generate_enum(methods);
@@ -158,6 +184,7 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
     let serialize_impl = generate_serialize_impl(methods);
     let deserialize_impl = generate_deserialize_impl(methods);
     let blanket = generate_blanket(methods);
+    let shim_forward = generate_shim_forward(methods);
     let gen = quote! {
         #[allow(non_snake_case)]
         mod #mod_ident {
@@ -230,7 +257,37 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                     deserializer.deserialize_seq(CallVisitor)
                 }
             }
-            pub fn start_send<T>(receiver: &mut T, call: Call) -> ::futures::StartSend<Call, ()> where T: super::#ident + ?Sized {
+            #[allow(non_camel_case_types)]
+            struct ProtocolShim<T: super::#ident> {
+                inner: T
+            }
+            impl<T> ::futures::Sink for ProtocolShim<T> where T: super::#ident {
+                type SinkItem = Call;
+                type SinkError = ();
+                fn start_send(&mut self, item: Self::SinkItem) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
+                    start_send(&mut self.inner, item)
+                }
+                fn poll_complete(&mut self) -> ::futures::Poll<(), Self::SinkError> {
+                    Ok(::futures::Async::Ready(()))
+                }
+            }
+            pub trait Protocol: ::futures::Sink<SinkItem = Call, SinkError = ()> + super::#ident + Send {}
+            #[allow(non_camel_case_types)]
+            pub trait ProtocolExt<T: super::#ident> {
+                fn into_protocol(self) -> Box<dyn Protocol>;
+            }
+            impl<T> Protocol for ProtocolShim<T> where T: super::#ident + Send {}
+            impl<T> ProtocolExt<T> for T where T: super::#ident + 'static + Send {
+                fn into_protocol(self) -> Box<dyn Protocol> {
+                    Box::new(ProtocolShim {
+                        inner: self
+                    })
+                }
+            }
+            impl<T: super::#ident> super::#ident for ProtocolShim<T> {
+                #shim_forward
+            }
+            fn start_send<T>(receiver: &mut T, call: Call) -> ::futures::StartSend<Call, ()> where T: super::#ident + ?Sized {
                 match call.call {
                     #blanket
                 }
@@ -401,39 +458,13 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     let ident = &input.ident;
     let mod_ident = Ident::new(&format!("_{}_protocol", ident), input.ident.span());
     let binds = generate_binds(ident, &procedures);
-    let proto_ident = Ident::new(&format!("_{}_Protocol", ident), input.ident.span());
-    let struct_ident = Ident::new(&format!("_{}_Protocol_Shim", ident), input.ident.span());
     let blanket_impl: TokenStream = quote! {
         impl #ident {
             fn remote() -> impl #ident + ::vitruvia::protocol::Remote {
                 #mod_ident::remote()
             }
         }
-        #[allow(non_camel_case_types)]
-        struct #struct_ident<T: #ident> {
-            c_ref: T
-        }
-        impl<T> ::futures::Sink for #struct_ident<T> where T: #ident {
-            type SinkItem = #mod_ident::Call;
-            type SinkError = ();
-            fn start_send(&mut self, item: Self::SinkItem) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
-                #mod_ident::start_send(&mut self.c_ref, item)
-            }
-            fn poll_complete(&mut self) -> ::futures::Poll<(), Self::SinkError> {
-                Ok(::futures::Async::Ready(()))
-            }
-        }
-        #[allow(non_camel_case_types)]
-        trait #proto_ident<T: #ident> {
-            fn into_protocol(self) -> Box<dyn Sink<SinkItem = #mod_ident::Call, SinkError = ()> + Send>;
-        }
-        impl<T> #proto_ident<T> for T where T: #ident + 'static + Send {
-            fn into_protocol(self) -> Box<dyn Sink<SinkItem = #mod_ident::Call, SinkError = ()> + Send> {
-                Box::new(#struct_ident {
-                    c_ref: self
-                })
-            }
-        }
+        use #mod_ident::ProtocolExt;
     }
     .into();
     let mut item: TokenStream = input.into_token_stream().into();
