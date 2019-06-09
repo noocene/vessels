@@ -1,4 +1,4 @@
-use futures::{Sink, Stream};
+use futures::{Sink, Stream, Future};
 use vitruvia::{executor::run, protocol::protocol};
 
 /*use stdweb::unstable::TryInto;
@@ -45,8 +45,8 @@ fn main() {
     run(hello_remote.for_each(|call| {
         let serialized = serde_json::to_string(&call).unwrap();
         let deserialized = serde_json::from_str(&serialized).unwrap();
-        let hello = TestHello;
-        hello.send(deserialized);
-        Ok(())
+        let mut hello = TestHello;
+        let sink = hello.into_protocol();
+        sink.send(deserialized).then(|_| Ok(()))
     }));
 }

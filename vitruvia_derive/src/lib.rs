@@ -235,7 +235,7 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                     #blanket
                 }
                 Ok(::futures::AsyncSink::Ready)
-            } 
+            }
             pub fn remote() -> impl super::#ident + ::vitruvia::protocol::Remote {
                 Remote::new()
             }
@@ -401,21 +401,37 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     let ident = &input.ident;
     let mod_ident = Ident::new(&format!("_{}_protocol", ident), input.ident.span());
     let binds = generate_binds(ident, &procedures);
+    let proto_ident = Ident::new(&format!("_{}_Protocol", ident), input.ident.span());
+    let struct_ident = Ident::new(&format!("_{}_Protocol_Shim", ident), input.ident.span());
     let blanket_impl: TokenStream = quote! {
         impl #ident {
             fn remote() -> impl #ident + ::vitruvia::protocol::Remote {
                 #mod_ident::remote()
             }
         }
-        impl ::futures::Sink for #ident {
+        #[allow(non_camel_case_types)]
+        struct #struct_ident<T: #ident> {
+            c_ref: T
+        }
+        impl<T> ::futures::Sink for #struct_ident<T> where T: #ident {
             type SinkItem = #mod_ident::Call;
             type SinkError = ();
-
-            fn start_send(&mut self, call: #mod_ident::Call) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
-                #mod_ident::start_send(self, call)
+            fn start_send(&mut self, item: Self::SinkItem) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
+                #mod_ident::start_send(&mut self.c_ref, item)
             }
             fn poll_complete(&mut self) -> ::futures::Poll<(), Self::SinkError> {
                 Ok(::futures::Async::Ready(()))
+            }
+        }
+        #[allow(non_camel_case_types)]
+        trait #proto_ident<T: #ident> {
+            fn into_protocol(self) -> Box<dyn Sink<SinkItem = #mod_ident::Call, SinkError = ()> + Send>;
+        }
+        impl<T> #proto_ident<T> for T where T: #ident + 'static + Send {
+            fn into_protocol(self) -> Box<dyn Sink<SinkItem = #mod_ident::Call, SinkError = ()> + Send> {
+                Box::new(#struct_ident {
+                    c_ref: self
+                })
             }
         }
     }
