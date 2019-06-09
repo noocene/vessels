@@ -150,7 +150,6 @@ impl RTCAnswer {
         let answer = {
             let task = task.clone();
             move |answer: String| {
-                console!(log, base64::encode(&answer));
                 sender.send(Some(answer)).unwrap();
                 task.notify();
             }
