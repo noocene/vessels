@@ -112,8 +112,12 @@ impl Profile {
         let display_profile =
             lcms2::Profile::new_icc(&cm_backing::get_profile_data(os_window)?).map_err(|_| ())?;
         Ok(Profile {
-            display_profile,
-            srgb_profile: lcms2::Profile::new_srgb(),
+            state: Arc::new(RwLock::new(ProfileState { 
+                display_profile,
+                srgb_profile: lcms2::Profile::new_srgb(),
+                color_cache: HashMap::with_capacity(10),
+                color_cache_queue: VecDeque::with_capacity(10),
+            })),
         })
     }
     pub(crate) fn from_window(window: &Window) -> Result<Profile, ()> {
