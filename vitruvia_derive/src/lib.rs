@@ -151,12 +151,13 @@ fn generate_deserialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream 
     }
 }
 
-fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
+fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
     let mod_ident = Ident::new(&format!("_{}_protocol", &ident), ident.span());
-    let enum_variants = generate_enum(methods.as_slice());
-    let remote_impl = generate_remote_impl(methods.as_slice());
-    let serialize_impl = generate_serialize_impl(methods.as_slice());
-    let deserialize_impl = generate_deserialize_impl(methods.as_slice());
+    let enum_variants = generate_enum(methods);
+    let remote_impl = generate_remote_impl(methods);
+    let serialize_impl = generate_serialize_impl(methods);
+    let deserialize_impl = generate_deserialize_impl(methods);
+    let blanket = generate_blanket(methods);
     let gen = quote! {
         #[allow(non_snake_case)]
         mod #mod_ident {
@@ -229,12 +230,44 @@ fn generate_binds(ident: &Ident, methods: Vec<Procedure>) -> TokenStream {
                     deserializer.deserialize_seq(CallVisitor)
                 }
             }
+            pub fn start_send<T>(receiver: &mut T, call: Call) -> ::futures::StartSend<Call, ()> where T: super::#ident + ?Sized {
+                match call.call {
+                    #blanket
+                }
+                Ok(::futures::AsyncSink::Ready)
+            } 
             pub fn remote() -> impl super::#ident + ::vitruvia::protocol::Remote {
                 Remote::new()
             }
         }
     };
     gen.into()
+}
+
+fn generate_blanket(methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let mut arms = proc_macro2::TokenStream::new();
+    for (index, method) in methods.iter().enumerate() {
+        let ident = &method.ident;
+        let mut sig = proc_macro2::TokenStream::new();
+        let mut args = proc_macro2::TokenStream::new();
+        if !method.arg_types.is_empty() {
+            for (index, _) in method.arg_types.iter().enumerate() {
+                let ident = Ident::new(&format!("_{}", index), Span::call_site());
+                args.extend(quote! {
+                    #ident,
+                });
+            }
+            sig.extend(quote! {
+                (#args)
+            });
+        }
+        arms.extend(quote! {
+            _Call::#ident#sig => {
+                receiver.#ident#sig;
+            }
+        });
+    }
+    arms
 }
 
 #[proc_macro_attribute]
@@ -367,11 +400,22 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
     let ident = &input.ident;
     let mod_ident = Ident::new(&format!("_{}_protocol", ident), input.ident.span());
-    let binds = generate_binds(ident, procedures);
+    let binds = generate_binds(ident, &procedures);
     let blanket_impl: TokenStream = quote! {
         impl #ident {
             fn remote() -> impl #ident + ::vitruvia::protocol::Remote {
                 #mod_ident::remote()
+            }
+        }
+        impl ::futures::Sink for #ident {
+            type SinkItem = #mod_ident::Call;
+            type SinkError = ();
+
+            fn start_send(&mut self, call: #mod_ident::Call) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
+                #mod_ident::start_send(self, call)
+            }
+            fn poll_complete(&mut self) -> ::futures::Poll<(), Self::SinkError> {
+                Ok(::futures::Async::Ready(()))
             }
         }
     }

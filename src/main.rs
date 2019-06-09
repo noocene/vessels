@@ -1,4 +1,4 @@
-use futures::Stream;
+use futures::{Sink, Stream};
 use vitruvia::{executor::run, protocol::protocol};
 
 /*use stdweb::unstable::TryInto;
@@ -29,7 +29,14 @@ extern crate stdweb;*/
 #[protocol]
 pub trait Hello {
     fn data(&mut self, m: String, f: f64);
-    fn test_method(&self, test: u32);
+}
+
+struct TestHello;
+
+impl Hello for TestHello {
+    fn data(&mut self, m: String, f: f64) {
+        println!("{}", m);
+    }
 }
 
 fn main() {
@@ -37,10 +44,9 @@ fn main() {
     hello_remote.data("test".to_owned(), 10.0);
     run(hello_remote.for_each(|call| {
         let serialized = serde_json::to_string(&call).unwrap();
-        println!("{}", serialized);
-        let deserialized: _Hello_protocol::Call = serde_json::from_str(&serialized).unwrap();
-        let serialized = serde_json::to_string(&deserialized).unwrap();
-        println!("{}", serialized);
+        let deserialized = serde_json::from_str(&serialized).unwrap();
+        let hello = TestHello;
+        hello.send(deserialized);
         Ok(())
     }));
 }
