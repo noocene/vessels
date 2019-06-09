@@ -168,8 +168,17 @@ fn generate_shim_forward(methods: &[Procedure]) -> proc_macro2::TokenStream {
                 });
             }
         }
+        let receiver = if method.mut_receiver {
+            quote! {
+                &mut self
+            }
+        } else {
+            quote! {
+                &self
+            }
+        };
         calls.extend(quote! {
-            fn #ident(&mut self, #args) {
+            fn #ident(#receiver, #args) {
                 self.inner.#ident(#arg_names)
             }
         });
@@ -303,7 +312,7 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
 
 fn generate_blanket(methods: &[Procedure]) -> proc_macro2::TokenStream {
     let mut arms = proc_macro2::TokenStream::new();
-    for (index, method) in methods.iter().enumerate() {
+    for method in methods {
         let ident = &method.ident;
         let mut sig = proc_macro2::TokenStream::new();
         let mut args = proc_macro2::TokenStream::new();
