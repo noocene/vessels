@@ -1,54 +1,76 @@
+use crate::errors::Error;
+use crate::network::{
+    mesh::{Channel, Negotiation, NegotiationItem, Peer, Role, SessionDescriptionType},
+    DataChannel,
+};
+use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use futures::{
-    future::err, lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream,
+    future::err, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream,
 };
-
-use serde::{Serialize, Serializer};
-
-use stdweb::{web::error::DomException, Reference};
-
 use std::sync::Arc;
+use stdweb::Reference;
 
-use crossbeam_channel::{bounded, Receiver, Sender, TryRecvError};
+struct RTCPeer {}
 
-use crate::{
-    errors::Error,
-    network::mesh::{Answer, Candidate, Negotiation, Offer, Peer},
-};
-
-struct RTCPeer {
-    connection: Reference,
+impl Peer for RTCPeer {
+    fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error>> {
+        Box::new(err(Error::connection_failed()))
+    }
 }
 
-struct RTCAcceptAnswer {
-    connection: Reference,
-}
-
-impl Future for RTCAcceptAnswer {
-    type Item = Box<dyn Peer>;
+impl Stream for RTCPeer {
+    type Item = Channel;
     type Error = Error;
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        Err(Error::connection_failed())
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        Ok(Async::Ready(None))
     }
 }
 
-impl RTCAcceptAnswer {
-    fn new(connection: Reference, answer: String) -> RTCAcceptAnswer {
-        js! {
-            @{&connection}.setRemoteDescription({sdp: @{answer}, type: "answer"});
-            @{&connection}.createDataChannel("test");
+impl RTCPeer {
+    fn new(role: Role, connection: Reference) -> RTCPeer {
+        RTCPeer {}
+    }
+}
+
+struct RTCNegotiation {
+    outgoing: Receiver<NegotiationItem>,
+    outgoing_sender: Sender<NegotiationItem>,
+    outgoing_task: Arc<AtomicTask>,
+    connection: Reference,
+}
+
+impl Negotiation for RTCNegotiation {}
+
+impl Stream for RTCNegotiation {
+    type Item = NegotiationItem;
+    type Error = Error;
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        match self.outgoing.try_recv() {
+            Ok(negotiation) => {
+                console!(log, format!("{:?}", negotiation));
+                Ok(Async::Ready(Some(negotiation)))
+            }
+            Err(err) => match err {
+                TryRecvError::Disconnected => {
+                    panic!("channel disconnected in negotiation stream");
+                }
+                TryRecvError::Empty => {
+                    self.outgoing_task.register();
+                    Ok(Async::NotReady)
+                }
+            },
         }
-        RTCAcceptAnswer { connection }
     }
 }
 
-impl Negotiation for RTCAcceptAnswer {}
-
-impl Sink for RTCAcceptAnswer {
-    type SinkItem = Candidate;
+impl Sink for RTCNegotiation {
+    type SinkItem = NegotiationItem;
     type SinkError = Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        self.handle_incoming(item);
         Ok(AsyncSink::Ready)
     }
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
@@ -56,163 +78,115 @@ impl Sink for RTCAcceptAnswer {
     }
 }
 
-impl Stream for RTCAcceptAnswer {
-    type Item = Candidate;
-    type Error = Error;
-
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        Ok(Async::NotReady)
-    }
-}
-
-impl RTCPeer {}
-
-struct RTCOffer {
-    task: Arc<AtomicTask>,
-    receiver: Receiver<Option<String>>,
-    connection: Reference,
-}
-
-impl RTCOffer {
-    fn new() -> RTCOffer {
-        let task = Arc::new(AtomicTask::new());
-        let (sender, receiver) = bounded(1);
-        let s_sender = sender.clone();
-        let f_task = task.clone();
-        let offer_fail = move |_: DomException| {
-            sender.send(None).unwrap();
-            f_task.notify();
+impl RTCNegotiation {
+    fn new(role: Role, connection: Reference) -> RTCNegotiation {
+        let (outgoing_sender, outgoing_receiver) = unbounded();
+        let outgoing_task = Arc::new(AtomicTask::new());
+        let outgoing_task_cloned = outgoing_task.clone();
+        let outgoing_sender_cloned = outgoing_sender.clone();
+        let send_offer = move |sdp: String| {
+            outgoing_sender_cloned
+                .send(NegotiationItem::SessionDescription(
+                    SessionDescriptionType::Offer,
+                    sdp,
+                ))
+                .expect("could not send offer");
+            outgoing_task_cloned.notify();
         };
-        let s_task = task.clone();
-        let offer_succeed = move |sdp: String| {
-            s_sender.send(Some(sdp)).unwrap();
-            s_task.notify();
-        };
-        let peer_connection = js! {
-            let connection = new RTCPeerConnection();
-            connection.createOffer().catch(@{offer_fail.clone()}).then((desc) => {
-                connection.setLocalDescription(desc, () => {
-                    @{offer_succeed}(desc.sdp);
-                }, () => {
-                    @{offer_fail}();
-                });
-            });
-            return connection;
+        match role {
+            Role::Offering => {
+                js! {
+                    let connection = @{&connection};
+                    connection.createOffer().catch((error) => {
+                        console.log(error);
+                    }).then((offer) => {
+                        connection.setLocalDescription(offer).catch((error) => {
+                            console.log(error);
+                        }).then(() => {
+                            @{send_offer}(offer.sdp);
+                        });
+                    });
+                };
+            }
+            Role::Answering => {}
         }
-        .into_reference()
-        .unwrap();
-        RTCOffer {
-            task,
-            receiver,
-            connection: peer_connection,
-        }
-    }
-}
-
-type AnswerCallback = Box<dyn FnOnce(Answer) -> Box<dyn Negotiation + 'static> + Send + 'static>;
-
-impl Future for RTCOffer {
-    type Item = (Offer, AnswerCallback);
-    type Error = Error;
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.receiver.try_recv() {
-            Ok(sdp) => match sdp {
-                Some(sdp) => {
-                    let connection = self.connection.clone();
-                    Ok(Async::Ready((
-                        sdp,
-                        Box::new(move |answer| Box::new(RTCAcceptAnswer::new(connection, answer))),
-                    )))
-                }
-                None => Err(Error::connection_failed()),
-            },
-            Err(err) => match err {
-                TryRecvError::Empty => {
-                    self.task.register();
-                    Ok(Async::NotReady)
-                }
-                TryRecvError::Disconnected => panic!("Offer generation channel disconnected!"),
-            },
+        RTCNegotiation {
+            outgoing: outgoing_receiver,
+            outgoing_sender,
+            outgoing_task,
+            connection,
         }
     }
-}
-
-struct RTCAnswer {
-    task: Arc<AtomicTask>,
-    receiver: Receiver<Option<String>>,
-    connection: Reference,
-}
-
-impl RTCAnswer {
-    fn new(offer: Offer) -> RTCAnswer {
-        let task = Arc::new(AtomicTask::new());
-        let (sender, receiver) = bounded(1);
-        let answer = {
-            let task = task.clone();
-            move |answer: String| {
-                sender.send(Some(answer)).unwrap();
-                task.notify();
+    fn handle_incoming(&mut self, incoming: NegotiationItem) {
+        match incoming {
+            NegotiationItem::SessionDescription(ty, sdp) => {
+                self.handle_session_description(ty, sdp);
+            }
+            NegotiationItem::ConnectivityEstablishmentCandidate {
+                username_fragment,
+                candidate,
+            } => {
+                self.handle_connectivity_establishment_candidate(username_fragment, candidate);
             }
         };
-        let peer_connection = js! {
-            let connection = new RTCPeerConnection();
-            connection.ondatachannel = () => {
-                console.log("channel");
-            };
-            connection.setRemoteDescription(new RTCSessionDescription({sdp: @{offer}, type: "offer"})).then(() => {
-                connection.createAnswer().then((answer) => {
-                    connection.setLocalDescription(answer).catch(() => {
-                        console.log("set local description failed");
-                    }).then(() => {
-                        @{answer}(answer.sdp);
+    }
+    fn handle_connectivity_establishment_candidate(&mut self, ufrag: String, candidate: String) {}
+    fn handle_session_description(&mut self, ty: SessionDescriptionType, sdp: String) {
+        let outgoing_task = self.outgoing_task.clone();
+        let outgoing_sender = self.outgoing_sender.clone();
+        let connection = self.connection.clone();
+        let finish_handle = move || match ty {
+            SessionDescriptionType::Offer => {
+                let outgoing_sender = outgoing_sender.clone();
+                let outgoing_task = outgoing_task.clone();
+                let connection = connection.clone();
+                let send_answer = move |sdp: String| {
+                    outgoing_sender
+                        .send(NegotiationItem::SessionDescription(
+                            SessionDescriptionType::Answer,
+                            sdp,
+                        ))
+                        .expect("could not send offer");
+                    outgoing_task.notify();
+                };
+                js! {
+                    let connection = @{connection};
+                    connection.createAnswer().catch((error) => console.log(error)).then((answer) => {
+                        connection.setLocalDescription(answer).catch((error) => {
+                            console.log(error);
+                        }).then(() => @{send_answer}(answer.sdp));
                     });
-                }).catch(() => {
-                    console.log("create answer failed");
-                });
-            }).catch(() => {
-                console.log("sdp parse failed");
-            });
-            return connection;
-        }
-        .into_reference()
-        .unwrap();
-        RTCAnswer {
-            task,
-            receiver,
-            connection: peer_connection,
-        }
-    }
-}
-
-impl Future for RTCAnswer {
-    type Item = (Answer, Box<dyn Negotiation + 'static>);
-    type Error = Error;
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.receiver.try_recv() {
-            Ok(sdp) => Ok(Async::NotReady),
-            Err(err) => match err {
-                TryRecvError::Empty => {
-                    self.task.register();
-                    Ok(Async::NotReady)
                 }
-                TryRecvError::Disconnected => panic!("Offer generation channel disconnected!"),
-            },
-        }
+            }
+            SessionDescriptionType::Answer => {}
+            SessionDescriptionType::Rollback => {}
+        };
+        js! {
+            @{&self.connection}.setRemoteDescription(new RTCSessionDescription({sdp: @{sdp}, type: @{match ty {
+                SessionDescriptionType::Answer => "answer",
+                SessionDescriptionType::Offer => "offer",
+                SessionDescriptionType::Rollback => "rollback"
+            }}})).catch((error) => {
+                console.log(error);
+            }).then(() => {
+                @{finish_handle}();
+            });
+        };
     }
 }
 
-pub(crate) fn offer() -> impl Future<
-    Item = (
-        Offer,
-        Box<dyn FnOnce(Answer) -> Box<dyn Negotiation + 'static> + Send + 'static>,
-    ),
-    Error = Error,
-> {
-    RTCOffer::new()
-}
-
-pub(crate) fn answer(
-    offer: Offer,
-) -> impl Future<Item = (Answer, Box<dyn Negotiation + 'static>), Error = Error> {
-    RTCAnswer::new(offer)
+pub(crate) fn new(role: Role) -> (Box<dyn Peer>, Box<dyn Negotiation>) {
+    let connection: Reference = js! {
+        let connection = new RTCPeerConnection();
+        connection.onnegotiationneeded = () => {
+            console.log("neg");
+        };
+        return connection;
+    }
+    .into_reference()
+    .unwrap();
+    (
+        Box::new(RTCPeer::new(role, connection.clone())),
+        Box::new(RTCNegotiation::new(role, connection)),
+    )
 }
