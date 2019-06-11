@@ -1,29 +1,16 @@
-image: rust
-
-before_script:
-  - apt-get update -y
-  - apt-get install -y python2.7 nodejs cmake libgtk-3-dev libgstreamer1.0-dev gstreamer1.0-plugins-bad
-  - git clone https://github.com/emscripten-core/emsdk.git
-  - cd emsdk
-  - git pull
-  - ./emsdk install latest
-  - ./emsdk activate latest
-  - source ./emsdk_env.sh
-  - cd ..
-  - rustup default stable
-  - rustup target add wasm32-unknown-emscripten
+image: syntacticsugarglider/vitruvia
 
 check:
   script:
-    - cargo check --target wasm32-unknown-emscripten
     - cargo check
+    - cargo web check
 
 docs:
   stage: deploy
   script:
-    - cargo rustdoc --target wasm32-unknown-emscripten
+    - cargo rustdoc
     - rm -rf public
-    - mv target/wasm32-unknown-emscripten/doc/ public
+    - mv target/doc/ public
   artifacts:
     paths:
       - public
