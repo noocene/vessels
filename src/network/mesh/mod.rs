@@ -32,12 +32,6 @@ pub enum NegotiationItem {
     ConnectivityEstablishmentCandidate(Option<ConnectivityEstablishmentCandidate>),
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum Role {
-    Offering,
-    Answering,
-}
-
 pub trait Negotiation:
     Sink<SinkItem = NegotiationItem, SinkError = Error>
     + Stream<Item = NegotiationItem, Error = Error>
@@ -52,7 +46,10 @@ pub trait Peer: Stream<Item = Channel, Error = Error> + Send {
 }
 
 impl dyn Peer {
-    pub fn new(role: Role) -> (Box<dyn Peer>, Box<dyn Negotiation>) {
-        targets::web::network::mesh::new(role)
+    pub fn new() -> (Box<dyn Peer>, Box<dyn Negotiation>) {
+        #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
+        return targets::web::network::mesh::new();
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        targets::native::network::mesh::new()
     }
 }

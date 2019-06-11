@@ -1,7 +1,7 @@
 use crate::errors::Error;
 use crate::network::{
     mesh::{
-        Channel, ConnectivityEstablishmentCandidate, Negotiation, NegotiationItem, Peer, Role,
+        Channel, ConnectivityEstablishmentCandidate, Negotiation, NegotiationItem, Peer,
         SessionDescriptionType,
     },
     DataChannel,
@@ -94,7 +94,7 @@ impl Stream for RTCPeer {
 }
 
 impl RTCPeer {
-    fn new(role: Role, connection: Reference) -> RTCPeer {
+    fn new(connection: Reference) -> RTCPeer {
         let (sender, receiver) = unbounded();
         let task = Arc::new(AtomicTask::new());
         let add_task = task.clone();
@@ -157,7 +157,7 @@ impl Sink for RTCNegotiation {
 }
 
 impl RTCNegotiation {
-    fn new(role: Role, connection: Reference) -> RTCNegotiation {
+    fn new(connection: Reference) -> RTCNegotiation {
         let (outgoing_sender, outgoing_receiver) = unbounded();
         let outgoing_task = Arc::new(AtomicTask::new());
         let outgoing_task_cloned = outgoing_task.clone();
@@ -302,7 +302,7 @@ impl RTCNegotiation {
     }
 }
 
-pub(crate) fn new(role: Role) -> (Box<dyn Peer>, Box<dyn Negotiation>) {
+pub(crate) fn new() -> (Box<dyn Peer>, Box<dyn Negotiation>) {
     let connection: Reference = js! {
         let connection = new RTCPeerConnection();
         return connection;
@@ -310,7 +310,7 @@ pub(crate) fn new(role: Role) -> (Box<dyn Peer>, Box<dyn Negotiation>) {
     .into_reference()
     .unwrap();
     (
-        Box::new(RTCPeer::new(role, connection.clone())),
-        Box::new(RTCNegotiation::new(role, connection)),
+        Box::new(RTCPeer::new(connection.clone())),
+        Box::new(RTCNegotiation::new(connection)),
     )
 }

@@ -46,6 +46,8 @@ pangocairo = "0.7.0"
 cairo-sys-rs = "0.8.0"
 pango = "0.6.0"
 ws = "0.8.1"
+gstreamer-webrtc = "0.13.0"
+gstreamer = "0.13.0"
 tokio = "0.1.21"
 
 [profile.release]
