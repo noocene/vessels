@@ -18,13 +18,18 @@ pub enum SessionDescriptionType {
     Rollback,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConnectivityEstablishmentCandidate {
+    pub candidate: String,
+    pub username_fragment: String,
+    pub media_id: String,
+    pub media_line_index: u32,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NegotiationItem {
     SessionDescription(SessionDescriptionType, String),
-    ConnectivityEstablishmentCandidate {
-        candidate: String,
-        username_fragment: String,
-    },
+    ConnectivityEstablishmentCandidate(Option<ConnectivityEstablishmentCandidate>),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -41,7 +46,7 @@ pub trait Negotiation:
 }
 
 /// The remote end of a peer-to-peer network connection.
-pub trait Peer: Stream<Item = Channel, Error = Error> {
+pub trait Peer: Stream<Item = Channel, Error = Error> + Send {
     /// Creates a new data channel.
     fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error>>;
 }

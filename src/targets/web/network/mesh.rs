@@ -1,6 +1,9 @@
 use crate::errors::Error;
 use crate::network::{
-    mesh::{Channel, Negotiation, NegotiationItem, Peer, Role, SessionDescriptionType},
+    mesh::{
+        Channel, ConnectivityEstablishmentCandidate, Negotiation, NegotiationItem, Peer, Role,
+        SessionDescriptionType,
+    },
     DataChannel,
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
@@ -10,10 +13,50 @@ use futures::{
 use std::sync::Arc;
 use stdweb::Reference;
 
-struct RTCPeer {}
+struct RTCDataChannel {
+    channel: Reference,
+}
+
+impl DataChannel for RTCDataChannel {}
+
+impl Stream for RTCDataChannel {
+    type Item = Vec<u8>;
+    type Error = Error;
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        Ok(Async::NotReady)
+    }
+}
+
+impl Sink for RTCDataChannel {
+    type SinkItem = Vec<u8>;
+    type SinkError = Error;
+
+    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        Ok(AsyncSink::Ready)
+    }
+    fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
+        Ok(Async::Ready(()))
+    }
+}
+
+impl RTCDataChannel {
+    fn new(channel: Reference) -> RTCDataChannel {
+        RTCDataChannel { channel }
+    }
+}
+
+struct RTCPeer {
+    connection: Reference,
+    channels: Receiver<Channel>,
+    task: Arc<AtomicTask>,
+}
 
 impl Peer for RTCPeer {
     fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error>> {
+        js! {
+            @{&self.connection}.createDataChannel("test");
+        };
         Box::new(err(Error::connection_failed()))
     }
 }
@@ -23,13 +66,49 @@ impl Stream for RTCPeer {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        Ok(Async::Ready(None))
+        match self.channels.try_recv() {
+            Ok(channel) => Ok(Async::Ready(Some(channel))),
+            Err(err) => match err {
+                TryRecvError::Disconnected => {
+                    panic!("channel disconnected in channel stream");
+                }
+                TryRecvError::Empty => {
+                    self.task.register();
+                    Ok(Async::NotReady)
+                }
+            },
+        }
     }
 }
 
 impl RTCPeer {
     fn new(role: Role, connection: Reference) -> RTCPeer {
-        RTCPeer {}
+        let (sender, receiver) = unbounded();
+        let task = Arc::new(AtomicTask::new());
+        match role {
+            Role::Answering => {}
+            Role::Offering => {
+                js! {
+                    @{&connection}.createDataChannel("test");
+                };
+            }
+        }
+        let add_task = task.clone();
+        let add_data_channel = move |channel: Reference| {
+            let channel = Channel::DataChannel(Box::new(RTCDataChannel::new(channel)));
+            sender.send(channel);
+            add_task.notify();
+        };
+        js! {
+            @{&connection}.ondatachannel = (e) => {
+                @{add_data_channel}(e.channel);
+            };
+        };
+        RTCPeer {
+            connection,
+            channels: receiver,
+            task,
+        }
     }
 }
 
@@ -48,10 +127,7 @@ impl Stream for RTCNegotiation {
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         match self.outgoing.try_recv() {
-            Ok(negotiation) => {
-                console!(log, format!("{:?}", negotiation));
-                Ok(Async::Ready(Some(negotiation)))
-            }
+            Ok(negotiation) => Ok(Async::Ready(Some(negotiation))),
             Err(err) => match err {
                 TryRecvError::Disconnected => {
                     panic!("channel disconnected in negotiation stream");
@@ -110,6 +186,36 @@ impl RTCNegotiation {
             }
             Role::Answering => {}
         }
+        let ice_sender = outgoing_sender.clone();
+        let ice_task = outgoing_task.clone();
+        let send_candidate = move |candidate: String, ufrag: String| {
+            ice_sender
+                .send(NegotiationItem::ConnectivityEstablishmentCandidate(Some(
+                    ConnectivityEstablishmentCandidate {
+                        candidate,
+                        username_fragment: ufrag,
+                        media_id: "0".to_owned(),
+                        media_line_index: 0,
+                    },
+                )))
+                .expect("could not send candidate");
+            ice_task.notify();
+        };
+        let ice_termination_sender = outgoing_sender.clone();
+        let ice_termination_task = outgoing_task.clone();
+        let send_candidate_termination = move || {
+            ice_termination_sender.send(NegotiationItem::ConnectivityEstablishmentCandidate(None));
+            ice_termination_task.notify();
+        };
+        js! {
+            @{&connection}.onicecandidate = (e) => {
+                if (!e.candidate) {
+                    @{send_candidate_termination}();
+                    return;
+                };
+                @{send_candidate}(e.candidate.candidate, e.candidate.usernameFragment);
+            };
+        }
         RTCNegotiation {
             outgoing: outgoing_receiver,
             outgoing_sender,
@@ -122,15 +228,30 @@ impl RTCNegotiation {
             NegotiationItem::SessionDescription(ty, sdp) => {
                 self.handle_session_description(ty, sdp);
             }
-            NegotiationItem::ConnectivityEstablishmentCandidate {
-                username_fragment,
-                candidate,
-            } => {
-                self.handle_connectivity_establishment_candidate(username_fragment, candidate);
+            NegotiationItem::ConnectivityEstablishmentCandidate(candidate) => {
+                self.handle_connectivity_establishment_candidate(candidate)
             }
         };
     }
-    fn handle_connectivity_establishment_candidate(&mut self, ufrag: String, candidate: String) {}
+    fn handle_connectivity_establishment_candidate(
+        &mut self,
+        candidate: Option<ConnectivityEstablishmentCandidate>,
+    ) {
+        match &candidate {
+            Some(candidate) => js! {
+                @{&self.connection}.addIceCandidate({
+                    candidate: @{&candidate.candidate},
+                    sdpMid: @{&candidate.media_id},
+                    sdpMLineIndex: @{&candidate.media_line_index},
+                    usernameFragment: @{&candidate.username_fragment}
+                });
+            },
+            None => js! {
+                //@{&self.connection}.addIceCandidate(null);
+            },
+        };
+        console!(log, format!("{:?}", candidate));
+    }
     fn handle_session_description(&mut self, ty: SessionDescriptionType, sdp: String) {
         let outgoing_task = self.outgoing_task.clone();
         let outgoing_sender = self.outgoing_sender.clone();
