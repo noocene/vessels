@@ -43,7 +43,9 @@ impl Sink for RTCDataChannel {
 
 impl RTCDataChannel {
     fn new(channel: Reference, sender: Sender<Channel>, add_task: Arc<AtomicTask>) {
-        let data_channel = RTCDataChannel { channel: channel.clone() };
+        let data_channel = RTCDataChannel {
+            channel: channel.clone(),
+        };
         let on_open = move || {
             sender.send(Channel::DataChannel(Box::new(data_channel.clone())));
             add_task.notify();
@@ -95,14 +97,6 @@ impl RTCPeer {
     fn new(role: Role, connection: Reference) -> RTCPeer {
         let (sender, receiver) = unbounded();
         let task = Arc::new(AtomicTask::new());
-        match role {
-            Role::Answering => {}
-            Role::Offering => {
-                js! {
-                    @{&connection}.createDataChannel("test");
-                };
-            }
-        }
         let add_task = task.clone();
         let add_data_channel = move |channel: Reference| {
             RTCDataChannel::new(channel, sender.clone(), add_task.clone());
@@ -168,32 +162,32 @@ impl RTCNegotiation {
         let outgoing_task = Arc::new(AtomicTask::new());
         let outgoing_task_cloned = outgoing_task.clone();
         let outgoing_sender_cloned = outgoing_sender.clone();
-        let send_offer = move |sdp: String| {
-            outgoing_sender_cloned
-                .send(NegotiationItem::SessionDescription(
-                    SessionDescriptionType::Offer,
-                    sdp,
-                ))
-                .expect("could not send offer");
-            outgoing_task_cloned.notify();
-        };
-        match role {
-            Role::Offering => {
-                js! {
-                    let connection = @{&connection};
-                    connection.createOffer().catch((error) => {
+        let n_connection = connection.clone();
+        let negotiate = move || {
+            let outgoing_task_cloned = outgoing_task_cloned.clone();
+            let outgoing_sender_cloned = outgoing_sender_cloned.clone();
+            let send_offer = move |sdp: String| {
+                outgoing_sender_cloned
+                    .send(NegotiationItem::SessionDescription(
+                        SessionDescriptionType::Offer,
+                        sdp,
+                    ))
+                    .expect("could not send offer");
+                outgoing_task_cloned.notify();
+            };
+            js! {
+                let connection = @{n_connection.clone()};
+                connection.createOffer().catch((error) => {
+                    console.log(error);
+                }).then((offer) => {
+                    connection.setLocalDescription(offer).catch((error) => {
                         console.log(error);
-                    }).then((offer) => {
-                        connection.setLocalDescription(offer).catch((error) => {
-                            console.log(error);
-                        }).then(() => {
-                            @{send_offer}(offer.sdp);
-                        });
+                    }).then(() => {
+                        @{send_offer}(offer.sdp);
                     });
-                };
-            }
-            Role::Answering => {}
-        }
+                });
+            };
+        };
         let ice_sender = outgoing_sender.clone();
         let ice_task = outgoing_task.clone();
         let send_candidate = move |candidate: String, ufrag: String| {
@@ -223,6 +217,9 @@ impl RTCNegotiation {
                 };
                 @{send_candidate}(e.candidate.candidate, e.candidate.usernameFragment);
             };
+            @{&connection}.onnegotiationneeded = () => {
+                @{negotiate}();
+            };
         }
         RTCNegotiation {
             outgoing: outgoing_receiver,
@@ -231,6 +228,7 @@ impl RTCNegotiation {
             connection,
         }
     }
+    fn create_offer(&mut self) {}
     fn handle_incoming(&mut self, incoming: NegotiationItem) {
         match incoming {
             NegotiationItem::SessionDescription(ty, sdp) => {
@@ -307,9 +305,6 @@ impl RTCNegotiation {
 pub(crate) fn new(role: Role) -> (Box<dyn Peer>, Box<dyn Negotiation>) {
     let connection: Reference = js! {
         let connection = new RTCPeerConnection();
-        connection.onnegotiationneeded = () => {
-            console.log("neg");
-        };
         return connection;
     }
     .into_reference()
