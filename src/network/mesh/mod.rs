@@ -46,7 +46,9 @@ pub trait Peer: Stream<Item = Channel, Error = Error> + Send {
 }
 
 impl dyn Peer {
-    pub fn new() -> (Box<dyn Peer>, Box<dyn Negotiation>) {
+    pub fn new(
+    ) -> impl Future<Item = (Box<dyn Peer + 'static>, Box<dyn Negotiation + 'static>), Error = Error>
+                 + Send {
         #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
         return targets::web::network::mesh::new();
         #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]

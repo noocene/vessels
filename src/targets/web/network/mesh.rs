@@ -8,7 +8,7 @@ use crate::network::{
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use futures::{
-    future::err, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream,
+    future::err, lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream,
 };
 use std::sync::Arc;
 use stdweb::Reference;
@@ -302,15 +302,17 @@ impl RTCNegotiation {
     }
 }
 
-pub(crate) fn new() -> (Box<dyn Peer>, Box<dyn Negotiation>) {
-    let connection: Reference = js! {
-        let connection = new RTCPeerConnection();
-        return connection;
-    }
-    .into_reference()
-    .unwrap();
-    (
-        Box::new(RTCPeer::new(connection.clone())),
-        Box::new(RTCNegotiation::new(connection)),
-    )
+pub(crate) fn new(
+) -> impl Future<Item = (Box<dyn Peer + 'static>, Box<dyn Negotiation + 'static>), Error = Error> {
+    lazy(move || {
+        let connection: Reference = js! {
+            let connection = new RTCPeerConnection();
+            return connection;
+        }
+        .into_reference()
+        .unwrap();
+        let peer: Box<dyn Peer> = Box::new(RTCPeer::new(connection.clone()));
+        let negotiation: Box<dyn Negotiation> = Box::new(RTCNegotiation::new(connection));
+        Ok((peer, negotiation))
+    })
 }
