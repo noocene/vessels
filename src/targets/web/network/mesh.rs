@@ -13,6 +13,7 @@ use futures::{
 use std::sync::Arc;
 use stdweb::Reference;
 
+#[derive(Clone)]
 struct RTCDataChannel {
     channel: Reference,
 }
@@ -41,8 +42,17 @@ impl Sink for RTCDataChannel {
 }
 
 impl RTCDataChannel {
-    fn new(channel: Reference) -> RTCDataChannel {
-        RTCDataChannel { channel }
+    fn new(channel: Reference, sender: Sender<Channel>, add_task: Arc<AtomicTask>) {
+        let data_channel = RTCDataChannel { channel: channel.clone() };
+        let on_open = move || {
+            sender.send(Channel::DataChannel(Box::new(data_channel.clone())));
+            add_task.notify();
+        };
+        js! {
+            @{&channel}.onopen = () => {
+                @{on_open}();
+            };
+        };
     }
 }
 
@@ -95,9 +105,7 @@ impl RTCPeer {
         }
         let add_task = task.clone();
         let add_data_channel = move |channel: Reference| {
-            let channel = Channel::DataChannel(Box::new(RTCDataChannel::new(channel)));
-            sender.send(channel);
-            add_task.notify();
+            RTCDataChannel::new(channel, sender.clone(), add_task.clone());
         };
         js! {
             @{&connection}.ondatachannel = (e) => {
