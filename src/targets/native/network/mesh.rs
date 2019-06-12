@@ -1,7 +1,10 @@
 use crate::{
     errors::Error,
     network::{
-        mesh::{Channel, Negotiation, NegotiationItem, Peer, SessionDescriptionType},
+        mesh::{
+            Channel, ConnectivityEstablishmentCandidate, Negotiation, NegotiationItem, Peer,
+            SessionDescriptionType,
+        },
         DataChannel,
     },
 };
@@ -14,12 +17,16 @@ use gstreamer::{
     Element, ElementExt, ElementExtManual, ElementFactory, GObjectExtManualGst, GstBinExt,
     Pipeline, Promise, State, Structure,
 };
-use gstreamer_webrtc::WebRTCSessionDescription;
+
+use gstreamer_sdp::SDPMessage;
+use gstreamer_webrtc::{WebRTCSDPType, WebRTCSessionDescription};
+
 use std::sync::Arc;
 
 struct RTCNegotiation {
     outgoing: Receiver<NegotiationItem>,
     task: Arc<AtomicTask>,
+    webrtc: Element,
 }
 
 impl RTCNegotiation {
@@ -32,20 +39,22 @@ impl RTCNegotiation {
                 let task = c_task.clone();
                 let webrtc = values[0].get::<Element>().unwrap();
                 let sender = sender.clone();
+                let set_desc_rtc = webrtc.clone();
                 let promise = Promise::new_with_change_func(move |promise| {
+                    let offer = promise
+                        .get_reply()
+                        .unwrap()
+                        .get_value("offer")
+                        .unwrap()
+                        .get::<WebRTCSessionDescription>()
+                        .unwrap();
+                    set_desc_rtc
+                        .emit("set-local-description", &[&offer, &None::<Promise>])
+                        .unwrap();
                     sender
                         .send(NegotiationItem::SessionDescription(
                             SessionDescriptionType::Offer,
-                            promise
-                                .get_reply()
-                                .unwrap()
-                                .get_value("offer")
-                                .unwrap()
-                                .get::<WebRTCSessionDescription>()
-                                .unwrap()
-                                .get_sdp()
-                                .as_text()
-                                .unwrap(),
+                            offer.get_sdp().as_text().unwrap(),
                         ))
                         .unwrap();
                     task.notify();
@@ -62,7 +71,56 @@ impl RTCNegotiation {
                 None
             })
             .unwrap();
-        RTCNegotiation { outgoing, task }
+        RTCNegotiation {
+            outgoing,
+            task,
+            webrtc,
+        }
+    }
+    fn handle_session_description(&mut self, ty: SessionDescriptionType, sdp: String) {
+        let gst_sdp = SDPMessage::parse_buffer(sdp.as_bytes()).unwrap();
+        let rtc_sdp = WebRTCSessionDescription::new(
+            match ty {
+                SessionDescriptionType::Answer => WebRTCSDPType::Answer,
+                SessionDescriptionType::Offer => WebRTCSDPType::Offer,
+                SessionDescriptionType::Rollback => panic!("rollback not handled"),
+            },
+            gst_sdp,
+        );
+        let webrtc = self.webrtc.clone();
+        let promise = Promise::new_with_change_func(move |_| {
+            if let SessionDescriptionType::Offer = ty {
+                let promise = Promise::new_with_change_func(move |promise| {
+                    let offer = promise.get_reply();
+                    let offer = offer.unwrap();
+                    let offer = offer.get_value("answer").unwrap();
+                    let offer = offer.get::<WebRTCSessionDescription>().unwrap();
+                    println!("{}", offer.get_sdp().as_text().unwrap());
+                });
+                webrtc
+                    .emit("create-answer", &[&None::<Structure>, &Some(promise)])
+                    .unwrap();
+            };
+        });
+        self.webrtc
+            .emit("set-remote-description", &[&rtc_sdp, &promise])
+            .unwrap();
+    }
+    fn handle_connectivity_establishment_candidate(
+        &mut self,
+        candidate: Option<ConnectivityEstablishmentCandidate>,
+    ) {
+    }
+    fn handle_incoming(&mut self, incoming: NegotiationItem) {
+        println!("incoming: {:?}", incoming);
+        match incoming {
+            NegotiationItem::SessionDescription(ty, sdp) => {
+                self.handle_session_description(ty, sdp);
+            }
+            NegotiationItem::ConnectivityEstablishmentCandidate(candidate) => {
+                self.handle_connectivity_establishment_candidate(candidate)
+            }
+        };
     }
 }
 
@@ -73,6 +131,7 @@ impl Sink for RTCNegotiation {
     type SinkError = Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        self.handle_incoming(item);
         Ok(AsyncSink::Ready)
     }
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {

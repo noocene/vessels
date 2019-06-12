@@ -1,13 +1,23 @@
-use futures::{Future, Stream};
+use futures::{Future, Sink, Stream};
 use vitruvia::{executor::run, network::mesh::Peer};
 
 fn main() {
     run(Peer::new()
-        .and_then(|(peer, negotiation)| {
-            negotiation.for_each(|item| {
-                println!("{:?}", item);
-                Ok(())
-            })
+        .join(Peer::new())
+        .map_err(|err| {
+            eprintln!("{:?}", err);
+            ()
         })
-        .map_err(|_| ()));
+        .and_then(|((peer, negotiation), (peer0, negotiation0))| {
+            let (i, o) = negotiation.split();
+            let (i0, o0) = negotiation0.split();
+
+            o.forward(i0)
+                .join(o0.forward(i))
+                .map_err(|err| {
+                    eprintln!("{:?}", err);
+                    ()
+                })
+                .and_then(|(_, _)| Ok(()))
+        }));
 }
