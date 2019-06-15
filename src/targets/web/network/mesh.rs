@@ -7,8 +7,30 @@ use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use futures::{
     future::err, lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream,
 };
-use std::sync::Arc;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use stdweb::Reference;
+
+struct RTCDataChannelOpening {
+    channel: Option<RTCDataChannel>,
+    open: Arc<AtomicBool>,
+    open_task: Arc<AtomicTask>,
+}
+
+impl Future for RTCDataChannelOpening {
+    type Item = Box<dyn DataChannel>;
+    type Error = Error;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        if !self.open.load(Ordering::SeqCst) {
+            self.open_task.register();
+            Ok(Async::NotReady)
+        } else {
+            let mut channel = None;
+            std::mem::swap(&mut self.channel, &mut channel);
+            Ok(Async::Ready(Box::new(channel.unwrap())))
+        }
+    }
+}
 
 #[derive(Clone)]
 struct RTCDataChannel {
@@ -44,7 +66,7 @@ impl RTCDataChannel {
             channel: channel.clone(),
         };
         let on_open = move || {
-            sender.send(Channel::DataChannel(Box::new(data_channel.clone())));
+            sender.send(Channel::DataChannel(Box::new(data_channel.clone()))).unwrap();
             add_task.notify();
         };
         js! {
@@ -52,6 +74,28 @@ impl RTCDataChannel {
                 @{on_open}();
             };
         };
+    }
+    fn new_local(channel: Reference) -> RTCDataChannelOpening {
+        let open_task = Arc::new(AtomicTask::new());
+        let open = Arc::new(AtomicBool::new(false));
+        let task = open_task.clone();
+        let open_cloned = open.clone();
+        let channel_ready = move || {
+            open_cloned.store(true, Ordering::SeqCst);
+            task.notify();
+        };
+        js! {
+            @{&channel}.onopen = () => {
+                @{channel_ready}();
+            };
+        };
+        RTCDataChannelOpening {
+            channel: Some(RTCDataChannel {
+                channel
+            }),
+            open,
+            open_task,
+        }
     }
 }
 
@@ -62,11 +106,11 @@ struct RTCPeer {
 }
 
 impl Peer for RTCPeer {
-    fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error>> {
-        js! {
-            @{&self.connection}.createDataChannel("test");
-        };
-        Box::new(err(Error::connection_failed()))
+    fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error> + Send> {
+        let channel = js! {
+            return @{&self.connection}.createDataChannel("test");
+        }.into_reference().unwrap();
+        Box::new(RTCDataChannel::new_local(channel))
     }
 }
 
@@ -236,7 +280,12 @@ impl RTCNegotiation {
     fn handle_connectivity_establishment_candidate(&mut self, candidate: Option<String>) {
         match &candidate {
             Some(candidate) => js! {
-                @{&self.connection}.addIceCandidate(@{candidate});
+                @{&self.connection}.addIceCandidate({
+                    candidate: @{&candidate},
+                    sdpMid: "0",
+                    sdpMLineIndex: 0,
+                    usernameFragment: "",
+                });
             },
             None => js! {
                 //@{&self.connection}.addIceCandidate(null);
