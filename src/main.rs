@@ -12,12 +12,18 @@ fn main() {
             let (i, o) = negotiation.split();
             let (i0, o0) = negotiation0.split();
 
-            o.forward(i0)
-                .join(o0.forward(i))
-                .map_err(|err| {
-                    eprintln!("{:?}", err);
-                    ()
-                })
-                .and_then(|(_, _)| Ok(()))
+            let mut peer0 = peer0;
+            //peer0.data_channel();
+
+            peer.for_each(|channel| {
+                println!("channel opened");
+                Ok(())
+            })
+            .join(o.forward(i0).join(o0.forward(i)))
+            .map_err(|err| {
+                eprintln!("{:?}", err);
+                ()
+            })
+            .and_then(|(_, _)| Ok(()))
         }));
 }

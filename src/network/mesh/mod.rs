@@ -18,18 +18,10 @@ pub enum SessionDescriptionType {
     Rollback,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ConnectivityEstablishmentCandidate {
-    pub candidate: String,
-    pub username_fragment: String,
-    pub media_id: String,
-    pub media_line_index: u32,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NegotiationItem {
     SessionDescription(SessionDescriptionType, String),
-    ConnectivityEstablishmentCandidate(Option<ConnectivityEstablishmentCandidate>),
+    ConnectivityEstablishmentCandidate(Option<String>),
 }
 
 pub trait Negotiation:

@@ -1,9 +1,6 @@
 use crate::errors::Error;
 use crate::network::{
-    mesh::{
-        Channel, ConnectivityEstablishmentCandidate, Negotiation, NegotiationItem, Peer,
-        SessionDescriptionType,
-    },
+    mesh::{Channel, Negotiation, NegotiationItem, Peer, SessionDescriptionType},
     DataChannel,
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
@@ -190,15 +187,10 @@ impl RTCNegotiation {
         };
         let ice_sender = outgoing_sender.clone();
         let ice_task = outgoing_task.clone();
-        let send_candidate = move |candidate: String, ufrag: String| {
+        let send_candidate = move |candidate: String, _ufrag: String| {
             ice_sender
                 .send(NegotiationItem::ConnectivityEstablishmentCandidate(Some(
-                    ConnectivityEstablishmentCandidate {
-                        candidate,
-                        username_fragment: ufrag,
-                        media_id: "0".to_owned(),
-                        media_line_index: 0,
-                    },
+                    candidate,
                 )))
                 .expect("could not send candidate");
             ice_task.notify();
@@ -239,18 +231,10 @@ impl RTCNegotiation {
             }
         };
     }
-    fn handle_connectivity_establishment_candidate(
-        &mut self,
-        candidate: Option<ConnectivityEstablishmentCandidate>,
-    ) {
+    fn handle_connectivity_establishment_candidate(&mut self, candidate: Option<String>) {
         match &candidate {
             Some(candidate) => js! {
-                @{&self.connection}.addIceCandidate({
-                    candidate: @{&candidate.candidate},
-                    sdpMid: @{&candidate.media_id},
-                    sdpMLineIndex: @{&candidate.media_line_index},
-                    usernameFragment: @{&candidate.username_fragment}
-                });
+                @{&self.connection}.addIceCandidate(@{candidate});
             },
             None => js! {
                 //@{&self.connection}.addIceCandidate(null);
