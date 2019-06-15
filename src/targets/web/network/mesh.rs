@@ -240,7 +240,6 @@ impl RTCNegotiation {
                 //@{&self.connection}.addIceCandidate(null);
             },
         };
-        console!(log, format!("{:?}", candidate));
     }
     fn handle_session_description(&mut self, ty: SessionDescriptionType, sdp: String) {
         let outgoing_task = self.outgoing_task.clone();
