@@ -20,6 +20,7 @@ use gstreamer_webrtc::{WebRTCSDPType, WebRTCSessionDescription};
 
 use std::sync::Arc;
 
+#[derive(Clone)]
 struct RTCNegotiation {
     outgoing: Receiver<NegotiationItem>,
     outgoing_sender: Sender<NegotiationItem>,
@@ -31,39 +32,6 @@ impl RTCNegotiation {
     fn new(webrtc: Element) -> RTCNegotiation {
         let (sender, outgoing) = unbounded();
         let task = Arc::new(AtomicTask::new());
-        let c_task = task.clone();
-        let negotiation_sender = sender.clone();
-        webrtc
-            .connect("on-negotiation-needed", false, move |values| {
-                let task = c_task.clone();
-                let webrtc = values[0].get::<Element>().unwrap();
-                let sender = negotiation_sender.clone();
-                let set_desc_rtc = webrtc.clone();
-                let promise = Promise::new_with_change_func(move |promise| {
-                    let offer = promise
-                        .get_reply()
-                        .unwrap()
-                        .get_value("offer")
-                        .unwrap()
-                        .get::<WebRTCSessionDescription>()
-                        .unwrap();
-                    set_desc_rtc
-                        .emit("set-local-description", &[&offer, &None::<Promise>])
-                        .unwrap();
-                    sender
-                        .send(NegotiationItem::SessionDescription(
-                            SessionDescriptionType::Offer,
-                            offer.get_sdp().as_text().unwrap(),
-                        ))
-                        .unwrap();
-                    task.notify();
-                });
-                webrtc
-                    .emit("create-offer", &[&None::<Structure>, &Some(promise)])
-                    .unwrap();
-                None
-            })
-            .unwrap();
         let ice_task = task.clone();
         let ice_sender = sender.clone();
         webrtc
@@ -84,6 +52,33 @@ impl RTCNegotiation {
             webrtc,
             outgoing_sender: sender,
         }
+    }
+    fn negotiate(&mut self) {
+        let webrtc = self.webrtc.clone();
+        let sender = self.outgoing_sender.clone();
+        let task = self.task.clone();
+        let promise = Promise::new_with_change_func(move |promise| {
+            let offer = promise
+                .get_reply()
+                .unwrap()
+                .get_value("offer")
+                .unwrap()
+                .get::<WebRTCSessionDescription>()
+                .unwrap();
+            webrtc
+                .emit("set-local-description", &[&offer, &None::<Promise>])
+                .unwrap();
+            sender
+                .send(NegotiationItem::SessionDescription(
+                    SessionDescriptionType::Offer,
+                    offer.get_sdp().as_text().unwrap(),
+                ))
+                .unwrap();
+            task.notify();
+        });
+        self.webrtc
+            .emit("create-offer", &[&None::<Structure>, &Some(promise)])
+            .unwrap();
     }
     fn handle_session_description(&mut self, ty: SessionDescriptionType, sdp: String) {
         let gst_sdp = SDPMessage::parse_buffer(sdp.as_bytes()).unwrap();
@@ -236,12 +231,13 @@ impl Stream for RTCDataChannel {
 
 struct RTCPeer {
     webrtc: Element,
+    negotiation: RTCNegotiation,
     receiver: Receiver<Channel>,
     task: Arc<AtomicTask>,
 }
 
 impl RTCPeer {
-    fn new(webrtc: Element) -> RTCPeer {
+    fn new(webrtc: Element, negotiation: RTCNegotiation) -> RTCPeer {
         let (sender, receiver) = unbounded();
         let task = Arc::new(AtomicTask::new());
         let task_cloned = task.clone();
@@ -256,12 +252,15 @@ impl RTCPeer {
             webrtc,
             receiver,
             task,
+            negotiation
         }
     }
 }
 
 impl Peer for RTCPeer {
     fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error>> {
+        self.webrtc.emit("create-data-channel", &[&("test".to_owned()), &None::<Structure>]).unwrap();
+        self.negotiation.negotiate();
         Box::new(err(Error::connection_failed()))
     }
 }
@@ -316,8 +315,9 @@ pub(crate) fn new(
         let webrtc = ElementFactory::make("webrtcbin", "sendrecv").unwrap();
         webrtc.set_property_from_str("bundle-policy", "max-bundle");
         pipeline.add(&webrtc).unwrap();
-        let peer: Box<dyn Peer> = Box::new(RTCPeer::new(webrtc.clone()));
-        let negotiation: Box<dyn Negotiation> = Box::new(RTCNegotiation::new(webrtc));
+        let negotiation = RTCNegotiation::new(webrtc.clone());
+        let peer: Box<dyn Peer> = Box::new(RTCPeer::new(webrtc, negotiation.clone()));
+        let negotiation: Box<dyn Negotiation> = Box::new(negotiation);
         pipeline.set_state(State::Playing).unwrap();
         tokio::spawn(lazy(move || {
             main_loop.run();

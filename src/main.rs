@@ -13,7 +13,7 @@ fn main() {
             let (i0, o0) = negotiation0.split();
 
             let mut peer0 = peer0;
-            //peer0.data_channel();
+            peer0.data_channel();
 
             peer.for_each(|channel| {
                 println!("channel opened");
