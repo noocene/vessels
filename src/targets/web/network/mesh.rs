@@ -198,7 +198,7 @@ impl RTCNegotiation {
         let ice_termination_sender = outgoing_sender.clone();
         let ice_termination_task = outgoing_task.clone();
         let send_candidate_termination = move || {
-            ice_termination_sender.send(NegotiationItem::ConnectivityEstablishmentCandidate(None));
+            ice_termination_sender.send(NegotiationItem::ConnectivityEstablishmentCandidate(None)).unwrap();
             ice_termination_task.notify();
         };
         js! {
