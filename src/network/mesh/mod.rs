@@ -34,7 +34,9 @@ pub trait Negotiation:
 /// The remote end of a peer-to-peer network connection.
 pub trait Peer: Stream<Item = Channel, Error = Error> + Send {
     /// Creates a new data channel.
-    fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error>>;
+    fn data_channel(
+        &mut self,
+    ) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error> + Send>;
 }
 
 impl dyn Peer {

@@ -18,7 +18,10 @@ use gstreamer::{
 use gstreamer_sdp::SDPMessage;
 use gstreamer_webrtc::{WebRTCSDPType, WebRTCSessionDescription};
 
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 #[derive(Clone)]
 struct RTCNegotiation {
@@ -189,7 +192,50 @@ struct RTCDataChannel {
     channel: WebRTCDataChannel,
 }
 
+struct RTCDataChannelOpening {
+    channel: Option<RTCDataChannel>,
+    open: Arc<AtomicBool>,
+    open_task: Arc<AtomicTask>,
+}
+
+impl Future for RTCDataChannelOpening {
+    type Item = Box<dyn DataChannel>;
+    type Error = Error;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        if !self.open.load(Ordering::SeqCst) {
+            self.open_task.register();
+            Ok(Async::NotReady)
+        } else {
+            let mut channel = None;
+            std::mem::swap(&mut self.channel, &mut channel);
+            Ok(Async::Ready(Box::new(channel.unwrap())))
+        }
+    }
+}
+
 impl RTCDataChannel {
+    fn local_create(channel: Object) -> RTCDataChannelOpening {
+        let task = Arc::new(AtomicTask::new());
+        let open = Arc::new(AtomicBool::new(false));
+        let open_cloned = open.clone();
+        let task_cloned = task.clone();
+        channel
+            .connect("on-open", false, move |values| {
+                open_cloned.store(true, Ordering::SeqCst);
+                task_cloned.notify();
+                None
+            })
+            .unwrap();
+        let data_channel = RTCDataChannel {
+            channel: WebRTCDataChannel(channel),
+        };
+        RTCDataChannelOpening {
+            open,
+            channel: Some(data_channel),
+            open_task: task,
+        }
+    }
     fn create(channel: Object, sender: Sender<Channel>, task: Arc<AtomicTask>) {
         let data_channel = RTCDataChannel {
             channel: WebRTCDataChannel(channel.clone()),
@@ -252,16 +298,29 @@ impl RTCPeer {
             webrtc,
             receiver,
             task,
-            negotiation
+            negotiation,
         }
     }
 }
 
 impl Peer for RTCPeer {
-    fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error>> {
-        self.webrtc.emit("create-data-channel", &[&("test".to_owned()), &None::<Structure>]).unwrap();
-        self.negotiation.negotiate();
-        Box::new(err(Error::connection_failed()))
+    fn data_channel(
+        &mut self,
+    ) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error> + Send> {
+        let webrtc = self.webrtc.clone();
+        let mut negotiation = self.negotiation.clone();
+        Box::new(lazy(move || {
+            let channel = webrtc
+                .emit(
+                    "create-data-channel",
+                    &[&("test".to_owned()), &None::<Structure>],
+                )
+                .unwrap()
+                .unwrap();
+            let channel = channel.get::<Object>().unwrap();
+            negotiation.negotiate();
+            Box::new(RTCDataChannel::local_create(channel))
+        }))
     }
 }
 
