@@ -7,8 +7,11 @@ use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use futures::{
     future::err, lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream,
 };
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-use stdweb::{Reference, web::ArrayBuffer};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use stdweb::{web::ArrayBuffer, Reference};
 
 struct RTCDataChannelOpening {
     channel: Option<RTCDataChannel>,
@@ -94,13 +97,15 @@ impl RTCDataChannel {
         RTCDataChannel {
             channel,
             data,
-            task
+            task,
         }
     }
     fn new(channel: Reference, sender: Sender<Channel>, add_task: Arc<AtomicTask>) {
         let data_channel = RTCDataChannel::make_channel(channel.clone());
         let on_open = move || {
-            sender.send(Channel::DataChannel(Box::new(data_channel.clone()))).unwrap();
+            sender
+                .send(Channel::DataChannel(Box::new(data_channel.clone())))
+                .unwrap();
             add_task.notify();
         };
         js! {
@@ -138,10 +143,14 @@ struct RTCPeer {
 }
 
 impl Peer for RTCPeer {
-    fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error> + Send> {
+    fn data_channel(
+        &mut self,
+    ) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error> + Send> {
         let channel = js! {
             return @{&self.connection}.createDataChannel("test");
-        }.into_reference().unwrap();
+        }
+        .into_reference()
+        .unwrap();
         Box::new(RTCDataChannel::new_local(channel))
     }
 }
