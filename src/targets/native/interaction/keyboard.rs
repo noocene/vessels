@@ -483,9 +483,7 @@ impl Keyboard {
             let mut state = c_state.state.write().unwrap();
             if let glutin::Event::WindowEvent { event, .. } = event {
                 if let glutin::WindowEvent::KeyboardInput { input, .. } = event {
-                    println!("{}", input.scancode);
                     let key = parse_code(input.scancode);
-                    println!("{:?}", key);
                     match input.state {
                         glutin::ElementState::Pressed => state.keys.insert(key, true),
                         glutin::ElementState::Released => state.keys.insert(key, false),
