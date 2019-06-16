@@ -8,7 +8,7 @@ use futures::{
     future::err, lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream,
 };
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-use stdweb::Reference;
+use stdweb::{Reference, web::ArrayBuffer};
 
 struct RTCDataChannelOpening {
     channel: Option<RTCDataChannel>,
@@ -35,6 +35,8 @@ impl Future for RTCDataChannelOpening {
 #[derive(Clone)]
 struct RTCDataChannel {
     channel: Reference,
+    data: Receiver<Vec<u8>>,
+    task: Arc<AtomicTask>,
 }
 
 impl DataChannel for RTCDataChannel {}
@@ -44,7 +46,18 @@ impl Stream for RTCDataChannel {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        Ok(Async::NotReady)
+        match self.data.try_recv() {
+            Ok(message) => Ok(Async::Ready(Some(message))),
+            Err(err) => match err {
+                TryRecvError::Disconnected => {
+                    panic!("channel disconnected in channel stream");
+                }
+                TryRecvError::Empty => {
+                    self.task.register();
+                    Ok(Async::NotReady)
+                }
+            },
+        }
     }
 }
 
@@ -53,6 +66,9 @@ impl Sink for RTCDataChannel {
     type SinkError = Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        js! {
+            @{&self.channel}.send(new Uint8Array(@{item}));
+        };
         Ok(AsyncSink::Ready)
     }
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
@@ -61,10 +77,28 @@ impl Sink for RTCDataChannel {
 }
 
 impl RTCDataChannel {
-    fn new(channel: Reference, sender: Sender<Channel>, add_task: Arc<AtomicTask>) {
-        let data_channel = RTCDataChannel {
-            channel: channel.clone(),
+    fn make_channel(channel: Reference) -> RTCDataChannel {
+        let (sender, data) = unbounded();
+        let task = Arc::new(AtomicTask::new());
+        let task_cloned = task.clone();
+        let handle_message = move |data: ArrayBuffer| {
+            let data = Vec::<u8>::from(data);
+            sender.send(data).unwrap();
+            task_cloned.notify();
         };
+        js! {
+            @{&channel}.onmessage = (message) => {
+                @{handle_message}(message.data);
+            };
+        }
+        RTCDataChannel {
+            channel,
+            data,
+            task
+        }
+    }
+    fn new(channel: Reference, sender: Sender<Channel>, add_task: Arc<AtomicTask>) {
+        let data_channel = RTCDataChannel::make_channel(channel.clone());
         let on_open = move || {
             sender.send(Channel::DataChannel(Box::new(data_channel.clone()))).unwrap();
             add_task.notify();
@@ -90,9 +124,7 @@ impl RTCDataChannel {
             };
         };
         RTCDataChannelOpening {
-            channel: Some(RTCDataChannel {
-                channel
-            }),
+            channel: Some(RTCDataChannel::make_channel(channel)),
             open,
             open_task,
         }
