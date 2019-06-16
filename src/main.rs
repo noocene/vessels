@@ -4,9 +4,6 @@ use vitruvia::{
     network::mesh::{Channel, Peer},
 };
 
-#[macro_use]
-extern crate stdweb;
-
 fn main() {
     executor::run(
         Peer::new()
@@ -43,7 +40,7 @@ fn main() {
                     executor::spawn(
                         channel
                             .for_each(|message| {
-                                console!(log, format!("got message: {:?}", message));
+                                println!("got message: {:?}", message);
                                 Ok(())
                             })
                             .map_err(|err| {
