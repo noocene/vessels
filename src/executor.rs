@@ -60,3 +60,27 @@ where
         notify_handle.notify(0);
     };
 }
+
+/// Spawns the provided future on the currently running executor.
+pub fn spawn<F>(future: F)
+where
+    F: Future<Item = (), Error = ()> + Send + 'static,
+{
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    tokio::spawn(future);
+    #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
+    {
+        use futures::executor::{spawn, NotifyHandle};
+        use std::sync::{Arc, Mutex};
+
+        use web_executor::Notifier;
+        let task = spawn(future);
+        let notifier = Arc::new(Notifier {
+            handle: Mutex::new(None),
+            task: Arc::new(Mutex::new(task)),
+        });
+        let notify_handle = NotifyHandle::from(notifier.clone());
+        *notifier.handle.lock().unwrap() = Some(notify_handle.clone());
+        notify_handle.notify(0);
+    };
+}

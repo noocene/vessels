@@ -4,28 +4,33 @@ edition = "2018"
 name = "vitruvia"
 version = "0.1.0"
 
+[workspace]
+members = [".", "vitruvia_derive"]
+
 [dependencies]
 failure = "0.1.5"
 crossbeam-channel = "0.3.8"
 futures = "0.1.27"
 
+[dependencies.vitruvia_derive]
+version = "0.1.0"
+path = "./vitruvia_derive"
+
+[dependencies.serde]
+version = "1.0.84"
+features = ["derive"]
+
 [target.wasm32-unknown-unknown.dependencies]
 stdweb = "0.4.13"
-serde_derive = "1.0.84"
 stdweb-derive = "0.5.1"
-serde = "1.0.84"
 itertools = "0.8.0"
 
 [target.asmjs-unknown-emscripten.dependencies]
-serde = "1.0.84"
-serde_derive = "1.0.84"
 stdweb = "0.4.13"
 stdweb-derive = "0.5.1"
 itertools = "0.8.0"
 
 [target.wasm32-unknown-emscripten.dependencies]
-serde = "1.0.84"
-serde_derive = "1.0.84"
 stdweb = "0.4.13"
 stdweb-derive = "0.5.1"
 itertools = "0.8.0"
@@ -40,18 +45,12 @@ libc = "0.2.54"
 pangocairo = "0.7.0"
 cairo-sys-rs = "0.8.0"
 pango = "0.6.0"
-itertools = "0.8.0"
 ws = "0.8.1"
+gstreamer-webrtc = "0.13.0"
+gstreamer-sdp = "0.13.0"
+gstreamer = "0.13.0"
 tokio = "0.1.21"
 
 [profile.release]
 lto = true
 debug = false
-
-[[bin]]
-name = "server"
-path = "src/main.rs"
-
-[[bin]]
-name = "client"
-path = "src/client.rs"
