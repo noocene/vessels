@@ -6,10 +6,8 @@ use crate::{
     },
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
-use futures::{
-    future::err, lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream,
-};
-use glib::{Object, ObjectExt};
+use futures::{lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream};
+use glib::{Bytes, Object, ObjectExt};
 use gstreamer::{
     message::MessageView, Element, ElementExt, ElementExtManual, ElementFactory,
     GObjectExtManualGst, GstBinExt, Pipeline, Promise, Registry, State, Structure,
@@ -18,9 +16,12 @@ use gstreamer::{
 use gstreamer_sdp::SDPMessage;
 use gstreamer_webrtc::{WebRTCSDPType, WebRTCSessionDescription};
 
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::{
+    ops::{Deref, DerefMut},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 #[derive(Clone)]
@@ -184,12 +185,28 @@ impl Stream for RTCNegotiation {
 #[derive(Clone)]
 struct WebRTCDataChannel(Object);
 
+impl Deref for WebRTCDataChannel {
+    type Target = Object;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for WebRTCDataChannel {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 unsafe impl Send for WebRTCDataChannel {}
 unsafe impl Sync for WebRTCDataChannel {}
 
 #[derive(Clone)]
 struct RTCDataChannel {
     channel: WebRTCDataChannel,
+    incoming_messages: Receiver<Vec<u8>>,
+    incoming_messages_task: Arc<AtomicTask>,
 }
 
 struct RTCDataChannelOpening {
@@ -215,6 +232,25 @@ impl Future for RTCDataChannelOpening {
 }
 
 impl RTCDataChannel {
+    fn make_channel(channel: Object) -> RTCDataChannel {
+        let (sender, incoming_messages) = unbounded();
+        let incoming_messages_task = Arc::new(AtomicTask::new());
+        let task = incoming_messages_task.clone();
+        channel
+            .connect("on-message-data", false, move |values| {
+                let data = &(*(values[1].get::<Bytes>().unwrap()));
+                sender.send(data.to_vec()).unwrap();
+                task.notify();
+                None
+            })
+            .unwrap();
+        let data_channel = RTCDataChannel {
+            channel: WebRTCDataChannel(channel),
+            incoming_messages,
+            incoming_messages_task,
+        };
+        data_channel
+    }
     fn local_create(channel: Object) -> RTCDataChannelOpening {
         let task = Arc::new(AtomicTask::new());
         let open = Arc::new(AtomicBool::new(false));
@@ -227,9 +263,7 @@ impl RTCDataChannel {
                 None
             })
             .unwrap();
-        let data_channel = RTCDataChannel {
-            channel: WebRTCDataChannel(channel),
-        };
+        let data_channel = RTCDataChannel::make_channel(channel);
         RTCDataChannelOpening {
             open,
             channel: Some(data_channel),
@@ -237,9 +271,7 @@ impl RTCDataChannel {
         }
     }
     fn create(channel: Object, sender: Sender<Channel>, task: Arc<AtomicTask>) {
-        let data_channel = RTCDataChannel {
-            channel: WebRTCDataChannel(channel.clone()),
-        };
+        let data_channel = RTCDataChannel::make_channel(channel.clone());
         channel
             .connect("on-open", false, move |values| {
                 sender
@@ -259,6 +291,9 @@ impl Sink for RTCDataChannel {
     type SinkError = Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        self.channel
+            .emit("send-data", &[&Bytes::from(&item)])
+            .unwrap();
         Ok(AsyncSink::Ready)
     }
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
@@ -271,7 +306,18 @@ impl Stream for RTCDataChannel {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        Ok(Async::Ready(None))
+        match self.incoming_messages.try_recv() {
+            Ok(message) => Ok(Async::Ready(Some(message))),
+            Err(err) => match err {
+                TryRecvError::Disconnected => {
+                    panic!("channel disconnected in incoming messages stream");
+                }
+                TryRecvError::Empty => {
+                    self.incoming_messages_task.register();
+                    Ok(Async::NotReady)
+                }
+            },
+        }
     }
 }
 
