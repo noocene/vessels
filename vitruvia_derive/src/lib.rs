@@ -494,6 +494,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #mod_ident::remote()
             }
         }
+        #[allow(unused_imports)]
         use #mod_ident::ProtocolExt as #use_hygiene;
     }
     .into();
