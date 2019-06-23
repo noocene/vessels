@@ -478,6 +478,12 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
         procedures.push(procedure);
     }
+    if procedures.len() == 0 {
+        return TokenStream::from(quote_spanned! {
+            input.span() =>
+            compile_error!("`protocol` with no methods is invalid");
+        });
+    }
     let ident = &input.ident;
     let mod_ident = Ident::new(&format!("_{}_protocol", ident), input.ident.span());
     let use_hygiene = Ident::new(&format!("{}ProtocolExt", ident), input.ident.span());
