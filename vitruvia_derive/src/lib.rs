@@ -65,18 +65,24 @@ fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
                 &self,
             });
         }
-        for (index, ty) in method.arg_types.iter().enumerate() {
-            let ident = Ident::new(&format!("_{}", index), Span::call_site());
-            arg_stream.extend(quote! {
-                #ident: #ty,
-            });
-            arg_names_stream.extend(quote! {
-                #ident,
+        let mut call_sig = proc_macro2::TokenStream::new();
+        if !method.arg_types.is_empty() {
+            for (index, ty) in method.arg_types.iter().enumerate() {
+                let ident = Ident::new(&format!("_{}", index), Span::call_site());
+                arg_stream.extend(quote! {
+                    #ident: #ty,
+                });
+                arg_names_stream.extend(quote! {
+                    #ident,
+                });
+            }
+            call_sig.extend(quote! {
+                (#arg_names_stream)
             });
         }
         stream.extend(quote! {
             fn #ident(#arg_stream) {
-                self.queue.write().unwrap().push_back(Call {call: _Call::#index_ident(#arg_names_stream)});
+                self.queue.write().unwrap().push_back(Call {call: _Call::#index_ident#call_sig});
                 self.task.notify();
             }
         });
@@ -194,6 +200,14 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
     let deserialize_impl = generate_deserialize_impl(methods);
     let blanket = generate_blanket(methods);
     let shim_forward = generate_shim_forward(methods);
+    let call_repr: proc_macro2::TokenStream;
+    if methods.len() == 1 && methods[0].arg_types.len() == 0 {
+        call_repr = proc_macro2::TokenStream::new();
+    } else {
+        call_repr = quote! {
+            #[repr(transparent)]
+        };
+    }
     let gen = quote! {
         #[allow(non_snake_case)]
         mod #mod_ident {
@@ -234,7 +248,7 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                     }
                 }
             }
-            #[repr(transparent)]
+            #call_repr
             pub struct Call {
                 call: _Call,
             }
@@ -329,7 +343,7 @@ fn generate_blanket(methods: &[Procedure]) -> proc_macro2::TokenStream {
         }
         arms.extend(quote! {
             _Call::#ident#sig => {
-                receiver.#ident#sig;
+                receiver.#ident(#args);
             }
         });
     }
@@ -466,14 +480,15 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
     let ident = &input.ident;
     let mod_ident = Ident::new(&format!("_{}_protocol", ident), input.ident.span());
+    let use_hygiene = Ident::new(&format!("{}ProtocolExt", ident), input.ident.span());
     let binds = generate_binds(ident, &procedures);
     let blanket_impl: TokenStream = quote! {
-        impl #ident {
+        impl dyn #ident {
             fn remote() -> impl #ident + ::vitruvia::protocol::Remote {
                 #mod_ident::remote()
             }
         }
-        use #mod_ident::ProtocolExt;
+        use #mod_ident::ProtocolExt as #use_hygiene;
     }
     .into();
     let mut item: TokenStream = input.into_token_stream().into();
