@@ -1,6 +1,6 @@
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, RwLock,
+    Arc,
 };
 use std::thread::spawn;
 
@@ -35,7 +35,7 @@ impl Connection {
     fn create(
         sender: ws::Sender,
         r_sender: Sender<Connection>,
-        r_task: Arc<RwLock<AtomicTask>>,
+        r_task: Arc<AtomicTask>,
     ) -> ConnectionHandler {
         let (c_sender, receiver) = unbounded();
         let task = Arc::new(AtomicTask::new());
@@ -52,7 +52,7 @@ impl Connection {
                         task: task.clone(),
                     })
                     .expect("Server connection channel disconnected!");
-                r_task.read().unwrap().notify();
+                r_task.notify();
             })
         };
         ConnectionHandler {
@@ -66,7 +66,7 @@ impl Connection {
     ) -> impl Future<Item = Box<dyn DataChannel + 'static>, Error = Error> {
         lazy(move || {
             let (sender, receiver) = unbounded();
-            let task = Arc::new(RwLock::new(AtomicTask::new()));
+            let task = Arc::new(AtomicTask::new());
             let mut socket = WebSocket::new(ConnectionFactory::new(sender, task.clone())).unwrap();
             socket
                 .connect(
@@ -82,14 +82,14 @@ impl Connection {
 }
 
 struct ClientConnection {
-    task: Arc<RwLock<AtomicTask>>,
+    task: Arc<AtomicTask>,
     receiver: Receiver<Connection>,
 }
 
 impl ClientConnection {
     fn wait(
         receiver: Receiver<Connection>,
-        task: Arc<RwLock<AtomicTask>>,
+        task: Arc<AtomicTask>,
     ) -> impl Future<Item = Box<dyn DataChannel + 'static>, Error = Error> {
         ClientConnection { task, receiver }
     }
@@ -105,7 +105,7 @@ impl Future for ClientConnection {
             Err(err) => match err {
                 TryRecvError::Disconnected => panic!("Server connection channel disconnected!"),
                 TryRecvError::Empty => {
-                    self.task.read().unwrap().register();
+                    self.task.register();
                     Ok(Async::NotReady)
                 }
             },
@@ -182,14 +182,14 @@ impl DataChannel for Connection {}
 
 pub(crate) struct Server {
     receiver: Receiver<Connection>,
-    task: Arc<RwLock<AtomicTask>>,
+    task: Arc<AtomicTask>,
 }
 
 impl Server {
     fn listen(config: ListenConfig) -> impl Future<Item = socket::Server, Error = Error> {
         lazy(move || {
             let (sender, receiver) = unbounded();
-            let task = Arc::new(RwLock::new(AtomicTask::new()));
+            let task = Arc::new(AtomicTask::new());
             let socket = WebSocket::new(ConnectionFactory::new(sender, task.clone())).unwrap();
             let server = Server { receiver, task };
             let socket = socket
@@ -204,11 +204,11 @@ impl Server {
 
 struct ConnectionFactory {
     sender: Sender<Connection>,
-    task: Arc<RwLock<AtomicTask>>,
+    task: Arc<AtomicTask>,
 }
 
 impl ConnectionFactory {
-    fn new(sender: Sender<Connection>, task: Arc<RwLock<AtomicTask>>) -> ConnectionFactory {
+    fn new(sender: Sender<Connection>, task: Arc<AtomicTask>) -> ConnectionFactory {
         ConnectionFactory { sender, task }
     }
 }
@@ -230,7 +230,7 @@ impl Stream for Server {
             Err(err) => match err {
                 TryRecvError::Disconnected => panic!("Server connection channel disconnected!"),
                 TryRecvError::Empty => {
-                    self.task.read().unwrap().register();
+                    self.task.register();
                     Ok(Async::NotReady)
                 }
             },

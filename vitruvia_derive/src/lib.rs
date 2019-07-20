@@ -9,7 +9,8 @@ use proc_macro2::Span;
 use syn::spanned::Spanned;
 use syn::{
     parse_macro_input, punctuated::Punctuated, token::Paren, Field, Fields, FieldsUnnamed, FnArg,
-    Ident, ItemTrait, ReturnType, TraitItem, Type, Variant, Visibility,
+    Ident, ItemTrait, Path, PathArguments, PathSegment, ReturnType, TraitBound, TraitBoundModifier,
+    TraitItem, TraitItemMethod, Type, TypeParamBound, Variant, Visibility,
 };
 
 #[derive(Debug)]
@@ -183,6 +184,13 @@ fn generate_shim_forward(methods: &[Procedure]) -> proc_macro2::TokenStream {
                 &self
             }
         };
+        let return_type = method
+            .return_type
+            .as_ref()
+            .map(|ty| quote! { #ty })
+            .unwrap_or_else(|| {
+                quote! { () }
+            });
         calls.extend(quote! {
             fn #ident(#receiver, #args) {
                 self.inner.#ident(#arg_names)
@@ -281,8 +289,15 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                 }
             }
             #[allow(non_camel_case_types)]
-            struct ProtocolShim<T: super::#ident> {
+            pub struct ProtocolShim<T: super::#ident> {
                 inner: T
+            }
+            impl<T: super::#ident> ProtocolShim<T> {
+                pub fn new(inner: T) -> Self {
+                    ProtocolShim {
+                        inner,
+                    }
+                }
             }
             impl<T> ::futures::Sink for ProtocolShim<T> where T: super::#ident {
                 type SinkItem = Call;
@@ -296,17 +311,7 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
             }
             pub trait Protocol: ::futures::Sink<SinkItem = Call, SinkError = ()> + super::#ident + Send {}
             #[allow(non_camel_case_types)]
-            pub trait ProtocolExt<T: super::#ident> {
-                fn into_protocol(self) -> Box<dyn Protocol>;
-            }
             impl<T> Protocol for ProtocolShim<T> where T: super::#ident + Send {}
-            impl<T> ProtocolExt<T> for T where T: super::#ident + 'static + Send {
-                fn into_protocol(self) -> Box<dyn Protocol> {
-                    Box::new(ProtocolShim {
-                        inner: self
-                    })
-                }
-            }
             impl<T: super::#ident> super::#ident for ProtocolShim<T> {
                 #shim_forward
             }
@@ -357,7 +362,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
             .parse()
             .unwrap();
     }
-    let input = {
+    let mut input = {
         let item = item.clone();
         parse_macro_input!(item as ItemTrait)
     };
@@ -389,6 +394,12 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                     compile_error!("`protocol` methods must not be named remote");
                 });
             }
+            if &format!("{}", method.sig.ident) == "into_protocol" {
+                return TokenStream::from(quote_spanned! {
+                    method.sig.ident.span() =>
+                    compile_error!("`protocol` methods must not be named into_protocol");
+                });
+            }
             if let Some(default) = &method.default {
                 return TokenStream::from(quote_spanned! {
                     default.span() =>
@@ -407,24 +418,17 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                     compile_error!("where clause not allowed on `protocol` method");
                 });
             }
-            // TODO: Disallow return type until I figure out how to handle async in the macro
-            if let ReturnType::Type(_, _) = &method.sig.decl.output {
-                return TokenStream::from(quote_spanned! {
-                    method.sig.decl.output.span() =>
-                    compile_error!("return type not allowed on `protocol` method");
-                });
-            }
-            /*if let ReturnType::Type(_, ty) = &method.sig.decl.output {
+            if let ReturnType::Type(_, ty) = &method.sig.decl.output {
                 let ident = Ident::new(
-                    &format!("_{}_{}_rt_AssertSerializeDeserialize", &input.ident, index),
+                    &format!("_{}_{}_rt_AssertProtocolValue", &input.ident, index),
                     Span::call_site(),
                 );
                 assert_stream.extend(TokenStream::from(quote_spanned! {
                     ty.span() =>
-                    struct #ident where #ty: ::serde::Serialize + ::serde::de::DeserializeOwned;
+                    //struct #ident where #ty: ::vitruvia::protocol::IValue;
                 }));
                 procedure.return_type = Some(*ty.clone());
-            }*/
+            }
             let mut has_receiver = false;
             for (arg_index, argument) in method.sig.decl.inputs.iter().enumerate() {
                 match argument {
@@ -486,7 +490,31 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
     let ident = &input.ident;
     let mod_ident = Ident::new(&format!("_{}_protocol", ident), input.ident.span());
-    let use_hygiene = Ident::new(&format!("{}ProtocolExt", ident), input.ident.span());
+    let m: TokenStream = quote! {
+        fn into_protocol(self) -> Box<dyn #mod_ident::Protocol> where Self: Sized + 'static {
+            Box::new(#mod_ident::ProtocolShim::new(self))
+        }
+    }
+    .into();
+    input
+        .items
+        .push(TraitItem::Method(parse_macro_input!(m as TraitItemMethod)));
+    let mut ty_path = Punctuated::new();
+    ty_path.push_value(PathSegment {
+        arguments: PathArguments::None,
+        ident: Ident::new("Send", input.ident.span()),
+    });
+    input
+        .supertraits
+        .push_value(TypeParamBound::Trait(TraitBound {
+            paren_token: None,
+            modifier: TraitBoundModifier::None,
+            lifetimes: None,
+            path: Path {
+                leading_colon: None,
+                segments: ty_path,
+            },
+        }));
     let binds = generate_binds(ident, &procedures);
     let blanket_impl: TokenStream = quote! {
         impl dyn #ident {
@@ -494,8 +522,6 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #mod_ident::remote()
             }
         }
-        #[allow(unused_imports)]
-        use #mod_ident::ProtocolExt as #use_hygiene;
     }
     .into();
     let mut item: TokenStream = input.into_token_stream().into();

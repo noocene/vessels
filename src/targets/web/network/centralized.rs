@@ -10,7 +10,7 @@ use stdweb::{
     },
 };
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 
@@ -29,14 +29,14 @@ pub(crate) fn listen(_: ListenConfig) -> impl Future<Item = Server, Error = Erro
 
 struct Channel {
     socket: WebSocket,
-    task: Arc<RwLock<AtomicTask>>,
+    task: Arc<AtomicTask>,
     receiver: Receiver<Vec<u8>>,
 }
 
 impl Channel {
     fn create(socket: WebSocket) -> Box<dyn DataChannel> {
         let (sender, receiver) = unbounded();
-        let task = Arc::new(RwLock::new(AtomicTask::new()));
+        let task = Arc::new(AtomicTask::new());
         let mut channel = Channel {
             receiver,
             task,
@@ -54,7 +54,7 @@ impl Channel {
                 .try_into()
                 .expect("Buffer conversion failed");
             sender.send(Vec::<u8>::from(buffer)).unwrap();
-            task.clone().read().unwrap().notify();
+            task.clone().notify();
         };
         js! {
             @{&self.socket}.onmessage = @{on_message};
@@ -86,7 +86,7 @@ impl Stream for Channel {
             Ok(data) => Ok(Async::Ready(Some(data))),
             Err(err) => match err {
                 TryRecvError::Empty => {
-                    self.task.read().unwrap().register();
+                    self.task.register();
                     Ok(Async::NotReady)
                 }
                 TryRecvError::Disconnected => panic!("Client connection channel disconnected!"),
@@ -97,7 +97,7 @@ impl Stream for Channel {
 
 struct Connection {
     socket: WebSocket,
-    task: Arc<RwLock<AtomicTask>>,
+    task: Arc<AtomicTask>,
 }
 
 impl Connection {
@@ -113,7 +113,7 @@ impl Connection {
             .unwrap();
             let mut connection = Connection {
                 socket,
-                task: Arc::new(RwLock::new(AtomicTask::new())),
+                task: Arc::new(AtomicTask::new()),
             };
             connection.initialize();
             connection
@@ -123,10 +123,10 @@ impl Connection {
         let c_task = self.task.clone();
         let o_task = self.task.clone();
         let on_close = move |_: SocketCloseEvent| {
-            c_task.read().unwrap().notify();
+            c_task.notify();
         };
         let on_open = move |_: SocketOpenEvent| {
-            o_task.read().unwrap().notify();
+            o_task.notify();
         };
         js! {
             @{&self.socket}.onclose = @{on_close};
@@ -142,7 +142,7 @@ impl Future for Connection {
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         match self.socket.ready_state() {
             SocketReadyState::Connecting => {
-                self.task.read().unwrap().register();
+                self.task.register();
                 Ok(Async::NotReady)
             }
             SocketReadyState::Closing => Ok(Async::NotReady),
