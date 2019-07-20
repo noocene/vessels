@@ -418,16 +418,12 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                     compile_error!("where clause not allowed on `protocol` method");
                 });
             }
-            if let ReturnType::Type(_, ty) = &method.sig.decl.output {
-                let ident = Ident::new(
-                    &format!("_{}_{}_rt_AssertProtocolValue", &input.ident, index),
-                    Span::call_site(),
-                );
-                assert_stream.extend(TokenStream::from(quote_spanned! {
-                    ty.span() =>
-                    //struct #ident where #ty: ::vitruvia::protocol::IValue;
-                }));
-                procedure.return_type = Some(*ty.clone());
+            // TODO: Disallow return type until I figure out how to handle async in the macro
+            if let ReturnType::Type(_, _) = &method.sig.decl.output {
+                return TokenStream::from(quote_spanned! {
+                    method.sig.decl.output.span() =>
+                    compile_error!("return type not allowed on `protocol` method");
+                });
             }
             let mut has_receiver = false;
             for (arg_index, argument) in method.sig.decl.inputs.iter().enumerate() {
