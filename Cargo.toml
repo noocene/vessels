@@ -54,7 +54,3 @@ tokio = "0.1.21"
 [profile.release]
 lto = true
 debug = false
-
-[[bin]]
-path = "src/main.rs"
-name = "main"
