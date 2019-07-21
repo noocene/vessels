@@ -184,13 +184,6 @@ fn generate_shim_forward(methods: &[Procedure]) -> proc_macro2::TokenStream {
                 &self
             }
         };
-        let return_type = method
-            .return_type
-            .as_ref()
-            .map(|ty| quote! { #ty })
-            .unwrap_or_else(|| {
-                quote! { () }
-            });
         calls.extend(quote! {
             fn #ident(#receiver, #args) {
                 self.inner.#ident(#arg_names)
