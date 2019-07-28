@@ -474,7 +474,11 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                 type SinkItem = Call;
                 type SinkError = ();
                 fn start_send(&mut self, item: Self::SinkItem) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
-                    start_send(&mut self.inner, item)
+                    use super::#ident;
+                    match item.call {
+                        #blanket
+                    }
+                    Ok(::futures::AsyncSink::Ready)
                 }
                 fn poll_complete(&mut self) -> ::futures::Poll<(), Self::SinkError> {
                     Ok(::futures::Async::Ready(()))
@@ -493,12 +497,6 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
             impl<T> Protocol for ProtocolShim<T> where T: super::#ident + Send {}
             impl<T: super::#ident> super::#ident for ProtocolShim<T> {
                 #shim_forward
-            }
-            fn start_send<T>(receiver: &mut T, call: Call) -> ::futures::StartSend<Call, ()> where T: super::#ident + ?Sized {
-                match call.call {
-                    #blanket
-                }
-                Ok(::futures::AsyncSink::Ready)
             }
             pub fn remote() -> impl super::#ident + Remote {
                 CRemote::new()
@@ -530,7 +528,7 @@ fn generate_blanket(methods: &[Procedure]) -> proc_macro2::TokenStream {
         });
         arms.extend(quote! {
             _Call::#ident#sig => {
-                receiver.#ident(#args)
+                self.#ident(#args)
             }
         });
     }
