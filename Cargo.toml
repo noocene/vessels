@@ -11,6 +11,7 @@ members = [".", "vitruvia_derive"]
 failure = "0.1.5"
 crossbeam-channel = "0.3.8"
 futures = "0.1.27"
+serde_json = "1.0.40"
 
 [dependencies.vitruvia_derive]
 version = "0.1.0"
@@ -54,3 +55,7 @@ tokio = "0.1.21"
 [profile.release]
 lto = true
 debug = false
+
+[[bin]]
+name = "main"
+path = "./src/main.rs"

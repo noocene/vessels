@@ -10,7 +10,7 @@ use syn::spanned::Spanned;
 use syn::{
     parse_macro_input, punctuated::Punctuated, token::Paren, Field, Fields, FieldsUnnamed, FnArg,
     Ident, ItemTrait, Path, PathArguments, PathSegment, ReturnType, TraitBound, TraitBoundModifier,
-    TraitItem, TraitItemMethod, Type, TypeParamBound, Variant, Visibility,
+    TraitItem, TraitItemMethod, Type, TypeParamBound, TypeVerbatim, Variant, Visibility,
 };
 
 #[derive(Debug)]
@@ -28,9 +28,7 @@ fn generate_enum(methods: &[Procedure]) -> Vec<Variant> {
             ident: method.ident.clone().unwrap(),
             attrs: vec![],
             discriminant: None,
-            fields: if method.arg_types.is_empty() {
-                Fields::Unit
-            } else {
+            fields: {
                 let mut fields = Punctuated::new();
                 for ty in &method.arg_types {
                     fields.push(Field {
@@ -41,6 +39,69 @@ fn generate_enum(methods: &[Procedure]) -> Vec<Variant> {
                         vis: Visibility::Inherited,
                     });
                 }
+                fields.push(Field {
+                    attrs: vec![],
+                    ident: None,
+                    ty: Type::Verbatim(TypeVerbatim {
+                        tts: quote! {
+                            u64
+                        },
+                    }),
+                    colon_token: None,
+                    vis: Visibility::Inherited,
+                });
+                Fields::Unnamed(FieldsUnnamed {
+                    paren_token: Paren(Span::call_site()),
+                    unnamed: fields,
+                })
+            },
+        })
+        .collect::<Vec<_>>()
+}
+
+fn generate_return_variants(methods: &[Procedure]) -> Vec<Variant> {
+    methods
+        .iter()
+        .map(|method| Variant {
+            ident: method.ident.clone().unwrap(),
+            attrs: vec![],
+            discriminant: None,
+            fields: {
+                let mut fields = Punctuated::new();
+                let ty = &method.return_type;
+                fields.push(Field {
+                    attrs: vec![],
+                    ident: None,
+                    ty: Type::Verbatim(TypeVerbatim {
+                        tts: quote! {
+                            <#ty as ::vitruvia::protocol::Value>::Item
+                        },
+                    }),
+                    colon_token: None,
+                    vis: Visibility::Inherited,
+                });
+                fields.push(Field {
+                    attrs: vec![],
+                    ident: None,
+                    ty: Type::Verbatim(TypeVerbatim {
+                        tts: quote! {
+                            u64
+                        },
+                    }),
+                    colon_token: None,
+                    vis: Visibility::Inherited,
+                });
+                fields.push(Field {
+                    attrs: vec![],
+                    ident: None,
+                    ty: Type::Verbatim(TypeVerbatim {
+                        tts: quote! {
+                            u64
+                        },
+                    }),
+                    colon_token: None,
+                    vis: Visibility::Inherited,
+                });
                 Fields::Unnamed(FieldsUnnamed {
                     paren_token: Paren(Span::call_site()),
                     unnamed: fields,
@@ -67,24 +128,30 @@ fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
             });
         }
         let mut call_sig = proc_macro2::TokenStream::new();
-        if !method.arg_types.is_empty() {
-            for (index, ty) in method.arg_types.iter().enumerate() {
-                let ident = Ident::new(&format!("_{}", index), Span::call_site());
-                arg_stream.extend(quote! {
-                    #ident: #ty,
-                });
-                arg_names_stream.extend(quote! {
-                    #ident,
-                });
-            }
-            call_sig.extend(quote! {
-                (#arg_names_stream)
+        for (index, ty) in method.arg_types.iter().enumerate() {
+            let ident = Ident::new(&format!("_{}", index), Span::call_site());
+            arg_stream.extend(quote! {
+                #ident: #ty,
+            });
+            arg_names_stream.extend(quote! {
+                #ident,
             });
         }
+        arg_names_stream.extend(quote! {
+            _proto_id,
+        });
+        call_sig.extend(quote! {
+            (#arg_names_stream)
+        });
+        let return_type = &method.return_type;
         stream.extend(quote! {
-            fn #ident(#arg_stream) {
+            fn #ident(#arg_stream) -> #return_type {
+                let _proto_id = self.next_id();
                 self.queue.write().unwrap().push_back(Call {call: _Call::#index_ident#call_sig});
                 self.task.notify();
+                /*if let None = <#return_type as ::vitruvia::protocol::Value>::construct() {
+
+                }*/
             }
         });
     }
@@ -98,26 +165,41 @@ fn generate_serialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
         let mut sig = proc_macro2::TokenStream::new();
         let mut args = proc_macro2::TokenStream::new();
         let mut element_calls = proc_macro2::TokenStream::new();
-        let t_len = method.arg_types.len() + 1;
-        if !method.arg_types.is_empty() {
-            for (index, _) in method.arg_types.iter().enumerate() {
-                let ident = Ident::new(&format!("_{}", index), Span::call_site());
-                args.extend(quote! {
-                    #ident,
-                });
-                element_calls.extend(quote! {
-                    seq.serialize_element(#ident)?;
-                });
-            }
-            sig.extend(quote! {
-                (#args)
+        let t_len = method.arg_types.len() + 2;
+        for index in 0..=method.arg_types.len() {
+            let ident = Ident::new(&format!("_{}", index), Span::call_site());
+            args.extend(quote! {
+                #ident,
+            });
+            element_calls.extend(quote! {
+                seq.serialize_element(#ident)?;
             });
         }
+        sig.extend(quote! {
+            (#args)
+        });
         arms.extend(quote! {
             _Call::#ident#sig => {
                 let mut seq = serializer.serialize_seq(Some(#t_len))?;
                 seq.serialize_element(&#index)?;
                 #element_calls
+                seq.end()
+            },
+        });
+    }
+    arms
+}
+
+fn generate_serialize_return_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let mut arms = proc_macro2::TokenStream::new();
+    for (index, method) in methods.iter().enumerate() {
+        let ident = &method.ident;
+        arms.extend(quote! {
+            Response::#ident(data, idx, m) => {
+                let mut seq = serializer.serialize_seq(Some(3))?;
+                seq.serialize_element(m)?;
+                seq.serialize_element(idx)?;
+                seq.serialize_element(data)?;
                 seq.end()
             },
         });
@@ -131,17 +213,14 @@ fn generate_deserialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream 
         let ident = &method.ident;
         let mut sig = proc_macro2::TokenStream::new();
         let mut args = proc_macro2::TokenStream::new();
-        if !method.arg_types.is_empty() {
-            for (index, _) in method.arg_types.iter().enumerate() {
-                let index = index + 1;
-                args.extend(quote! {
-                    seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(#index, &self))?,
-                });
-            }
-            sig.extend(quote! {
-                (#args)
+        for index in (0..=method.arg_types.len()).into_iter().map(|i| i + 1) {
+            args.extend(quote! {
+                seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(#index, &self))?,
             });
         }
+        sig.extend(quote! {
+            (#args)
+        });
         arms.extend(quote! {
             #index => {
                 _Call::#ident#sig
@@ -155,6 +234,25 @@ fn generate_deserialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream 
                 _ => Err(::serde::de::Error::invalid_length(index, &self))?
             }
         })
+    }
+}
+
+fn generate_deserialize_return_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let mut arms = proc_macro2::TokenStream::new();
+    for (index, method) in methods.iter().enumerate() {
+        let ident = &method.ident;
+        let index = index as u64;
+        arms.extend(quote! {
+            #index => {
+                Ok(Response::#ident(seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?, seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?, index))
+            }
+        });
+    }
+    quote! {
+        match index {
+            #arms
+            _ => Err(::serde::de::Error::invalid_length(0, &self))?
+        }
     }
 }
 
@@ -184,8 +282,10 @@ fn generate_shim_forward(methods: &[Procedure]) -> proc_macro2::TokenStream {
                 &self
             }
         };
+        let return_type = &method.return_type;
         calls.extend(quote! {
-            fn #ident(#receiver, #args) {
+            fn #ident(#receiver, #args) -> #return_type {
+                let ctx = ::vitruvia::protocol::Context::<<#return_type as ::vitruvia::protocol::Value>::Item>::new();
                 self.inner.#ident(#arg_names)
             }
         });
@@ -193,13 +293,41 @@ fn generate_shim_forward(methods: &[Procedure]) -> proc_macro2::TokenStream {
     calls
 }
 
+fn generate_st_traits(methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let mut items = proc_macro2::TokenStream::new();
+    let mut variants = proc_macro2::TokenStream::new();
+
+    methods.iter().for_each(|m| {
+        let r_type = m.return_type.as_ref().unwrap();
+        let ident = m.ident.as_ref().unwrap();
+        items.extend(quote! {
+            pub trait #ident: ::futures::Stream<Item = <#r_type as ::vitruvia::protocol::Value>::Item, Error = ()> + ::futures::Sink<SinkItem = <#r_type as ::vitruvia::protocol::Value>::Item, SinkError = ()> + Send + Sync {}
+            impl<T> #ident for T where T: ::futures::Stream<Item = <#r_type as ::vitruvia::protocol::Value>::Item, Error = ()> + ::futures::Sink<SinkItem = <#r_type as ::vitruvia::protocol::Value>::Item, SinkError = ()> + Send + Sync {}
+        });
+        variants.extend(quote! {
+            #ident(Box<dyn #ident>),
+        })
+    });
+
+    quote! {
+        pub enum Channel {
+            #variants
+        }
+        #items
+    }
+}
+
 fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
     let mod_ident = Ident::new(&format!("_{}_protocol", &ident), ident.span());
     let enum_variants = generate_enum(methods);
+    let return_variants = generate_return_variants(methods);
     let remote_impl = generate_remote_impl(methods);
     let serialize_impl = generate_serialize_impl(methods);
+    let serialize_return_impl = generate_serialize_return_impl(methods);
     let deserialize_impl = generate_deserialize_impl(methods);
+    let deserialize_return_impl = generate_deserialize_return_impl(methods);
     let blanket = generate_blanket(methods);
+    let st_traits = generate_st_traits(methods);
     let shim_forward = generate_shim_forward(methods);
     let call_repr: proc_macro2::TokenStream;
     if methods.len() == 1 && methods[0].arg_types.len() == 0 {
@@ -212,28 +340,40 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
     let gen = quote! {
         #[allow(non_snake_case)]
         mod #mod_ident {
-            use ::std::{collections::VecDeque, sync::{RwLock}};
+            use ::std::{collections::VecDeque, sync::{RwLock, Arc, atomic::{AtomicU64, Ordering}}};
             use ::futures::{Poll, Async, task::AtomicTask};
             use ::serde::ser::SerializeSeq;
-            struct Remote {
-                task: AtomicTask,
-                queue: RwLock<VecDeque<Call>>
+            #[derive(Clone)]
+            struct CRemote {
+                task: Arc<AtomicTask>,
+                queue: Arc<RwLock<VecDeque<Call>>>,
+                ids: Arc<RwLock<Vec<u64>>>,
+                last_id: Arc<AtomicU64>,
+                channels: Arc<RwLock<::std::collections::HashMap<u64, st_traits::Channel>>>,
             }
-            impl Remote {
-                pub fn new() -> Remote {
-                    Remote {
-                        task: AtomicTask::new(),
-                        queue: RwLock::new(VecDeque::new())
+            impl CRemote {
+                pub fn new() -> CRemote {
+                    CRemote {
+                        task: Arc::new(AtomicTask::new()),
+                        queue: Arc::new(RwLock::new(VecDeque::new())),
+                        ids: Arc::new(RwLock::new(vec![])),
+                        last_id: Arc::new(AtomicU64::new(0)),
+                        channels: Arc::new(RwLock::new(::std::collections::HashMap::new())),
+                    }
+                }
+                fn next_id(&self) -> u64 {
+                    let mut ids = self.ids.write().unwrap();
+                    if let Some(id) = ids.pop() {
+                        id
+                    } else {
+                        self.last_id.fetch_add(1, Ordering::SeqCst)
                     }
                 }
             }
-            impl super::#ident for Remote {
+            impl super::#ident for CRemote {
                 #remote_impl
             }
-            impl ::vitruvia::protocol::Remote for Remote {
-                type Item = Call;
-            }
-            impl ::futures::Stream for Remote {
+            impl ::futures::Stream for CRemote {
                 type Item = Call;
                 type Error = ();
 
@@ -257,10 +397,25 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
             enum _Call {
                 #(#enum_variants),*
             }
+            #[allow(non_camel_case_types)]
+            mod st_traits {
+                #st_traits
+            }
+            #[allow(non_camel_case_types)]
+            pub enum Response {
+                #(#return_variants),*
+            }
             impl ::serde::Serialize for Call {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
                     match &self.call {
                         #serialize_impl
+                    }
+                }
+            }
+            impl ::serde::Serialize for Response {
+                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+                    match self {
+                        #serialize_return_impl
                     }
                 }
             }
@@ -281,14 +436,37 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                     deserializer.deserialize_seq(CallVisitor)
                 }
             }
+            pub trait Remote: futures::Stream<Item = Call, Error = ()> + Clone {}
+            impl Remote for CRemote {}
+            impl <'de> ::serde::Deserialize<'de> for Response {
+                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'de> {
+                    struct ResponseVisitor;
+                    impl<'de> ::serde::de::Visitor<'de> for ResponseVisitor {
+                        type Value = Response;
+
+                        fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                            formatter.write_str("a serialized protocol Response")
+                        }
+                        fn visit_seq<V>(self, mut seq: V) -> Result<Response, V::Error> where V: ::serde::de::SeqAccess<'de>, {
+                            let index: u64 = seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?;
+                            #deserialize_return_impl
+                        }
+                    }
+                    deserializer.deserialize_seq(ResponseVisitor)
+                }
+            }
             #[allow(non_camel_case_types)]
             pub struct ProtocolShim<T: super::#ident> {
-                inner: T
+                inner: T,
+                channels: ::std::collections::HashMap<u64, st_traits::Channel>,
+                inner_stream: Box<dyn ::futures::Stream<Item = Response, Error = ()> + Send>,
             }
             impl<T: super::#ident> ProtocolShim<T> {
                 pub fn new(inner: T) -> Self {
                     ProtocolShim {
                         inner,
+                        channels: ::std::collections::HashMap::new(),
+                        inner_stream: Box::new(::futures::stream::empty())
                     }
                 }
             }
@@ -302,7 +480,15 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                     Ok(::futures::Async::Ready(()))
                 }
             }
-            pub trait Protocol: ::futures::Sink<SinkItem = Call, SinkError = ()> + super::#ident + Send {}
+            impl<T> ::futures::Stream for ProtocolShim<T> where T: super::#ident {
+                type Item = Response;
+                type Error = ();
+
+                fn poll(&mut self) -> ::futures::Poll<Option<Self::Item>, Self::Error> {
+                    self.inner_stream.poll()
+                }
+            }
+            pub trait Protocol: ::futures::Sink<SinkItem = Call, SinkError = ()> + ::futures::Stream<Item = Response, Error = ()> + super::#ident + Send {}
             #[allow(non_camel_case_types)]
             impl<T> Protocol for ProtocolShim<T> where T: super::#ident + Send {}
             impl<T: super::#ident> super::#ident for ProtocolShim<T> {
@@ -314,8 +500,8 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                 }
                 Ok(::futures::AsyncSink::Ready)
             }
-            pub fn remote() -> impl super::#ident + ::vitruvia::protocol::Remote {
-                Remote::new()
+            pub fn remote() -> impl super::#ident + Remote {
+                CRemote::new()
             }
         }
     };
@@ -328,20 +514,23 @@ fn generate_blanket(methods: &[Procedure]) -> proc_macro2::TokenStream {
         let ident = &method.ident;
         let mut sig = proc_macro2::TokenStream::new();
         let mut args = proc_macro2::TokenStream::new();
-        if !method.arg_types.is_empty() {
-            for (index, _) in method.arg_types.iter().enumerate() {
-                let ident = Ident::new(&format!("_{}", index), Span::call_site());
-                args.extend(quote! {
-                    #ident,
-                });
-            }
-            sig.extend(quote! {
-                (#args)
+        for index in 0..method.arg_types.len() {
+            let ident = Ident::new(&format!("_{}", index), Span::call_site());
+            args.extend(quote! {
+                #ident,
             });
         }
+        let mut s_args = args.clone();
+        let id = Ident::new(&format!("_{}", method.arg_types.len()), Span::call_site());
+        s_args.extend(quote! {
+            #id,
+        });
+        sig.extend(quote! {
+            (#s_args)
+        });
         arms.extend(quote! {
             _Call::#ident#sig => {
-                receiver.#ident(#args);
+                receiver.#ident(#args)
             }
         });
     }
@@ -373,7 +562,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
     let mut assert_stream = TokenStream::new();
     let mut procedures = vec![];
-    for (index, item) in input.items.iter().enumerate() {
+    for (index, item) in input.items.iter_mut().enumerate() {
         let mut procedure = Procedure {
             arg_types: vec![],
             return_type: None,
@@ -411,12 +600,23 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                     compile_error!("where clause not allowed on `protocol` method");
                 });
             }
-            // TODO: Disallow return type until I figure out how to handle async in the macro
-            if let ReturnType::Type(_, _) = &method.sig.decl.output {
-                return TokenStream::from(quote_spanned! {
-                    method.sig.decl.output.span() =>
-                    compile_error!("return type not allowed on `protocol` method");
-                });
+            if let ReturnType::Type(_, ty) = &mut method.sig.decl.output {
+                let ident = Ident::new(
+                    &format!("_{}_{}_rt_AssertValue", &input.ident, index),
+                    Span::call_site(),
+                );
+                assert_stream.extend(TokenStream::from(quote_spanned! {
+                    ty.span() =>
+                    struct #ident where #ty: ::vitruvia::protocol::Value;
+                }));
+                procedure.return_type = Some(*ty.clone());
+            } else {
+                let m: proc_macro::TokenStream = quote! {
+                    ()
+                }
+                .into();
+                let ty = parse_macro_input!(m as Type);
+                procedure.return_type = Some(ty);
             }
             let mut has_receiver = false;
             for (arg_index, argument) in method.sig.decl.inputs.iter().enumerate() {
@@ -436,15 +636,12 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                     FnArg::Captured(argument) => {
                         let ty = &argument.ty;
                         let ident = Ident::new(
-                            &format!(
-                                "_{}_{}_arg_{}_AssertSerializeDeserialize",
-                                &input.ident, index, arg_index
-                            ),
+                            &format!("_{}_{}_arg_{}_AssertValue", &input.ident, index, arg_index),
                             Span::call_site(),
                         );
                         assert_stream.extend(TokenStream::from(quote_spanned! {
                             ty.span() =>
-                            struct #ident where #ty: ::serde::Serialize + ::serde::de::DeserializeOwned;
+                            struct #ident where #ty: ::vitruvia::protocol::Value;
                         }));
                         procedure.arg_types.push(argument.ty.clone());
                     }
@@ -479,10 +676,19 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
     let ident = &input.ident;
     let mod_ident = Ident::new(&format!("_{}_protocol", ident), input.ident.span());
-    let m: TokenStream = quote! {
+    let mut m: TokenStream = quote! {
+        #[doc(hidden)]
         fn into_protocol(self) -> Box<dyn #mod_ident::Protocol> where Self: Sized + 'static {
             Box::new(#mod_ident::ProtocolShim::new(self))
         }
+    }
+    .into();
+    input
+        .items
+        .push(TraitItem::Method(parse_macro_input!(m as TraitItemMethod)));
+    m = quote! {
+        #[doc(hidden)]
+        fn IS_PROTO() where Self: Sized {}
     }
     .into();
     input
@@ -507,7 +713,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     let binds = generate_binds(ident, &procedures);
     let blanket_impl: TokenStream = quote! {
         impl dyn #ident {
-            fn remote() -> impl #ident + ::vitruvia::protocol::Remote {
+            fn remote() -> impl #ident + #mod_ident::Remote {
                 #mod_ident::remote()
             }
         }
