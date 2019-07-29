@@ -20,9 +20,9 @@
 extern crate stdweb;
 
 mod errors;
-/// Provides interfaces to 2D graphics APIs.
-pub mod executor;
 /// Provides a cross-platform abstracted asynchronous executor.
+pub mod executor;
+/// Provides interfaces to 2D graphics APIs.
 pub mod graphics_2d;
 /// Provides interfaces to user interaction/HID APIs.
 pub mod interaction;
