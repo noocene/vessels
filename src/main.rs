@@ -1,5 +1,8 @@
-use futures::{Stream, lazy, Future};
-use vitruvia::protocol::protocol;
+use futures::{lazy, Future, Sink, Stream};
+use vitruvia::{
+    executor,
+    protocol::{protocol, Context},
+};
 
 #[protocol]
 pub trait TestProtocol {
@@ -20,13 +23,11 @@ impl TestProtocol for Test {
 
 fn main() {
     let rem = TestProtocol::remote();
+    let (rsink, rstream) = rem.clone().split();
     let (sink, stream) = Test.into_protocol().split();
-    tokio::run(lazy(move || {
-        tokio::spawn(rem.clone().forward(sink).then(|_| Ok(())));
-        tokio::spawn(stream.for_each(|i| {
-            println!("{}", serde_json::to_string(&i).unwrap());
-            Ok(())
-        }));
+    executor::run(lazy(move || {
+        executor::spawn(rstream.forward(sink).then(|_| Ok(())));
+        executor::spawn(stream.forward(rsink).then(|_| Ok(())));
         rem.test();
         rem.sec_test();
         rem.test();

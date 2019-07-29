@@ -149,9 +149,9 @@ fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
                 let _proto_id = self.next_id();
                 self.queue.write().unwrap().push_back(Call {call: _Call::#index_ident#call_sig});
                 self.task.notify();
-                /*if let None = <#return_type as ::vitruvia::protocol::Value>::construct() {
-
-                }*/
+                let (ct, ct1) = ::vitruvia::protocol::Context::new();
+                <#return_type as ::vitruvia::protocol::Value>::construct(ct);
+                self.channels.write().unwrap().insert(_proto_id, st_traits::Channel::#ident(Box::new(ct1)));
             }
         });
     }
@@ -192,7 +192,7 @@ fn generate_serialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
 
 fn generate_serialize_return_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
     let mut arms = proc_macro2::TokenStream::new();
-    for (index, method) in methods.iter().enumerate() {
+    for method in methods {
         let ident = &method.ident;
         arms.extend(quote! {
             Response::#ident(data, idx, m) => {
@@ -231,7 +231,10 @@ fn generate_deserialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream 
         Ok(Call{
             call: match index {
                 #arms,
-                _ => Err(::serde::de::Error::invalid_length(index, &self))?
+                _ => {
+                    let d: Response = seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(1, &self))?;
+                    _Call::__Response(d)
+                }
             }
         })
     }
@@ -317,6 +320,26 @@ fn generate_st_traits(methods: &[Procedure]) -> proc_macro2::TokenStream {
     }
 }
 
+fn generate_handle_response(methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let mut arms = proc_macro2::TokenStream::new();
+    for method in methods {
+        let ident = method.ident.as_ref().unwrap();
+        arms.extend(quote! {
+            Response::#ident(data, index, id) => {
+                let mut channels = self.channels.write().unwrap();
+                if let Some(st_traits::Channel::#ident(channel)) = channels.get_mut(&id) {
+                    channel.start_send(data);
+                }
+            }
+        });
+    }
+    quote! {
+        match item {
+            #arms
+        }
+    }
+}
+
 fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
     let mod_ident = Ident::new(&format!("_{}_protocol", &ident), ident.span());
     let enum_variants = generate_enum(methods);
@@ -328,8 +351,10 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
     let deserialize_return_impl = generate_deserialize_return_impl(methods);
     let blanket = generate_blanket(methods);
     let st_traits = generate_st_traits(methods);
+    let handle_response = generate_handle_response(methods);
     let shim_forward = generate_shim_forward(methods);
     let call_repr: proc_macro2::TokenStream;
+    let m_len = methods.len();
     if methods.len() == 1 && methods[0].arg_types.len() == 0 {
         call_repr = proc_macro2::TokenStream::new();
     } else {
@@ -389,13 +414,26 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                     }
                 }
             }
+            impl ::futures::Sink for CRemote {
+                type SinkItem = Response;
+                type SinkError = ();
+
+                fn start_send(&mut self, item: Self::SinkItem) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
+                    #handle_response
+                    Ok(::futures::AsyncSink::Ready)
+                }
+                fn poll_complete(&mut self) -> ::futures::Poll<(), Self::SinkError> {
+                    Ok(::futures::Async::Ready(()))
+                }
+            }
             #call_repr
             pub struct Call {
                 call: _Call,
             }
             #[allow(non_camel_case_types)]
             enum _Call {
-                #(#enum_variants),*
+                #(#enum_variants),*,
+                __Response(Response)
             }
             #[allow(non_camel_case_types)]
             mod st_traits {
@@ -409,6 +447,12 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
                     match &self.call {
                         #serialize_impl
+                        _Call::__Response(response) => {
+                            let mut seq = serializer.serialize_seq(Some(4))?;
+                            seq.serialize_element(&#m_len)?;
+                            seq.serialize_element(response);
+                            seq.end()
+                        }
                     }
                 }
             }
@@ -436,7 +480,7 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                     deserializer.deserialize_seq(CallVisitor)
                 }
             }
-            pub trait Remote: futures::Stream<Item = Call, Error = ()> + Clone {}
+            pub trait Remote: futures::Stream<Item = Call, Error = ()> + futures::Sink<SinkItem = Response, SinkError = ()> + Clone {}
             impl Remote for CRemote {}
             impl <'de> ::serde::Deserialize<'de> for Response {
                 fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'de> {
@@ -475,8 +519,13 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                 type SinkError = ();
                 fn start_send(&mut self, item: Self::SinkItem) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
                     use super::#ident;
+                    use ::vitruvia::protocol::Value;
+                    use ::futures::{Stream, Sink, Future};
                     match item.call {
                         #blanket
+                        _Call::__Response(resp) => {
+                            println!("resp");
+                        }
                     }
                     Ok(::futures::AsyncSink::Ready)
                 }
@@ -508,7 +557,8 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
 
 fn generate_blanket(methods: &[Procedure]) -> proc_macro2::TokenStream {
     let mut arms = proc_macro2::TokenStream::new();
-    for method in methods {
+    for (index, method) in methods.iter().enumerate() {
+        let index = index as u64;
         let ident = &method.ident;
         let mut sig = proc_macro2::TokenStream::new();
         let mut args = proc_macro2::TokenStream::new();
@@ -528,7 +578,12 @@ fn generate_blanket(methods: &[Procedure]) -> proc_macro2::TokenStream {
         });
         arms.extend(quote! {
             _Call::#ident#sig => {
-                self.#ident(#args)
+                let (context, loc_context) = ::vitruvia::protocol::Context::new();
+                self.#ident(#args).deconstruct(context);
+                let (sink, stream) = loc_context.split();
+                let mut i_stream: Box<dyn ::futures::Stream<Error = (), Item = Response> + Send + 'static> = Box::new(futures::stream::empty());
+                std::mem::swap(&mut self.inner_stream, &mut i_stream);
+                self.inner_stream = Box::new(stream.map(move |i| Response::#ident(i, #index, #id)).select(i_stream));
             }
         });
     }
