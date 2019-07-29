@@ -150,8 +150,8 @@ fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
                 self.queue.write().unwrap().push_back(Call {call: _Call::#index_ident#call_sig});
                 self.task.notify();
                 let (ct, ct1) = ::vitruvia::protocol::Context::new();
-                <#return_type as ::vitruvia::protocol::Value>::construct(ct);
                 self.channels.write().unwrap().insert(_proto_id, st_traits::Channel::#ident(Box::new(ct1)));
+                <#return_type as ::vitruvia::protocol::Value>::construct(ct)
             }
         });
     }
@@ -524,7 +524,7 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                     match item.call {
                         #blanket
                         _Call::__Response(resp) => {
-                            println!("resp");
+                            // TODO
                         }
                     }
                     Ok(::futures::AsyncSink::Ready)

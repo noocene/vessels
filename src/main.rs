@@ -6,15 +6,16 @@ use vitruvia::{
 
 #[protocol]
 pub trait TestProtocol {
-    fn test(&self);
+    fn test(&self) -> String;
     fn sec_test(&self);
 }
 
 struct Test;
 
 impl TestProtocol for Test {
-    fn test(&self) {
+    fn test(&self) -> String {
         println!("test");
+        "foo".to_owned()
     }
     fn sec_test(&self) {
         println!("sec_test");
@@ -28,9 +29,7 @@ fn main() {
     executor::run(lazy(move || {
         executor::spawn(rstream.forward(sink).then(|_| Ok(())));
         executor::spawn(stream.forward(rsink).then(|_| Ok(())));
-        rem.test();
-        rem.sec_test();
-        rem.test();
+        println!("{}", rem.test());
         Ok(())
     }));
 }

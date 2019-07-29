@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 pub use vitruvia_derive::protocol;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Context<T: Serialize + DeserializeOwned> {
     sender: Sender<T>,
     o_sender: Sender<T>,
@@ -79,13 +79,9 @@ impl<T: Serialize + DeserializeOwned> futures::Stream for Context<T> {
 pub trait Value {
     type Item: Serialize + DeserializeOwned + Send + 'static;
 
-    fn construct(context: Context<Self::Item>) -> Option<Self>
+    fn construct(context: Context<Self::Item>) -> Self
     where
-        Self: Sized,
-    {
-        executor::spawn(context.for_each(|i| {println!("i"); Ok(())}));
-        None
-    }
+        Self: Sized;
     fn deconstruct(self, context: Context<Self::Item>)
     where
         Self: Sized;
@@ -123,6 +119,13 @@ where
 {
     type Item = T;
 
+    fn construct(context: Context<Self::Item>) -> Self {
+        if let Ok(v) = context.into_future().wait() {
+            return v.0.unwrap();
+        } else {
+            panic!("panic in construction");
+        }
+    }
     fn deconstruct(self, context: Context<Self::Item>)
     where
         Self: Sized,
