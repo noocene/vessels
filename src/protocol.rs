@@ -1,7 +1,7 @@
 use crate::executor;
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
-use futures::{task::AtomicTask, Async, AsyncSink, Poll, Sink, StartSend, Stream, IntoFuture};
 use futures::Future as Fut;
+use futures::{task::AtomicTask, Async, AsyncSink, IntoFuture, Poll, Sink, StartSend, Stream};
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
 
@@ -80,11 +80,25 @@ impl<T: Serialize + DeserializeOwned> futures::Stream for Context<T> {
 pub trait Value {
     type Item: Serialize + DeserializeOwned + Send + 'static;
 
-    fn construct<C: Sink<SinkItem = Self::Item, SinkError = ()> + Stream<Item = Self::Item, Error = ()> + Send + 'static>(context: C) -> Self
+    fn construct<
+        C: Sink<SinkItem = Self::Item, SinkError = ()>
+            + Stream<Item = Self::Item, Error = ()>
+            + Send
+            + 'static,
+    >(
+        context: C,
+    ) -> Self
     where
         Self: Sized;
-    fn deconstruct<C: Sink<SinkItem = Self::Item, SinkError = ()> + Stream<Item = Self::Item, Error = ()> + Send + 'static>(self, context: C)
-    where
+    fn deconstruct<
+        C: Sink<SinkItem = Self::Item, SinkError = ()>
+            + Stream<Item = Self::Item, Error = ()>
+            + Send
+            + 'static,
+    >(
+        self,
+        context: C,
+    ) where
         Self: Sized;
 }
 
@@ -93,7 +107,10 @@ pub struct Future<T: Value, E: Value> {
 }
 
 impl<T: Value, E: Value> Future<T, E> {
-    fn new<F: IntoFuture<Item = T, Error = E> + Send + 'static>(future: F) -> Self where F::Future: Send {
+    pub fn new<F: IntoFuture<Item = T, Error = E> + Send + 'static>(future: F) -> Self
+    where
+        F::Future: Send,
+    {
         Future {
             future: Box::new(future.into_future()),
         }
@@ -111,34 +128,61 @@ fn future_with_err<T: Value, E: Value>(item: E::Item) -> Result<Result<T::Item, 
 impl<T: Value + Send + 'static, E: Value + Send + 'static> Value for Future<T, E> {
     type Item = Result<T::Item, E::Item>;
 
-    fn construct<C: Sink<SinkItem = Self::Item, SinkError = ()> + Stream<Item = Self::Item, Error = ()> + Send + 'static>(context: C) -> Self where Self: Sized {
-        executor::spawn(context.for_each(|v| {println!("{}", serde_json::to_string(&v).unwrap()); Ok(())}));
+    fn construct<
+        C: Sink<SinkItem = Self::Item, SinkError = ()>
+            + Stream<Item = Self::Item, Error = ()>
+            + Send
+            + 'static,
+    >(
+        context: C,
+    ) -> Self
+    where
+        Self: Sized,
+    {
+        executor::spawn(context.for_each(|v| {
+            println!("{}", serde_json::to_string(&v).unwrap());
+            Ok(())
+        }));
         Future {
             future: Box::new(futures::future::done(Ok(T::construct(Context::new().0)))),
         }
     }
 
-    fn deconstruct<C: Sink<SinkItem = Self::Item, SinkError = ()> + Stream<Item = Self::Item, Error = ()> + Send + 'static>(self, context: C) where Self: Sized {
+    fn deconstruct<
+        C: Sink<SinkItem = Self::Item, SinkError = ()>
+            + Stream<Item = Self::Item, Error = ()>
+            + Send
+            + 'static,
+    >(
+        self,
+        context: C,
+    ) where
+        Self: Sized,
+    {
         executor::spawn(self.future.then(|result| {
             match result {
                 Ok(value) => {
-                    let ctx = context.map(|item| {
-                        if let Ok(item) = item {
-                            return item;
-                        } else {
-                            panic!("Invalid result in future stream");
-                        }
-                    }).with(future_with_ok::<T, E>);
+                    let ctx = context
+                        .map(|item| {
+                            if let Ok(item) = item {
+                                return item;
+                            } else {
+                                panic!("Invalid result in future stream");
+                            }
+                        })
+                        .with(future_with_ok::<T, E>);
                     value.deconstruct(ctx);
                 }
                 Err(value) => {
-                    let ctx = context.map(|item| {
-                        if let Err(item) = item {
-                            return item;
-                        } else {
-                            panic!("Invalid result in future stream");
-                        }
-                    }).with(future_with_err::<T, E>);
+                    let ctx = context
+                        .map(|item| {
+                            if let Err(item) = item {
+                                return item;
+                            } else {
+                                panic!("Invalid result in future stream");
+                            }
+                        })
+                        .with(future_with_err::<T, E>);
                     value.deconstruct(ctx);
                 }
             }
@@ -170,15 +214,29 @@ where
 {
     type Item = T;
 
-    fn construct<C: Sink<SinkItem = Self::Item, SinkError = ()> + Stream<Item = Self::Item, Error = ()> + Send + 'static>(context: C) -> Self {
+    fn construct<
+        C: Sink<SinkItem = Self::Item, SinkError = ()>
+            + Stream<Item = Self::Item, Error = ()>
+            + Send
+            + 'static,
+    >(
+        context: C,
+    ) -> Self {
         if let Ok(v) = context.into_future().wait() {
             return v.0.unwrap();
         } else {
             panic!("panic in construction");
         }
     }
-    fn deconstruct<C: Sink<SinkItem = Self::Item, SinkError = ()> + Stream<Item = Self::Item, Error = ()> + Send + 'static>(self, context: C)
-    where
+    fn deconstruct<
+        C: Sink<SinkItem = Self::Item, SinkError = ()>
+            + Stream<Item = Self::Item, Error = ()>
+            + Send
+            + 'static,
+    >(
+        self,
+        context: C,
+    ) where
         Self: Sized,
     {
         executor::spawn(context.send(self).then(|_| Ok(())));
