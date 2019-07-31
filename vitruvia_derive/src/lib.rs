@@ -111,7 +111,10 @@ fn generate_return_variants(methods: &[Procedure]) -> Vec<Variant> {
         .collect::<Vec<_>>()
 }
 
-fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
+fn generate_remote_impl(ident: &Ident, methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let call_inner = prefix(ident, "Call_Inner");
+    let call = prefix(ident, "Call");
+    let channel = prefix(ident, "Channel");
     let mut stream = proc_macro2::TokenStream::new();
     for method in methods.iter() {
         let index_ident = method.ident.clone().unwrap();
@@ -147,10 +150,10 @@ fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
         stream.extend(quote! {
             fn #ident(#arg_stream) -> #return_type {
                 let _proto_id = self.next_id();
-                self.queue.write().unwrap().push_back(Call {call: _Call::#index_ident#call_sig});
+                self.queue.write().unwrap().push_back(#call {call: #call_inner::#index_ident#call_sig});
                 self.task.notify();
                 let (ct, ct1) = ::vitruvia::protocol::Context::new();
-                self.channels.write().unwrap().insert(_proto_id, st_traits::Channel::#ident(Box::new(ct1)));
+                self.channels.write().unwrap().insert(_proto_id, #channel::#ident(Box::new(ct1)));
                 <#return_type as ::vitruvia::protocol::Value>::construct(ct)
             }
         });
@@ -158,7 +161,8 @@ fn generate_remote_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
     stream
 }
 
-fn generate_serialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
+fn generate_serialize_impl(ident: &Ident, methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let call_inner = prefix(ident, "Call_Inner");
     let mut arms = proc_macro2::TokenStream::new();
     for (index, method) in methods.iter().enumerate() {
         let ident = &method.ident;
@@ -179,7 +183,7 @@ fn generate_serialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
             (#args)
         });
         arms.extend(quote! {
-            _Call::#ident#sig => {
+            #call_inner::#ident#sig => {
                 let mut seq = serializer.serialize_seq(Some(#t_len))?;
                 seq.serialize_element(&#index)?;
                 #element_calls
@@ -190,12 +194,16 @@ fn generate_serialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
     arms
 }
 
-fn generate_serialize_return_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
+fn generate_serialize_return_impl(
+    ident: &Ident,
+    methods: &[Procedure],
+) -> proc_macro2::TokenStream {
+    let response = prefix(ident, "Response");
     let mut arms = proc_macro2::TokenStream::new();
     for method in methods {
         let ident = &method.ident;
         arms.extend(quote! {
-            Response::#ident(data, idx, m) => {
+            #response::#ident(data, idx, m) => {
                 let mut seq = serializer.serialize_seq(Some(3))?;
                 seq.serialize_element(m)?;
                 seq.serialize_element(idx)?;
@@ -207,13 +215,17 @@ fn generate_serialize_return_impl(methods: &[Procedure]) -> proc_macro2::TokenSt
     arms
 }
 
-fn generate_deserialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
+fn generate_deserialize_impl(ident: &Ident, methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let call_inner = prefix(ident, "Call_Inner");
+    let call = prefix(ident, "Call");
+    let response_variant = prefix(ident, "Call_Response_Variant");
+    let response = prefix(ident, "Response");
     let mut arms = proc_macro2::TokenStream::new();
     for (index, method) in methods.iter().enumerate() {
         let ident = &method.ident;
         let mut sig = proc_macro2::TokenStream::new();
         let mut args = proc_macro2::TokenStream::new();
-        for index in (0..=method.arg_types.len()).into_iter().map(|i| i + 1) {
+        for index in (0..=method.arg_types.len()).map(|i| i + 1) {
             args.extend(quote! {
                 seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(#index, &self))?,
             });
@@ -223,31 +235,35 @@ fn generate_deserialize_impl(methods: &[Procedure]) -> proc_macro2::TokenStream 
         });
         arms.extend(quote! {
             #index => {
-                _Call::#ident#sig
+                #call_inner::#ident#sig
             }
         });
     }
     quote! {
-        Ok(Call{
+        Ok(#call{
             call: match index {
                 #arms,
                 _ => {
-                    let d: Response = seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(1, &self))?;
-                    _Call::__Response(d)
+                    let d: #response = seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(1, &self))?;
+                    #call_inner::#response_variant(d)
                 }
             }
         })
     }
 }
 
-fn generate_deserialize_return_impl(methods: &[Procedure]) -> proc_macro2::TokenStream {
+fn generate_deserialize_return_impl(
+    ident: &Ident,
+    methods: &[Procedure],
+) -> proc_macro2::TokenStream {
+    let response = prefix(ident, "Response");
     let mut arms = proc_macro2::TokenStream::new();
     for (index, method) in methods.iter().enumerate() {
         let ident = &method.ident;
         let index = index as u64;
         arms.extend(quote! {
             #index => {
-                Ok(Response::#ident(seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?, seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?, index))
+                Ok(#response::#ident(seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?, seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?, index))
             }
         });
     }
@@ -296,38 +312,46 @@ fn generate_shim_forward(methods: &[Procedure]) -> proc_macro2::TokenStream {
     calls
 }
 
-fn generate_st_traits(methods: &[Procedure]) -> proc_macro2::TokenStream {
+fn generate_st_traits(ident: &Ident, methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let channel = prefix(ident, "Channel");
     let mut items = proc_macro2::TokenStream::new();
     let mut variants = proc_macro2::TokenStream::new();
 
     methods.iter().for_each(|m| {
         let r_type = m.return_type.as_ref().unwrap();
-        let ident = m.ident.as_ref().unwrap();
+        let ident = prefix(ident, &format!("METHOD_TRAIT_{}", m.ident.as_ref().unwrap().to_string()));
         items.extend(quote! {
+            #[allow(non_camel_case_types)]
+            #[doc(hidden)]
             pub trait #ident: ::futures::Stream<Item = <#r_type as ::vitruvia::protocol::Value>::Item, Error = ()> + ::futures::Sink<SinkItem = <#r_type as ::vitruvia::protocol::Value>::Item, SinkError = ()> + Send + Sync {}
             impl<T> #ident for T where T: ::futures::Stream<Item = <#r_type as ::vitruvia::protocol::Value>::Item, Error = ()> + ::futures::Sink<SinkItem = <#r_type as ::vitruvia::protocol::Value>::Item, SinkError = ()> + Send + Sync {}
         });
+        let o_ident = m.ident.as_ref().unwrap();
         variants.extend(quote! {
-            #ident(Box<dyn #ident>),
+            #o_ident(Box<dyn #ident>),
         })
     });
 
     quote! {
-        pub enum Channel {
+        #[doc(hidden)]
+        #[allow(non_camel_case_types)]
+        pub enum #channel {
             #variants
         }
         #items
     }
 }
 
-fn generate_handle_response(methods: &[Procedure]) -> proc_macro2::TokenStream {
+fn generate_handle_response(ident: &Ident, methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let channel = prefix(ident, "Channel");
+    let response = prefix(ident, "Response");
     let mut arms = proc_macro2::TokenStream::new();
     for method in methods {
         let ident = method.ident.as_ref().unwrap();
         arms.extend(quote! {
-            Response::#ident(data, index, id) => {
+            #response::#ident(data, index, id) => {
                 let mut channels = self.channels.write().unwrap();
-                if let Some(st_traits::Channel::#ident(channel)) = channels.get_mut(&id) {
+                if let Some(#channel::#ident(channel)) = channels.get_mut(&id) {
                     channel.start_send(data);
                 }
             }
@@ -340,22 +364,37 @@ fn generate_handle_response(methods: &[Procedure]) -> proc_macro2::TokenStream {
     }
 }
 
+fn prefix<'a>(ident: &Ident, name: &'a str) -> Ident {
+    Ident::new(
+        &format!("_{}_PROTOCOL_IMPLEMENTATION_{}", ident, name),
+        Span::call_site(),
+    )
+}
+
 fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
-    let mod_ident = Ident::new(&format!("_{}_protocol", &ident), ident.span());
     let enum_variants = generate_enum(methods);
     let return_variants = generate_return_variants(methods);
-    let remote_impl = generate_remote_impl(methods);
-    let serialize_impl = generate_serialize_impl(methods);
-    let serialize_return_impl = generate_serialize_return_impl(methods);
-    let deserialize_impl = generate_deserialize_impl(methods);
-    let deserialize_return_impl = generate_deserialize_return_impl(methods);
-    let blanket = generate_blanket(methods);
-    let st_traits = generate_st_traits(methods);
-    let handle_response = generate_handle_response(methods);
+    let remote_impl = generate_remote_impl(ident, methods);
+    let serialize_impl = generate_serialize_impl(ident, methods);
+    let serialize_return_impl = generate_serialize_return_impl(ident, methods);
+    let deserialize_impl = generate_deserialize_impl(ident, methods);
+    let deserialize_return_impl = generate_deserialize_return_impl(ident, methods);
+    let blanket = generate_blanket(ident, methods);
+    let st_traits = generate_st_traits(ident, methods);
+    let handle_response = generate_handle_response(ident, methods);
     let shim_forward = generate_shim_forward(methods);
     let call_repr: proc_macro2::TokenStream;
     let m_len = methods.len();
-    if methods.len() == 1 && methods[0].arg_types.len() == 0 {
+    let c_remote = prefix(ident, "Concrete_Remote");
+    let call_inner = prefix(ident, "Call_Inner");
+    let protocol_shim = prefix(ident, "Protocol_Shim");
+    let protocol_trait = prefix(ident, "Protocol_Trait");
+    let call = prefix(ident, "Call");
+    let remote = prefix(ident, "Remote");
+    let response = prefix(ident, "Response");
+    let response_variant = prefix(ident, "Call_Response_Variant");
+    let channel = prefix(ident, "Channel");
+    if methods.len() == 1 && methods[0].arg_types.is_empty() {
         call_repr = proc_macro2::TokenStream::new();
     } else {
         call_repr = quote! {
@@ -364,198 +403,195 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
     }
     let gen = quote! {
         #[allow(non_snake_case)]
-        mod #mod_ident {
-            use ::std::{collections::VecDeque, sync::{RwLock, Arc, atomic::{AtomicU64, Ordering}}};
-            use ::futures::{Poll, Async, task::AtomicTask};
-            use ::serde::ser::SerializeSeq;
-            #[derive(Clone)]
-            struct CRemote {
-                task: Arc<AtomicTask>,
-                queue: Arc<RwLock<VecDeque<Call>>>,
-                ids: Arc<RwLock<Vec<u64>>>,
-                last_id: Arc<AtomicU64>,
-                channels: Arc<RwLock<::std::collections::HashMap<u64, st_traits::Channel>>>,
-            }
-            impl CRemote {
-                pub fn new() -> CRemote {
-                    CRemote {
-                        task: Arc::new(AtomicTask::new()),
-                        queue: Arc::new(RwLock::new(VecDeque::new())),
-                        ids: Arc::new(RwLock::new(vec![])),
-                        last_id: Arc::new(AtomicU64::new(0)),
-                        channels: Arc::new(RwLock::new(::std::collections::HashMap::new())),
-                    }
-                }
-                fn next_id(&self) -> u64 {
-                    let mut ids = self.ids.write().unwrap();
-                    if let Some(id) = ids.pop() {
-                        id
-                    } else {
-                        self.last_id.fetch_add(1, Ordering::SeqCst)
-                    }
+        #[allow(non_camel_case_types)]
+        #[derive(Clone)]
+        #[allow(non_camel_case_types)]
+        struct #c_remote {
+            task: ::std::sync::Arc<::futures::task::AtomicTask>,
+            queue: ::std::sync::Arc<::std::sync::RwLock<::std::collections::VecDeque<#call>>>,
+            ids: ::std::sync::Arc<::std::sync::RwLock<Vec<u64>>>,
+            last_id: ::std::sync::Arc<::std::sync::atomic::AtomicU64>,
+            channels: ::std::sync::Arc<::std::sync::RwLock<::std::collections::HashMap<u64, #channel>>>,
+        }
+        impl #c_remote {
+            pub fn new() -> #c_remote {
+                #c_remote {
+                    task: ::std::sync::Arc::new(::futures::task::AtomicTask::new()),
+                    queue: ::std::sync::Arc::new(::std::sync::RwLock::new(::std::collections::VecDeque::new())),
+                    ids: ::std::sync::Arc::new(::std::sync::RwLock::new(vec![])),
+                    last_id: ::std::sync::Arc::new(::std::sync::atomic::AtomicU64::new(0)),
+                    channels: ::std::sync::Arc::new(::std::sync::RwLock::new(::std::collections::HashMap::new())),
                 }
             }
-            impl super::#ident for CRemote {
-                #remote_impl
+            fn next_id(&self) -> u64 {
+                let mut ids = self.ids.write().unwrap();
+                if let Some(id) = ids.pop() {
+                    id
+                } else {
+                    self.last_id.fetch_add(1, ::std::sync::atomic::Ordering::SeqCst)
+                }
             }
-            impl ::futures::Stream for CRemote {
-                type Item = Call;
-                type Error = ();
+        }
+        impl #ident for #c_remote {
+            #remote_impl
+        }
+        impl ::futures::Stream for #c_remote {
+            type Item = #call;
+            type Error = ();
 
-                fn poll(&mut self) -> Poll<::std::option::Option<Self::Item>, Self::Error> {
-                    match self.queue.write().unwrap().pop_front() {
-                        Some(item) => {
-                            Ok(Async::Ready(Some(item)))
-                        },
-                        None => {
-                            self.task.register();
-                            Ok(Async::NotReady)
-                        }
+            fn poll(&mut self) -> ::futures::Poll<::std::option::Option<Self::Item>, Self::Error> {
+                match self.queue.write().unwrap().pop_front() {
+                    Some(item) => {
+                        Ok(::futures::Async::Ready(Some(item)))
+                    },
+                    None => {
+                        self.task.register();
+                        Ok(::futures::Async::NotReady)
                     }
                 }
             }
-            impl ::futures::Sink for CRemote {
-                type SinkItem = Response;
-                type SinkError = ();
+        }
+        impl ::futures::Sink for #c_remote {
+            type SinkItem = #response;
+            type SinkError = ();
 
-                fn start_send(&mut self, item: Self::SinkItem) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
-                    #handle_response
-                    Ok(::futures::AsyncSink::Ready)
-                }
-                fn poll_complete(&mut self) -> ::futures::Poll<(), Self::SinkError> {
-                    Ok(::futures::Async::Ready(()))
-                }
+            fn start_send(&mut self, item: Self::SinkItem) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
+                #handle_response
+                Ok(::futures::AsyncSink::Ready)
             }
-            #call_repr
-            pub struct Call {
-                call: _Call,
+            fn poll_complete(&mut self) -> ::futures::Poll<(), Self::SinkError> {
+                Ok(::futures::Async::Ready(()))
             }
-            #[allow(non_camel_case_types)]
-            enum _Call {
-                #(#enum_variants),*,
-                __Response(Response)
-            }
-            #[allow(non_camel_case_types)]
-            mod st_traits {
-                #st_traits
-            }
-            #[allow(non_camel_case_types)]
-            pub enum Response {
-                #(#return_variants),*
-            }
-            impl ::serde::Serialize for Call {
-                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-                    match &self.call {
-                        #serialize_impl
-                        _Call::__Response(response) => {
-                            let mut seq = serializer.serialize_seq(Some(4))?;
-                            seq.serialize_element(&#m_len)?;
-                            seq.serialize_element(response);
-                            seq.end()
-                        }
+        }
+        #[doc(hidden)]
+        #[allow(non_camel_case_types)]
+        #call_repr
+        pub struct #call {
+            call: #call_inner,
+        }
+        #[allow(non_camel_case_types)]
+        enum #call_inner {
+            #(#enum_variants),*,
+            #response_variant(#response)
+        }
+        #st_traits
+        #[allow(non_camel_case_types)]
+        #[doc(hidden)]
+        pub enum #response {
+            #(#return_variants),*
+        }
+        impl ::serde::Serialize for #call {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+                use ::serde::ser::SerializeSeq;
+                match &self.call {
+                    #serialize_impl
+                    #call_inner::#response_variant(response) => {
+                        let mut seq = serializer.serialize_seq(Some(4))?;
+                        seq.serialize_element(&#m_len)?;
+                        seq.serialize_element(response);
+                        seq.end()
                     }
                 }
             }
-            impl ::serde::Serialize for Response {
-                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-                    match self {
-                        #serialize_return_impl
-                    }
+        }
+        impl ::serde::Serialize for #response {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+                use ::serde::ser::SerializeSeq;
+                match self {
+                    #serialize_return_impl
                 }
             }
-            impl <'de> ::serde::Deserialize<'de> for Call {
-                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'de> {
-                    struct CallVisitor;
-                    impl<'de> ::serde::de::Visitor<'de> for CallVisitor {
-                        type Value = Call;
+        }
+        impl <'de> ::serde::Deserialize<'de> for #call {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'de> {
+                struct CallVisitor;
+                impl<'de> ::serde::de::Visitor<'de> for CallVisitor {
+                    type Value = #call;
 
-                        fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                            formatter.write_str("a serialized protocol Call")
-                        }
-                        fn visit_seq<V>(self, mut seq: V) -> Result<Call, V::Error> where V: ::serde::de::SeqAccess<'de>, {
-                            let index: usize = seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?;
-                            #deserialize_impl
-                        }
+                    fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                        formatter.write_str("a serialized protocol #call")
                     }
-                    deserializer.deserialize_seq(CallVisitor)
+                    fn visit_seq<V>(self, mut seq: V) -> Result<#call, V::Error> where V: ::serde::de::SeqAccess<'de>, {
+                        let index: usize = seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?;
+                        #deserialize_impl
+                    }
                 }
+                deserializer.deserialize_seq(CallVisitor)
             }
-            pub trait Remote: futures::Stream<Item = Call, Error = ()> + futures::Sink<SinkItem = Response, SinkError = ()> + Clone {}
-            impl Remote for CRemote {}
-            impl <'de> ::serde::Deserialize<'de> for Response {
-                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'de> {
-                    struct ResponseVisitor;
-                    impl<'de> ::serde::de::Visitor<'de> for ResponseVisitor {
-                        type Value = Response;
+        }
+        trait #remote: futures::Stream<Item = #call, Error = ()> + futures::Sink<SinkItem = #response, SinkError = ()> + Clone {}
+        impl #remote for #c_remote {}
+        impl <'de> ::serde::Deserialize<'de> for #response {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'de> {
+                struct ResponseVisitor;
+                impl<'de> ::serde::de::Visitor<'de> for ResponseVisitor {
+                    type Value = #response;
 
-                        fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                            formatter.write_str("a serialized protocol Response")
-                        }
-                        fn visit_seq<V>(self, mut seq: V) -> Result<Response, V::Error> where V: ::serde::de::SeqAccess<'de>, {
-                            let index: u64 = seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?;
-                            #deserialize_return_impl
-                        }
+                    fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                        formatter.write_str("a serialized protocol #response")
                     }
-                    deserializer.deserialize_seq(ResponseVisitor)
-                }
-            }
-            #[allow(non_camel_case_types)]
-            pub struct ProtocolShim<T: super::#ident> {
-                inner: T,
-                channels: ::std::collections::HashMap<u64, st_traits::Channel>,
-                inner_stream: Box<dyn ::futures::Stream<Item = Response, Error = ()> + Send>,
-            }
-            impl<T: super::#ident> ProtocolShim<T> {
-                pub fn new(inner: T) -> Self {
-                    ProtocolShim {
-                        inner,
-                        channels: ::std::collections::HashMap::new(),
-                        inner_stream: Box::new(::futures::stream::empty())
+                    fn visit_seq<V>(self, mut seq: V) -> Result<#response, V::Error> where V: ::serde::de::SeqAccess<'de>, {
+                        let index: u64 = seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?;
+                        #deserialize_return_impl
                     }
                 }
+                deserializer.deserialize_seq(ResponseVisitor)
             }
-            impl<T> ::futures::Sink for ProtocolShim<T> where T: super::#ident {
-                type SinkItem = Call;
-                type SinkError = ();
-                fn start_send(&mut self, item: Self::SinkItem) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
-                    use super::#ident;
-                    use ::vitruvia::protocol::Value;
-                    use ::futures::{Stream, Sink, Future};
-                    match item.call {
-                        #blanket
-                        _Call::__Response(resp) => {
-                            // TODO
-                        }
+        }
+        #[allow(non_camel_case_types)]
+        struct #protocol_shim<T: #ident> {
+            inner: T,
+            channels: ::std::collections::HashMap<u64, #channel>,
+            inner_stream: Box<dyn ::futures::Stream<Item = #response, Error = ()> + Send>,
+        }
+        impl<T: #ident> #protocol_shim<T> {
+            pub fn new(inner: T) -> Self {
+                #protocol_shim {
+                    inner,
+                    channels: ::std::collections::HashMap::new(),
+                    inner_stream: Box::new(::futures::stream::empty())
+                }
+            }
+        }
+        impl<T> ::futures::Sink for #protocol_shim<T> where T: #ident {
+            type SinkItem = #call;
+            type SinkError = ();
+            fn start_send(&mut self, item: Self::SinkItem) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
+                use ::vitruvia::protocol::Value;
+                use ::futures::{Stream, Sink, Future};
+                match item.call {
+                    #blanket
+                    #call_inner::#response_variant(resp) => {
+                        // TODO
                     }
-                    Ok(::futures::AsyncSink::Ready)
                 }
-                fn poll_complete(&mut self) -> ::futures::Poll<(), Self::SinkError> {
-                    Ok(::futures::Async::Ready(()))
-                }
+                Ok(::futures::AsyncSink::Ready)
             }
-            impl<T> ::futures::Stream for ProtocolShim<T> where T: super::#ident {
-                type Item = Response;
-                type Error = ();
+            fn poll_complete(&mut self) -> ::futures::Poll<(), Self::SinkError> {
+                Ok(::futures::Async::Ready(()))
+            }
+        }
+        impl<T> ::futures::Stream for #protocol_shim<T> where T: #ident {
+            type Item = #response;
+            type Error = ();
 
-                fn poll(&mut self) -> ::futures::Poll<Option<Self::Item>, Self::Error> {
-                    self.inner_stream.poll()
-                }
+            fn poll(&mut self) -> ::futures::Poll<Option<Self::Item>, Self::Error> {
+                self.inner_stream.poll()
             }
-            pub trait Protocol: ::futures::Sink<SinkItem = Call, SinkError = ()> + ::futures::Stream<Item = Response, Error = ()> + super::#ident + Send {}
-            #[allow(non_camel_case_types)]
-            impl<T> Protocol for ProtocolShim<T> where T: super::#ident + Send {}
-            impl<T: super::#ident> super::#ident for ProtocolShim<T> {
-                #shim_forward
-            }
-            pub fn remote() -> impl super::#ident + Remote {
-                CRemote::new()
-            }
+        }
+        pub trait #protocol_trait: ::futures::Sink<SinkItem = #call, SinkError = ()> + ::futures::Stream<Item = #response, Error = ()> + #ident + Send {}
+        #[allow(non_camel_case_types)]
+        impl<T> #protocol_trait for #protocol_shim<T> where T: #ident + Send {}
+        impl<T: #ident> #ident for #protocol_shim<T> {
+            #shim_forward
         }
     };
     gen.into()
 }
 
-fn generate_blanket(methods: &[Procedure]) -> proc_macro2::TokenStream {
+fn generate_blanket(ident: &Ident, methods: &[Procedure]) -> proc_macro2::TokenStream {
+    let call_inner = prefix(ident, "Call_Inner");
+    let response = prefix(ident, "Response");
     let mut arms = proc_macro2::TokenStream::new();
     for (index, method) in methods.iter().enumerate() {
         let index = index as u64;
@@ -577,13 +613,13 @@ fn generate_blanket(methods: &[Procedure]) -> proc_macro2::TokenStream {
             (#s_args)
         });
         arms.extend(quote! {
-            _Call::#ident#sig => {
+            #call_inner::#ident#sig => {
                 let (context, loc_context) = ::vitruvia::protocol::Context::new();
                 self.#ident(#args).deconstruct(context);
                 let (sink, stream) = loc_context.split();
-                let mut i_stream: Box<dyn ::futures::Stream<Error = (), Item = Response> + Send + 'static> = Box::new(futures::stream::empty());
+                let mut i_stream: Box<dyn ::futures::Stream<Error = (), Item = #response> + Send + 'static> = Box::new(futures::stream::empty());
                 std::mem::swap(&mut self.inner_stream, &mut i_stream);
-                self.inner_stream = Box::new(stream.map(move |i| Response::#ident(i, #index, #id)).select(i_stream));
+                self.inner_stream = Box::new(stream.map(move |i| #response::#ident(i, #index, #id)).select(i_stream));
             }
         });
     }
@@ -660,6 +696,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                 );
                 assert_stream.extend(TokenStream::from(quote_spanned! {
                     ty.span() =>
+                    #[allow(non_camel_case_types)]
                     struct #ident where #ty: ::vitruvia::protocol::Value;
                 }));
                 procedure.return_type = Some(*ty.clone());
@@ -694,6 +731,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                         );
                         assert_stream.extend(TokenStream::from(quote_spanned! {
                             ty.span() =>
+                            #[allow(non_camel_case_types)]
                             struct #ident where #ty: ::vitruvia::protocol::Value;
                         }));
                         procedure.arg_types.push(argument.ty.clone());
@@ -721,18 +759,19 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
         procedures.push(procedure);
     }
-    if procedures.len() == 0 {
+    if procedures.is_empty() {
         return TokenStream::from(quote_spanned! {
             input.span() =>
             compile_error!("`protocol` with no methods is invalid");
         });
     }
     let ident = &input.ident;
-    let mod_ident = Ident::new(&format!("_{}_protocol", ident), input.ident.span());
+    let protocol_shim = prefix(ident, "Protocol_Shim");
+    let protocol_trait = prefix(ident, "Protocol_Trait");
     let mut m: TokenStream = quote! {
         #[doc(hidden)]
-        fn into_protocol(self) -> Box<dyn #mod_ident::Protocol> where Self: Sized + 'static {
-            Box::new(#mod_ident::ProtocolShim::new(self))
+        fn into_protocol(self) -> Box<dyn #protocol_trait> where Self: Sized + 'static {
+            Box::new(#protocol_shim::new(self))
         }
     }
     .into();
@@ -763,11 +802,13 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                 segments: ty_path,
             },
         }));
+    let c_remote = prefix(ident, "Concrete_Remote");
+    let remote = prefix(ident, "Remote");
     let binds = generate_binds(ident, &procedures);
     let blanket_impl: TokenStream = quote! {
         impl dyn #ident {
-            fn remote() -> impl #ident + #mod_ident::Remote {
-                #mod_ident::remote()
+            fn remote() -> impl #ident + #remote {
+                #c_remote::new()
             }
         }
     }

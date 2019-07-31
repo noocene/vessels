@@ -1,0 +1,17 @@
+{
+	"dockerFile": "Dockerfile",
+	"extensions": [
+		"rust-lang.rust",
+		"bungcip.better-toml",
+	],
+	"runArgs": [
+		"--cap-add=SYS_PTRACE",
+		"--security-opt",
+		"seccomp=unconfined"
+	],
+	"settings": {
+		"terminal.integrated.shell.linux": "/bin/zsh",
+		"editor.formatOnSave": true,
+		"rust.clippy_preference": "on",
+	}
+}

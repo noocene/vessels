@@ -1,8 +1,8 @@
-use futures::{lazy, Sink, Stream, IntoFuture};
 use futures::Future as Fut;
+use futures::{lazy, IntoFuture, Stream};
 use vitruvia::{
     executor,
-    protocol::{protocol, Future, self, Context},
+    protocol::{self, protocol, Future},
 };
 
 #[protocol]

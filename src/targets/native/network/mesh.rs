@@ -244,12 +244,11 @@ impl RTCDataChannel {
                 None
             })
             .unwrap();
-        let data_channel = RTCDataChannel {
+        RTCDataChannel {
             channel: WebRTCDataChannel(channel),
             incoming_messages,
             incoming_messages_task,
-        };
-        data_channel
+        }
     }
     fn local_create(channel: Object) -> RTCDataChannelOpening {
         let task = Arc::new(AtomicTask::new());
@@ -257,7 +256,7 @@ impl RTCDataChannel {
         let open_cloned = open.clone();
         let task_cloned = task.clone();
         channel
-            .connect("on-open", false, move |values| {
+            .connect("on-open", false, move |_| {
                 open_cloned.store(true, Ordering::SeqCst);
                 task_cloned.notify();
                 None
@@ -273,7 +272,7 @@ impl RTCDataChannel {
     fn create(channel: Object, sender: Sender<Channel>, task: Arc<AtomicTask>) {
         let data_channel = RTCDataChannel::make_channel(channel.clone());
         channel
-            .connect("on-open", false, move |values| {
+            .connect("on-open", false, move |_| {
                 sender
                     .send(Channel::DataChannel(Box::new(data_channel.clone())))
                     .unwrap();
@@ -399,7 +398,7 @@ pub(crate) fn new(
         let missing = needed
             .iter()
             .filter(|n| registry.find_plugin(n).is_none())
-            .map(|n| *n)
+            .cloned()
             .collect::<Vec<_>>();
         if !missing.is_empty() {
             panic!("missing plugins: {:?}", missing);
