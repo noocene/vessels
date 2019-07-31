@@ -150,11 +150,12 @@ fn generate_remote_impl(ident: &Ident, methods: &[Procedure]) -> proc_macro2::To
         stream.extend(quote! {
             fn #ident(#arg_stream) -> #return_type {
                 let _proto_id = self.next_id();
-                self.queue.write().unwrap().push_back(#call {call: #call_inner::#index_ident#call_sig});
-                self.task.notify();
                 let (ct, ct1) = ::vitruvia::protocol::Context::new();
                 self.channels.write().unwrap().insert(_proto_id, #channel::#ident(Box::new(ct1)));
-                <#return_type as ::vitruvia::protocol::Value>::construct(ct)
+                let constructed = <#return_type as ::vitruvia::protocol::Value>::construct(ct);
+                self.queue.write().unwrap().push_back(#call {call: #call_inner::#index_ident#call_sig});
+                self.task.notify();
+                constructed
             }
         });
     }
@@ -352,7 +353,7 @@ fn generate_handle_response(ident: &Ident, methods: &[Procedure]) -> proc_macro2
             #response::#ident(data, index, id) => {
                 let mut channels = self.channels.write().unwrap();
                 if let Some(#channel::#ident(channel)) = channels.get_mut(&id) {
-                    channel.start_send(data);
+                    channel.start_send(data).unwrap();
                 }
             }
         });
@@ -488,7 +489,7 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                     #call_inner::#response_variant(response) => {
                         let mut seq = serializer.serialize_seq(Some(4))?;
                         seq.serialize_element(&#m_len)?;
-                        seq.serialize_element(response);
+                        seq.serialize_element(response)?;
                         seq.end()
                     }
                 }

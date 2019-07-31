@@ -5,18 +5,27 @@ use vitruvia::{
     protocol::{self, protocol, Future},
 };
 
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Tester<T> {
+    Yes,
+    No,
+    Value(T),
+}
+
 #[protocol]
 pub trait TestProtocol {
-    fn test(&self) -> Future<String, ()>;
+    fn test(&self) -> Future<Tester<u8>, ()>;
     fn sec_test(&self);
 }
 
 struct Test;
 
 impl TestProtocol for Test {
-    fn test(&self) -> Future<String, ()> {
+    fn test(&self) -> Future<Tester<u8>, ()> {
         println!("test");
-        protocol::Future::new(Ok("foo".to_owned()).into_future())
+        protocol::Future::new(Ok(Tester::Value(3)).into_future())
     }
     fn sec_test(&self) {
         println!("sec_test");

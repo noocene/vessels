@@ -44,7 +44,7 @@ impl<T: Serialize + DeserializeOwned> Context<T> {
     }
 }
 
-impl<T: Serialize + DeserializeOwned> futures::Sink for Context<T> {
+impl<T: Serialize + DeserializeOwned> Sink for Context<T> {
     type SinkError = ();
     type SinkItem = T;
 
@@ -59,7 +59,7 @@ impl<T: Serialize + DeserializeOwned> futures::Sink for Context<T> {
     }
 }
 
-impl<T: Serialize + DeserializeOwned> futures::Stream for Context<T> {
+impl<T: Serialize + DeserializeOwned> Stream for Context<T> {
     type Error = ();
     type Item = T;
 
@@ -117,12 +117,33 @@ impl<T: Value, E: Value> Future<T, E> {
     }
 }
 
-fn future_with_ok<T: Value, E: Value>(ok: T::Item) -> Result<Result<T::Item, E::Item>, ()> {
-    Ok(Ok(ok))
+struct SinkStream<T, U>(T, U);
+
+impl<T, E, S, U> Sink for SinkStream<S, U>
+where
+    S: Sink<SinkItem = T, SinkError = E>,
+{
+    type SinkItem = T;
+    type SinkError = E;
+
+    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        self.0.start_send(item)
+    }
+    fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
+        self.0.poll_complete()
+    }
 }
 
-fn future_with_err<T: Value, E: Value>(item: E::Item) -> Result<Result<T::Item, E::Item>, ()> {
-    Ok(Err(item))
+impl<T, E, S, U> Stream for SinkStream<S, U>
+where
+    U: Stream<Item = T, Error = E>,
+{
+    type Item = T;
+    type Error = E;
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        self.1.poll()
+    }
 }
 
 impl<T: Value + Send + 'static, E: Value + Send + 'static> Value for Future<T, E> {
@@ -139,12 +160,35 @@ impl<T: Value + Send + 'static, E: Value + Send + 'static> Value for Future<T, E
     where
         Self: Sized,
     {
-        executor::spawn(context.for_each(|v| {
-            println!("{}", serde_json::to_string(&v).unwrap());
+        let (sender, receiver) = unbounded();
+        executor::spawn(context.into_future().map_err(|_| ()).and_then(move |v| {
+            let result = v.0.unwrap();
+            match result {
+                Ok(value) => {
+                    let (sink, stream) = v.1.split();
+                    let stream =
+                        futures::stream::once(Ok(value)).chain(stream.map(|data| match data {
+                            Ok(data) => data,
+                            Err(_e) => panic!("Invalid content in protocol future stream"),
+                        }));
+                    let sink = sink.with(|data: T::Item| Ok(Ok(data)));
+                    sender.send(Ok(T::construct(SinkStream(sink, stream)))).unwrap();
+                }
+                Err(value) => {
+                    let (sink, stream) = v.1.split();
+                    let stream =
+                        futures::stream::once(Ok(value)).chain(stream.map(|data| match data {
+                            Err(data) => data,
+                            Ok(_) => panic!("Invalid content in protocol future stream"),
+                        }));
+                    let sink = sink.with(|data: E::Item| Ok(Err(data)));
+                    sender.send(Err(E::construct(SinkStream(sink, stream)))).unwrap();
+                }
+            };
             Ok(())
         }));
         Future {
-            future: Box::new(futures::future::done(Ok(T::construct(Context::new().0)))),
+            future: Box::new(futures::stream::iter(receiver.into_iter()).take(1).into_future().map_err(|v| v.0).map(|v| v.0.unwrap())),
         }
     }
 
@@ -170,7 +214,7 @@ impl<T: Value + Send + 'static, E: Value + Send + 'static> Value for Future<T, E
                                 panic!("Invalid result in future stream");
                             }
                         })
-                        .with(future_with_ok::<T, E>);
+                        .with(|ok| Ok(Ok(ok)));
                     value.deconstruct(ctx);
                 }
                 Err(value) => {
@@ -182,7 +226,7 @@ impl<T: Value + Send + 'static, E: Value + Send + 'static> Value for Future<T, E
                                 panic!("Invalid result in future stream");
                             }
                         })
-                        .with(future_with_err::<T, E>);
+                        .with(|err| Ok(Err(err)));
                     value.deconstruct(ctx);
                 }
             }
