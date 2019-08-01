@@ -10,3 +10,4 @@ RUN rustup component add rust-analysis
 RUN rustup component add rust-src
 RUN rustup component add rustfmt
 RUN rustup install nightly
+RUN apt-get -y install lldb

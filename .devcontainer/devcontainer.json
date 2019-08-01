@@ -3,6 +3,7 @@
 	"extensions": [
 		"rust-lang.rust",
 		"bungcip.better-toml",
+		"vadimcn.vscode-lldb",
 	],
 	"runArgs": [
 		"--cap-add=SYS_PTRACE",

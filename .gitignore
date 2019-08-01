@@ -4,4 +4,3 @@ vitruvia_derive/Cargo.lock
 **/*.rs.bk
 Cargo.lock
 .DS_Store
-.vscode

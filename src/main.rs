@@ -7,22 +7,34 @@ use vitruvia::{
 
 #[derive(Value, Debug)]
 pub enum TestEnum {
-    Number(u8),
+    Numbers(u8, u32),
     Text(String),
+    Empty,
+}
+
+#[derive(Value)]
+pub struct TestStruct {
+    data: String,
+    number: u64,
+    future: Future<TestEnum, ()>,
 }
 
 #[protocol]
 pub trait TestProtocol {
-    fn test(&self) -> Future<TestEnum, ()>;
+    fn test(&self) -> Future<TestStruct, ()>;
     fn sec_test(&self);
 }
 
 struct Test;
 
 impl TestProtocol for Test {
-    fn test(&self) -> Future<TestEnum, ()> {
+    fn test(&self) -> Future<TestStruct, ()> {
         println!("test");
-        protocol::Future::new(Ok(TestEnum::Number(8)).into_future())
+        protocol::Future::new(Ok(TestStruct {
+            data: "test".to_owned(),
+            number: 8,
+            future: Future::new(Ok(TestEnum::Numbers(0, 25)).into_future()),
+        }).into_future())
     }
     fn sec_test(&self) {
         println!("sec_test");
@@ -36,7 +48,7 @@ fn main() {
     executor::run(lazy(move || {
         executor::spawn(rstream.forward(sink).then(|_| Ok(())));
         executor::spawn(stream.forward(rsink).then(|_| Ok(())));
-        println!("{:?}", rem.test().wait());
+        println!("{:?}", rem.test().wait().unwrap().future.wait());
         Ok(())
     }));
 }
