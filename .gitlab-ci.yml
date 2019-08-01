@@ -1,4 +1,4 @@
-image: syntacticsugarglider/vitruvia
+image: syntacticsugarglider/vessels
 
 check:
   script:
