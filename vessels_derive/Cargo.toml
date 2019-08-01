@@ -1,7 +1,7 @@
 [package]
 authors = ["Izzy Swart", "Tyler Poon"]
 edition = "2018"
-name = "vitruvia_derive"
+name = "vessels_derive"
 version = "0.1.0"
 
 [lib]

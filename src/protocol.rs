@@ -5,7 +5,7 @@ use futures::{task::AtomicTask, Async, AsyncSink, IntoFuture, Poll, Sink, StartS
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
 
-pub use vitruvia_derive::{protocol, Value};
+pub use vessels_derive::{protocol, Value};
 
 #[derive(Clone, Debug)]
 pub struct Context<T: Serialize + DeserializeOwned> {

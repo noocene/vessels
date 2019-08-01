@@ -1,5 +1,7 @@
-//! Vitruvia is a general-purpose hardware abstraction layer that aims to provide a
-//! consistent and ergonomic set of interfaces for common platform-specific APIs.
+//! Vessels is an application development framework intended to facilitate
+//! the ergonomic development of performant cross-platform applications using
+//! a novel paradigm based on a single-source distributed object model and
+//! low-overhead containerisation.
 
 #![warn(
     missing_copy_implementations,
@@ -21,7 +23,7 @@ extern crate stdweb;
 
 #[allow(unused_imports)]
 #[macro_use]
-extern crate vitruvia_derive;
+extern crate vessels_derive;
 
 mod errors;
 /// Provides a cross-platform abstracted asynchronous executor.

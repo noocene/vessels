@@ -1,4 +1,4 @@
-FROM syntacticsugarglider/vitruvia
+FROM syntacticsugarglider/vessels
 RUN apt-get --allow-releaseinfo-change update
 RUN apt-get -y install libssl-dev git
 RUN cargo install cargo-edit

@@ -77,7 +77,7 @@ fn generate_return_variants(methods: &[Procedure]) -> Vec<Variant> {
                     ident: None,
                     ty: Type::Verbatim(TypeVerbatim {
                         tts: quote! {
-                            <#ty as ::vitruvia::protocol::Value>::Item
+                            <#ty as ::vessels::protocol::Value>::Item
                         },
                     }),
                     colon_token: None,
@@ -153,9 +153,9 @@ fn generate_remote_impl(ident: &Ident, methods: &[Procedure]) -> proc_macro2::To
         stream.extend(quote! {
             fn #ident(#arg_stream) -> #return_type {
                 let _proto_id = self.next_id();
-                let (ct, ct1) = ::vitruvia::protocol::Context::new();
+                let (ct, ct1) = ::vessels::protocol::Context::new();
                 self.channels.write().unwrap().insert(_proto_id, #channel::#ident(Box::new(ct1)));
-                let constructed = <#return_type as ::vitruvia::protocol::Value>::construct(ct);
+                let constructed = <#return_type as ::vessels::protocol::Value>::construct(ct);
                 self.queue.write().unwrap().push_back(#call {call: #call_inner::#index_ident#call_sig});
                 self.task.notify();
                 constructed
@@ -308,7 +308,7 @@ fn generate_shim_forward(methods: &[Procedure]) -> proc_macro2::TokenStream {
         let return_type = &method.return_type;
         calls.extend(quote! {
             fn #ident(#receiver, #args) -> #return_type {
-                let ctx = ::vitruvia::protocol::Context::<<#return_type as ::vitruvia::protocol::Value>::Item>::new();
+                let ctx = ::vessels::protocol::Context::<<#return_type as ::vessels::protocol::Value>::Item>::new();
                 self.inner.#ident(#arg_names)
             }
         });
@@ -327,8 +327,8 @@ fn generate_st_traits(ident: &Ident, methods: &[Procedure]) -> proc_macro2::Toke
         items.extend(quote! {
             #[allow(non_camel_case_types)]
             #[doc(hidden)]
-            pub trait #ident: ::futures::Stream<Item = <#r_type as ::vitruvia::protocol::Value>::Item, Error = ()> + ::futures::Sink<SinkItem = <#r_type as ::vitruvia::protocol::Value>::Item, SinkError = ()> + Send + Sync {}
-            impl<T> #ident for T where T: ::futures::Stream<Item = <#r_type as ::vitruvia::protocol::Value>::Item, Error = ()> + ::futures::Sink<SinkItem = <#r_type as ::vitruvia::protocol::Value>::Item, SinkError = ()> + Send + Sync {}
+            pub trait #ident: ::futures::Stream<Item = <#r_type as ::vessels::protocol::Value>::Item, Error = ()> + ::futures::Sink<SinkItem = <#r_type as ::vessels::protocol::Value>::Item, SinkError = ()> + Send + Sync {}
+            impl<T> #ident for T where T: ::futures::Stream<Item = <#r_type as ::vessels::protocol::Value>::Item, Error = ()> + ::futures::Sink<SinkItem = <#r_type as ::vessels::protocol::Value>::Item, SinkError = ()> + Send + Sync {}
         });
         let o_ident = m.ident.as_ref().unwrap();
         variants.extend(quote! {
@@ -561,7 +561,7 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
             type SinkItem = #call;
             type SinkError = ();
             fn start_send(&mut self, item: Self::SinkItem) -> ::futures::StartSend<Self::SinkItem, Self::SinkError> {
-                use ::vitruvia::protocol::Value;
+                use ::vessels::protocol::Value;
                 use ::futures::{Stream, Sink, Future};
                 match item.call {
                     #blanket
@@ -618,7 +618,7 @@ fn generate_blanket(ident: &Ident, methods: &[Procedure]) -> proc_macro2::TokenS
         });
         arms.extend(quote! {
             #call_inner::#ident#sig => {
-                let (context, loc_context) = ::vitruvia::protocol::Context::new();
+                let (context, loc_context) = ::vessels::protocol::Context::new();
                 self.#ident(#args).deconstruct(context);
                 let (sink, stream) = loc_context.split();
                 let mut i_stream: Box<dyn ::futures::Stream<Error = (), Item = #response> + Send + 'static> = Box::new(futures::stream::empty());
@@ -701,7 +701,7 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                 assert_stream.extend(TokenStream::from(quote_spanned! {
                     ty.span() =>
                     #[allow(non_camel_case_types)]
-                    struct #ident where #ty: ::vitruvia::protocol::Value;
+                    struct #ident where #ty: ::vessels::protocol::Value;
                 }));
                 procedure.return_type = Some(*ty.clone());
             } else {
@@ -841,10 +841,10 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
             let ident = Ident::new(&format!("{}_{}", ident, index), Span::call_site());
             let ty = &binding.ast().ty;
             variants.extend(quote! {
-                #ident(<#ty as ::vitruvia::protocol::Value>::Item),
+                #ident(<#ty as ::vessels::protocol::Value>::Item),
             });
             stream.extend(quote! {
-                struct #name where #ty: ::vitruvia::protocol::Value;
+                struct #name where #ty: ::vessels::protocol::Value;
             });
         });
         if bindings.is_empty() {
@@ -881,7 +881,7 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
             let ident = Ident::new(&format!("{}_{}_ct", ident, index), Span::call_site());
             let ident_ctx = Ident::new(&format!("{}_{}_ctx", ident, index), Span::call_site());
             stream.extend(quote! {
-                let ctxs = ::vitruvia::protocol::Context::new();
+                let ctxs = ::vessels::protocol::Context::new();
                 let (i_sink, i_stream) = ctxs.1.split();
                 #ident_ctx = Some(i_sink);
                 #ident = Some(i_stream);
@@ -891,7 +891,7 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
                 #en::#r_ident(data) => {
                     let mut s = None;
                     ::std::mem::swap(&mut s, &mut #ident_ctx);
-                    ::vitruvia::executor::spawn(s.expect("No split sink").send_all(::futures::stream::once(Ok(data)).chain(item.1.filter_map(|item| {
+                    ::vessels::executor::spawn(s.expect("No split sink").send_all(::futures::stream::once(Ok(data)).chain(item.1.filter_map(|item| {
                         if let #en::#r_ident(item) = item {
                             Some(item)
                         } else {
@@ -907,7 +907,7 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
                 let sel_stream = (if let Some(stream) = #ident { Box::new(stream.map(|item| #en::#r_ident(item)).select(sel_stream)) } else { sel_stream });
             });
             decl_stream.extend(quote! {
-                let (mut #ident, mut #ident_ctx): (Option<::futures::stream::SplitStream<::vitruvia::protocol::Context::<<#ty as ::vitruvia::protocol::Value>::Item>>>, Option<::futures::stream::SplitSink<::vitruvia::protocol::Context::<<#ty as ::vitruvia::protocol::Value>::Item>>>) = (None, None);
+                let (mut #ident, mut #ident_ctx): (Option<::futures::stream::SplitStream<::vessels::protocol::Context::<<#ty as ::vessels::protocol::Value>::Item>>>, Option<::futures::stream::SplitSink<::vessels::protocol::Context::<<#ty as ::vessels::protocol::Value>::Item>>>) = (None, None);
             });
             idx += 1;
         });
@@ -936,7 +936,7 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
                 let ident_ctxs = Ident::new(&format!("{}_{}_ctxs", ident_ct, idx), Span::call_site());
                 let ty = &field.ty;
                 decl_stream.extend(quote! {
-                    let (mut #ident_ct, mut #ident_ctx): (::futures::stream::SplitStream<::vitruvia::protocol::Context::<<#ty as ::vitruvia::protocol::Value>::Item>>, ::futures::stream::SplitSink<::vitruvia::protocol::Context::<<#ty as ::vitruvia::protocol::Value>::Item>>);
+                    let (mut #ident_ct, mut #ident_ctx): (::futures::stream::SplitStream<::vessels::protocol::Context::<<#ty as ::vessels::protocol::Value>::Item>>, ::futures::stream::SplitSink<::vessels::protocol::Context::<<#ty as ::vessels::protocol::Value>::Item>>);
                 });
                 select_stream.extend(quote! {
                     let sel_stream = #ident_ct.map(|item| #en::#b_i_ident(item)).select(sel_stream);
@@ -948,7 +948,7 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
                 });
                 quote! {
                     {
-                        let ret = <#ty as ::vitruvia::protocol::Value>::construct(#ident_ctxs);
+                        let ret = <#ty as ::vessels::protocol::Value>::construct(#ident_ctxs);
                         ret
                     }
                 }
@@ -960,11 +960,11 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
                 let ident_ctxs = Ident::new(&format!("{}_{}_ctxs", ident_ct, idx), Span::call_site());
                 let ty = &field.ast().ty;
                 decl_stream.extend(quote! {
-                    let #ident_ctxs: ::vitruvia::protocol::Context<<#ty as ::vitruvia::protocol::Value>::Item>;
+                    let #ident_ctxs: ::vessels::protocol::Context<<#ty as ::vessels::protocol::Value>::Item>;
                 });
                 mcst.extend(quote! {
                     {
-                        let ctxs = ::vitruvia::protocol::Context::new();
+                        let ctxs = ::vessels::protocol::Context::new();
                         let (i_sink, i_stream) = ctxs.1.split();
                         #ident_ctx = i_sink;
                         #ident_ct = i_stream;
@@ -977,7 +977,7 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
                     let sel_stream = ::futures::stream::empty();
                     #decl_stream
                     #mcst;
-                    ::vitruvia::executor::spawn(::futures::stream::once(Ok(#en::#b_ident(data))).chain(v.1).for_each(move |item| {
+                    ::vessels::executor::spawn(::futures::stream::once(Ok(#en::#b_ident(data))).chain(v.1).for_each(move |item| {
                         match item {
                             #item_stream
                             _ => {}
@@ -985,7 +985,7 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
                         Ok(())
                     }));
                     #select_stream
-                    ::vitruvia::executor::spawn(sel_stream.forward(sink).map_err(|e| {
+                    ::vessels::executor::spawn(sel_stream.forward(sink).map_err(|e| {
                         println!("{:?}", e);
                         e
                     }).then(|_| Ok(())));
@@ -997,7 +997,7 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
     });
     let wrapper_ident = prefix(ident, "Derive_Container");
     stream.extend(quote! {
-        impl ::vitruvia::protocol::Value for #ident {
+        impl ::vessels::protocol::Value for #ident {
             type Item = #en;
 
             fn deconstruct<
@@ -1018,7 +1018,7 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
                 match self {
                     #deconstruct
                 };
-                ::vitruvia::executor::spawn(stream.into_future().map_err(|e| {
+                ::vessels::executor::spawn(stream.into_future().map_err(|e| {
                         println!("{:?}", e.0);
                         ()
                     }).and_then(move |item| {
@@ -1031,7 +1031,7 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
                     }
                 ));
                 #select_stream
-                ::vitruvia::executor::spawn(sel_stream.forward(sink).map_err(|e| {
+                ::vessels::executor::spawn(sel_stream.forward(sink).map_err(|e| {
                         println!("{:?}", e);
                         e
                     }).then(|_| Ok(())));
