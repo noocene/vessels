@@ -870,7 +870,7 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
         let bindings = variant.bindings();
         if bindings.is_empty() {
             return quote! {
-                sink.start_send(#en::#ident);
+                sink.start_send(#en::#ident).unwrap();
             };
         };
         let mut stream = proc_macro2::TokenStream::new();
