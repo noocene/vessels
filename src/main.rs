@@ -2,30 +2,27 @@ use futures::Future as Fut;
 use futures::{lazy, IntoFuture, Stream};
 use vitruvia::{
     executor,
-    protocol::{self, protocol, Future},
+    protocol::{self, protocol, Future, Value},
 };
 
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Tester<T> {
-    Yes,
-    No,
-    Value(T),
+#[derive(Value, Debug)]
+pub enum TestEnum {
+    Number(u8),
+    Text(String),
 }
 
 #[protocol]
 pub trait TestProtocol {
-    fn test(&self) -> Future<Tester<u8>, ()>;
+    fn test(&self) -> Future<TestEnum, ()>;
     fn sec_test(&self);
 }
 
 struct Test;
 
 impl TestProtocol for Test {
-    fn test(&self) -> Future<Tester<u8>, ()> {
+    fn test(&self) -> Future<TestEnum, ()> {
         println!("test");
-        protocol::Future::new(Ok(Tester::Value(3)).into_future())
+        protocol::Future::new(Ok(TestEnum::Number(8)).into_future())
     }
     fn sec_test(&self) {
         println!("sec_test");

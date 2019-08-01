@@ -19,6 +19,10 @@
 #[macro_use]
 extern crate stdweb;
 
+#[allow(unused_imports)]
+#[macro_use]
+extern crate vitruvia_derive;
+
 mod errors;
 /// Provides a cross-platform abstracted asynchronous executor.
 pub mod executor;

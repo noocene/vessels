@@ -2,6 +2,9 @@
 
 extern crate proc_macro;
 
+#[macro_use]
+extern crate synstructure;
+
 use crate::proc_macro::TokenStream;
 use quote::{quote, quote_spanned, ToTokens};
 
@@ -819,4 +822,128 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
     item.extend(assert_stream);
     item.extend(binds);
     item
+}
+
+decl_derive!([Value] => value_derive);
+
+fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
+    let ast = s.ast();
+    let ident = &ast.ident;
+    let en = prefix(ident, "Derive_Variants");
+    let mut stream = proc_macro2::TokenStream::new();
+    let mut variants = proc_macro2::TokenStream::new();
+    s.variants().iter().for_each(|variant| {
+        let ident = &variant.ast().ident;
+        let base = format!("{}_AssertValue_", ident);
+        let mut variant_stream = proc_macro2::TokenStream::new();
+        variant
+            .bindings()
+            .iter()
+            .enumerate()
+            .for_each(|(index, binding)| {
+                let name = prefix(&ast.ident, &(base.clone() + &index.to_string()));
+                let ty = &binding.ast().ty;
+                variant_stream.extend(quote! {
+                    <#ty as ::vitruvia::protocol::Value>::Item,
+                });
+                stream.extend(quote! {
+                    struct #name where #ty: ::vitruvia::protocol::Value;
+                });
+            });
+        variants.extend(quote! {
+            #ident(#variant_stream),
+        });
+    });
+    stream.extend(quote! {
+        #[doc(hidden)]
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub enum #en {
+            #variants
+        }
+    });
+    s.bind_with(|_| synstructure::BindStyle::Move);
+    let deconstruct = s.each_variant(|bi| {
+        let ident = &bi.ast().ident;
+        let mut args = proc_macro2::TokenStream::new();
+        if !bi.bindings().is_empty() {
+            bi.bindings().iter().for_each(|bi| {
+                let ident = bi.pat();
+                args.extend(quote! {
+                    #ident,
+                });
+            });
+            args = quote! {
+                (#args)
+            };
+        }
+        quote! {
+            #en::#ident#args
+        }
+    });
+    let mut construct = proc_macro2::TokenStream::new();
+    s.variants().iter().for_each(|bi| {
+        let mut args = proc_macro2::TokenStream::new();
+        let ident = bi.ast().ident;
+        if !bi.bindings().is_empty() {
+            bi.bindings().iter().for_each(|bi| {
+                let ident = bi.pat();
+                args.extend(quote! {
+                    #ident,
+                });
+            });
+            args = quote! {
+                (#args)
+            };
+        }
+        let cons = bi.construct(|_, i| {
+            let ident = bi.bindings().iter().nth(i).unwrap().pat();
+            quote!(#ident)
+        });
+        construct.extend(quote! {
+            #en::#ident#args => #cons,
+        });
+    });
+    let wrapper_ident = prefix(ident, "Derive_Container");
+    stream.extend(quote! {
+        impl ::vitruvia::protocol::Value for #ident {
+            type Item = #en;
+
+            fn deconstruct<
+                C: ::futures::Sink<SinkItem = Self::Item, SinkError = ()>
+                    + ::futures::Stream<Item = Self::Item, Error = ()>
+                    + Send
+                    + 'static,
+            >(
+                self,
+                context: C,
+            ) where
+                Self: Sized,
+            {
+                ::vitruvia::executor::spawn(context.send(match self {
+                    #deconstruct
+                }).then(|_| Ok(())))
+            }
+            fn construct<
+                C: ::futures::Sink<SinkItem = Self::Item, SinkError = ()>
+                    + ::futures::Stream<Item = Self::Item, Error = ()>
+                    + Send
+                    + 'static,
+            >(
+                context: C,
+            ) -> Self {
+                if let Ok(v) = context.into_future().wait() {
+                    match v.0.unwrap() {
+                        #construct
+                    }
+                } else {
+                    panic!("panic in construction");
+                }
+            }
+        }
+    });
+    quote! {
+        const #wrapper_ident: () = {
+            #stream
+        };
+    }
 }

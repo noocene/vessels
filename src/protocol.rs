@@ -5,7 +5,7 @@ use futures::{task::AtomicTask, Async, AsyncSink, IntoFuture, Poll, Sink, StartS
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
 
-pub use vitruvia_derive::protocol;
+pub use vitruvia_derive::{protocol, Value};
 
 #[derive(Clone, Debug)]
 pub struct Context<T: Serialize + DeserializeOwned> {
@@ -172,7 +172,9 @@ impl<T: Value + Send + 'static, E: Value + Send + 'static> Value for Future<T, E
                             Err(_e) => panic!("Invalid content in protocol future stream"),
                         }));
                     let sink = sink.with(|data: T::Item| Ok(Ok(data)));
-                    sender.send(Ok(T::construct(SinkStream(sink, stream)))).unwrap();
+                    sender
+                        .send(Ok(T::construct(SinkStream(sink, stream))))
+                        .unwrap();
                 }
                 Err(value) => {
                     let (sink, stream) = v.1.split();
@@ -182,13 +184,21 @@ impl<T: Value + Send + 'static, E: Value + Send + 'static> Value for Future<T, E
                             Ok(_) => panic!("Invalid content in protocol future stream"),
                         }));
                     let sink = sink.with(|data: E::Item| Ok(Err(data)));
-                    sender.send(Err(E::construct(SinkStream(sink, stream)))).unwrap();
+                    sender
+                        .send(Err(E::construct(SinkStream(sink, stream))))
+                        .unwrap();
                 }
             };
             Ok(())
         }));
         Future {
-            future: Box::new(futures::stream::iter(receiver.into_iter()).take(1).into_future().map_err(|v| v.0).map(|v| v.0.unwrap())),
+            future: Box::new(
+                futures::stream::iter(receiver.into_iter())
+                    .take(1)
+                    .into_future()
+                    .map_err(|v| v.0)
+                    .map(|v| v.0.unwrap()),
+            ),
         }
     }
 
