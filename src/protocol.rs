@@ -193,7 +193,7 @@ impl<T: Value + Send + 'static, E: Value + Send + 'static> Value for Future<T, E
         }));
         Future {
             future: Box::new(
-                futures::stream::iter(receiver.into_iter())
+                futures::stream::iter_result(receiver.into_iter())
                     .take(1)
                     .into_future()
                     .map_err(|v| v.0)
