@@ -155,10 +155,9 @@ fn generate_remote_impl(ident: &Ident, methods: &[Procedure]) -> proc_macro2::To
                 let _proto_id = self.next_id();
                 let (ct, ct1) = ::vessels::protocol::Context::new();
                 self.channels.write().unwrap().insert(_proto_id, #channel::#ident(Box::new(ct1)));
-                let constructed = <#return_type as ::vessels::protocol::Value>::construct(ct);
                 self.queue.write().unwrap().push_back(#call {call: #call_inner::#index_ident#call_sig});
                 self.task.notify();
-                constructed
+                <#return_type as ::vessels::protocol::Value>::construct(ct)
             }
         });
     }
