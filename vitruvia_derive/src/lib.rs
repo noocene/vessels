@@ -730,13 +730,13 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                     FnArg::Captured(argument) => {
                         let ty = &argument.ty;
                         let ident = Ident::new(
-                            &format!("_{}_{}_arg_{}_AssertValue", &input.ident, index, arg_index),
+                            &format!("_{}_{}_arg_{}_AssertSerializeDeserialize", &input.ident, index, arg_index),
                             Span::call_site(),
                         );
                         assert_stream.extend(TokenStream::from(quote_spanned! {
                             ty.span() =>
                             #[allow(non_camel_case_types)]
-                            struct #ident where #ty: ::vitruvia::protocol::Value;
+                            struct #ident where #ty: ::serde::Serialize + ::serde::de::DeserializeOwned;
                         }));
                         procedure.arg_types.push(argument.ty.clone());
                     }
