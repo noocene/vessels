@@ -505,7 +505,7 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
                 }
             }
         }
-        impl <'de> ::serde::Deserialize<'de> for #call {
+        impl<'de> ::serde::Deserialize<'de> for #call {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'de> {
                 struct CallVisitor;
                 impl<'de> ::serde::de::Visitor<'de> for CallVisitor {
@@ -524,7 +524,7 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
         }
         trait #remote: futures::Stream<Item = #call, Error = ()> + futures::Sink<SinkItem = #response, SinkError = ()> + Clone {}
         impl #remote for #c_remote {}
-        impl <'de> ::serde::Deserialize<'de> for #response {
+        impl<'de> ::serde::Deserialize<'de> for #response {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'de> {
                 struct ResponseVisitor;
                 impl<'de> ::serde::de::Visitor<'de> for ResponseVisitor {
@@ -828,9 +828,18 @@ decl_derive!([Value] => value_derive);
 fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
     let ast = s.ast();
     let ident = &ast.ident;
+    if s.variants().is_empty() {
+        return quote_spanned! {
+            ident.span() =>
+            compile_error!("Value cannot be derived for an enum with no variants");
+        };
+    }
     let en = prefix(ident, "Derive_Variants");
     let mut stream = proc_macro2::TokenStream::new();
     let mut variants = proc_macro2::TokenStream::new();
+    let mut serialize_impl = proc_macro2::TokenStream::new();
+    let mut deserialize_impl = proc_macro2::TokenStream::new();
+    let mut id: usize = 0;
     s.variants().iter().for_each(|variant| {
         let ident = &variant.ast().ident;
         let base = format!("{}_AssertValue_", ident);
@@ -845,18 +854,72 @@ fn value_derive(mut s: synstructure::Structure) -> proc_macro2::TokenStream {
             stream.extend(quote! {
                 struct #name where #ty: ::vessels::protocol::Value;
             });
+            serialize_impl.extend(quote! {
+                #en::#ident(data) => {
+                    let mut seq = serializer.serialize_seq(Some(2))?;
+                    seq.serialize_element(&#id)?;
+                    seq.serialize_element(data)?;
+                    seq.end()
+                }
+            });
+            deserialize_impl.extend(quote! {
+                #id => {
+                    #en::#ident(seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(1, &self))?)
+                }
+            });
+            id += 1;
         });
         if bindings.is_empty() {
             variants.extend(quote! {
                 #ident,
-            })
+            });
+            serialize_impl.extend(quote! {
+                #en::#ident => {
+                    let mut seq = serializer.serialize_seq(Some(1))?;
+                    seq.serialize_element(&#id)?;
+                    seq.end()
+                }
+            });
+            deserialize_impl.extend(quote! {
+                #id => {
+                    #en::#ident
+                }
+            });
         }
     });
+    let expectation = format!("a serialized Value item from the derivation on {}", ident);
     stream.extend(quote! {
         #[doc(hidden)]
-        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub enum #en {
             #variants
+        }
+        impl ::serde::Serialize for #en {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+                use ::serde::ser::SerializeSeq;
+                match self {
+                    #serialize_impl
+                }
+            }
+        }
+        impl<'de> ::serde::Deserialize<'de> for #en {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'de> {
+                struct CallVisitor;
+                impl<'de> ::serde::de::Visitor<'de> for CallVisitor {
+                    type Value = #en;
+
+                    fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                        formatter.write_str(#expectation)
+                    }
+                    fn visit_seq<V>(self, mut seq: V) -> Result<#en, V::Error> where V: ::serde::de::SeqAccess<'de>, {
+                        let index: usize = seq.next_element()?.ok_or_else(|| ::serde::de::Error::invalid_length(0, &self))?;
+                        Ok(match index {
+                            #deserialize_impl
+                            _ => { Err(::serde::de::Error::invalid_length(0, &self))? }
+                        })
+                    }
+                }
+                deserializer.deserialize_seq(CallVisitor)
+            }
         }
     });
     s.bind_with(|_| synstructure::BindStyle::Move);
