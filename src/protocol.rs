@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 pub use vessels_derive::{protocol, Value};
 
+/// The core context type used for communication by most Value implementations.
 #[derive(Clone, Debug)]
 pub struct Context<T: Serialize + DeserializeOwned> {
     sender: Sender<T>,
@@ -18,6 +19,7 @@ pub struct Context<T: Serialize + DeserializeOwned> {
 }
 
 impl<T: Serialize + DeserializeOwned> Context<T> {
+    /// Creates a new pair of linked contexts.
     pub fn new() -> (Self, Self) {
         let (s0, r1) = unbounded();
         let (s1, r0) = unbounded();
@@ -77,9 +79,12 @@ impl<T: Serialize + DeserializeOwned> Stream for Context<T> {
     }
 }
 
+/// A value that can be constructed/deconstructed into a stream of serializable items for use with protocol traits.
 pub trait Value {
+    /// The item type sent over the internal channel by this value.
     type Item: Serialize + DeserializeOwned + Send + 'static;
 
+    /// Constructs a value of this type from the provided context. This method may block for indefinite time until the value is ready (i.e. with concrete or derived Value types) or return immediately (i.e. with Futures etc.)
     fn construct<
         C: Sink<SinkItem = Self::Item, SinkError = ()>
             + Stream<Item = Self::Item, Error = ()>
@@ -90,6 +95,7 @@ pub trait Value {
     ) -> Self
     where
         Self: Sized;
+    /// Deconstructs a value of this type onto the provided context.
     fn deconstruct<
         C: Sink<SinkItem = Self::Item, SinkError = ()>
             + Stream<Item = Self::Item, Error = ()>
@@ -102,11 +108,13 @@ pub trait Value {
         Self: Sized;
 }
 
+/// An abstracted future that allows the remote protocol abstraction to return immediately from a method call and preserve asynchronous operation. Recommended for most return values.
 pub struct Future<T: Value, E: Value> {
     future: Box<dyn futures::Future<Item = T, Error = E> + Send + 'static>,
 }
 
 impl<T: Value, E: Value> Future<T, E> {
+    /// Creates a new abstracted future. `Result` and `Option` implement IntoFuture making this construction simple for concrete values.
     pub fn new<F: IntoFuture<Item = T, Error = E> + Send + 'static>(future: F) -> Self
     where
         F::Future: Send,
