@@ -389,6 +389,7 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
     let call_repr: proc_macro2::TokenStream;
     let m_len = methods.len();
     let c_remote = prefix(ident, "Concrete_Remote");
+    let never_ready = prefix(ident, "Never_Ready");
     let call_inner = prefix(ident, "Call_Inner");
     let protocol_shim = prefix(ident, "Protocol_Shim");
     let protocol_trait = prefix(ident, "Protocol_Trait");
@@ -464,6 +465,26 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
             }
             fn poll_complete(&mut self) -> ::futures::Poll<(), Self::SinkError> {
                 Ok(::futures::Async::Ready(()))
+            }
+        }
+        struct #never_ready<T, E> {
+            item: ::std::marker::PhantomData<T>,
+            error: ::std::marker::PhantomData<E>
+        }
+        impl<T, E> #never_ready<T, E> {
+            fn new() -> Self {
+                #never_ready {
+                    item: ::std::marker::PhantomData,
+                    error: ::std::marker::PhantomData,
+                }
+            }
+        }
+        impl<T, E> ::futures::Stream for #never_ready<T, E> {
+            type Item = T;
+            type Error = E;
+
+            fn poll(&mut self) -> ::futures::Poll<Option<Self::Item>, Self::Error> {
+                Ok(::futures::Async::NotReady)
             }
         }
         #[doc(hidden)]
@@ -546,13 +567,15 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
             inner: T,
             channels: ::std::collections::HashMap<u64, #channel>,
             inner_stream: Box<dyn ::futures::Stream<Item = #response, Error = ()> + Send>,
+            task: ::std::sync::Arc<::futures::task::AtomicTask>
         }
         impl<T: #ident> #protocol_shim<T> {
             pub fn new(inner: T) -> Self {
                 #protocol_shim {
                     inner,
                     channels: ::std::collections::HashMap::new(),
-                    inner_stream: Box::new(::futures::stream::empty())
+                    inner_stream: Box::new(#never_ready::new()),
+                    task: ::std::sync::Arc::new(::futures::task::AtomicTask::new())
                 }
             }
         }
@@ -579,7 +602,11 @@ fn generate_binds(ident: &Ident, methods: &[Procedure]) -> TokenStream {
             type Error = ();
 
             fn poll(&mut self) -> ::futures::Poll<Option<Self::Item>, Self::Error> {
-                self.inner_stream.poll()
+                let poll = self.inner_stream.poll();
+                if let Ok(::futures::Async::NotReady) = poll {
+                    self.task.register();
+                }
+                poll
             }
         }
         pub trait #protocol_trait: ::futures::Sink<SinkItem = #call, SinkError = ()> + ::futures::Stream<Item = #response, Error = ()> + #ident + Send {}
@@ -623,6 +650,7 @@ fn generate_blanket(ident: &Ident, methods: &[Procedure]) -> proc_macro2::TokenS
                 let mut i_stream: Box<dyn ::futures::Stream<Error = (), Item = #response> + Send + 'static> = Box::new(futures::stream::empty());
                 std::mem::swap(&mut self.inner_stream, &mut i_stream);
                 self.inner_stream = Box::new(stream.map(move |i| #response::#ident(i, #index, #id)).select(i_stream));
+                self.task.notify();
             }
         });
     }
