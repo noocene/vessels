@@ -6,6 +6,7 @@
 		"vadimcn.vscode-lldb",
 	],
 	"runArgs": [
+		"--shm-size=128MB",
 		"--cap-add=SYS_PTRACE",
 		"--security-opt",
 		"seccomp=unconfined"
