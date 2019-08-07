@@ -232,6 +232,7 @@ impl CairoImage {
                 channel,
             );
         }
+        unsafe { cairo_sys::cairo_surface_mark_dirty(surface.to_raw_none()) };
     }
     fn get_data_ptr(&self) -> *const c_void {
         let surface = &self.0.lock().unwrap().0;
@@ -436,72 +437,6 @@ impl CairoFrame {
         }
         pangocairo::functions::show_layout(&context, &layout);
     }
-    fn draw_shadows(&self, matrix: [f64; 6], entity: &Path) {
-        let state = self.state.read().unwrap();
-        let context = state.context.lock().unwrap();
-        for shadow in &entity.shadows {
-            context.restore();
-            context.save();
-            context.transform(Matrix {
-                xx: matrix[0],
-                yx: matrix[2],
-                xy: matrix[1],
-                yy: matrix[3],
-                x0: matrix[4],
-                y0: matrix[5],
-            });
-            let spread = shadow.spread * 2.;
-            let size = entity.bounds().size;
-            let scale = (size + spread) / size;
-            let segments = entity.segments.iter();
-            let new_size = size + spread;
-            let scale_offset = (size - new_size) / 2.;
-            context.translate(
-                scale_offset.x + shadow.offset.x,
-                scale_offset.y + shadow.offset.y,
-            );
-            context.scale(scale.x, scale.y);
-            segments.for_each(|segment| match segment {
-                Segment::LineTo(point) => {
-                    context.line_to(point.x, point.y);
-                }
-                Segment::MoveTo(point) => {
-                    context.move_to(point.x, point.y);
-                }
-                Segment::CubicTo(point, handle_1, handle_2) => {
-                    context.curve_to(
-                        handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
-                    );
-                }
-                Segment::QuadraticTo(point, handle) => {
-                    context.curve_to(handle.x, handle.y, handle.x, handle.y, point.x, point.y);
-                }
-            });
-            if entity.closed {
-                context.close_path();
-            }
-            /*
-            context.set_shadow_blur(shadow.blur * state.pixel_ratio);
-            */
-            context.set_source_rgba(
-                f64::from(shadow.color.r) / 255.,
-                f64::from(shadow.color.g) / 255.,
-                f64::from(shadow.color.b) / 255.,
-                f64::from(shadow.color.a) / 255.,
-            );
-            context.fill();
-        }
-        context.restore();
-        context.save();
-        context.transform(Matrix {
-            xx: matrix[0],
-            yx: matrix[2],
-            xy: matrix[1],
-            yy: matrix[3],
-            x0: matrix[4],
-            y0: matrix[5],
-        });
-    }
 
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
@@ -518,7 +453,6 @@ impl CairoFrame {
                 y0: matrix[5],
             });
         }
-        self.draw_shadows(matrix, &entity);
         let context = state.context.lock().unwrap();
         let segments = entity.segments.iter();
         context.move_to(0., 0.);
@@ -781,9 +715,24 @@ impl Frame for CairoFrame {
             context.save();
         }
         state.contents.iter().for_each(|object| {
-            let object = object.state.read().unwrap();
-            let matrix = object.orientation.to_matrix();
-            match &object.content {
+            let object_state = object.state.read().unwrap();
+            let matrix = object_state.orientation.to_matrix();
+            (*object.shadow_surface.lock().unwrap()).iter().for_each(|surface| {
+                let context = state.context.lock().unwrap();
+                context.restore();
+                context.save();
+                context.transform(Matrix {
+                    xx: matrix[0],
+                    yx: matrix[2],
+                    xy: matrix[1],
+                    yy: matrix[3],
+                    x0: matrix[4],
+                    y0: matrix[5],
+                });
+                context.set_source_surface(&surface.0.get_target(), surface.1.x, surface.1.y);
+                context.paint();
+            });
+            match &object_state.content {
                 Rasterizable::Path(path) => self.draw_path(matrix, &path),
                 Rasterizable::Text(input) => self.draw_text(matrix, &input),
             };
@@ -801,6 +750,7 @@ struct CairoObjectState {
 struct CairoObject {
     state: Arc<RwLock<CairoObjectState>>,
     color_profile: Option<Profile>,
+    shadow_surface: Arc<Mutex<Option<(CairoContext, Vector)>>>,
 }
 
 impl CairoObject {
@@ -810,7 +760,7 @@ impl CairoObject {
         depth: u32,
         color_profile: Option<Profile>,
     ) -> CairoObject {
-        CairoObject {
+        let mut object = CairoObject {
             state: Arc::new(RwLock::new(CairoObjectState {
                 orientation,
                 content: match color_profile.clone() {
@@ -820,6 +770,73 @@ impl CairoObject {
                 depth,
             })),
             color_profile,
+            shadow_surface: Arc::new(Mutex::new(None)),
+        };
+        object.update_shadows();
+        object
+    }
+    fn update_shadows(&mut self) {
+        if let Rasterizable::Path(path) = &self.state.read().unwrap().content {
+            if !path.shadows.is_empty() {
+                let mut corners = (Vector::from((0., 0.)), Vector::from((0., 0.)));
+                for shadow in &path.shadows {
+                    let spread = shadow.spread * 2.;
+                    let size = path.bounds().size;
+                    let new_size = size + spread + (shadow.blur * 2.);
+                    let scale_offset = (size - new_size) / 2.;
+                    let near_corner = scale_offset + shadow.offset;
+                    let far_corner = near_corner + new_size;
+                    corners.1.x = corners.1.x.max(far_corner.x);
+                    corners.1.y = corners.1.y.max(far_corner.y);
+                    corners.0.x = corners.0.x.min(near_corner.x);
+                    corners.0.y = corners.0.y.min(near_corner.y);
+                }
+                let size = Vector::from(((corners.1.x - corners.0.x).abs(), (corners.1.y - corners.0.y).abs()));
+                let base_surface = ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
+                let base_context = CairoContext(cairo::Context::new(&base_surface));
+                for shadow in &path.shadows {
+                    let spread = shadow.spread * 2.;
+                    let size = path.bounds().size;
+                    let scale = (size + spread) / size;
+                    let segments = path.segments.iter();
+                    let new_size = size + spread + (shadow.blur * 2.);
+                    let surface = ImageSurface::create(Format::ARgb32, new_size.x as i32, new_size.y as i32).unwrap();
+                    let context = CairoContext(cairo::Context::new(&surface));
+                    let scale_offset = (size - new_size) / 2.;
+                    context.scale(scale.x, scale.y);
+                    segments.for_each(|segment| match segment {
+                        Segment::LineTo(point) => {
+                            context.line_to(point.x, point.y);
+                        }
+                        Segment::MoveTo(point) => {
+                            context.move_to(point.x, point.y);
+                        }
+                        Segment::CubicTo(point, handle_1, handle_2) => {
+                            context.curve_to(
+                                handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
+                            );
+                        }
+                        Segment::QuadraticTo(point, handle) => {
+                            context.curve_to(handle.x, handle.y, handle.x, handle.y, point.x, point.y);
+                        }
+                    });
+                    if path.closed {
+                        context.close_path();
+                    }
+                    context.set_source_rgba(
+                        f64::from(shadow.color.r) / 255.,
+                        f64::from(shadow.color.g) / 255.,
+                        f64::from(shadow.color.b) / 255.,
+                        f64::from(shadow.color.a) / 255.,
+                    );
+                    context.fill();
+                    let image = CairoImage::new(CairoSurface(surface));
+                    image.blur(shadow.blur);
+                    base_context.set_source_surface(&image.0.lock().unwrap().0, scale_offset.x + shadow.offset.x + shadow.blur - corners.0.x, scale_offset.y + shadow.offset.y + shadow.blur - corners.0.y);
+                    base_context.paint();
+                }
+                *self.shadow_surface.lock().unwrap() = Some((base_context, (corners.0.x.min(0.), corners.0.y.min(0.)).into()));
+            }
         }
     }
 }
@@ -835,10 +852,22 @@ impl Object for CairoObject {
         self.state.write().unwrap().orientation = transform;
     }
     fn update(&mut self, input: Rasterizable) {
+        let update_shadows = if let Rasterizable::Path(path) = &input {
+            if let Rasterizable::Path(current_path) = &self.state.read().unwrap().content {
+                current_path.shadows != path.shadows
+            } else {
+                false
+            }
+        } else {
+            false
+        };
         self.state.write().unwrap().content = match self.color_profile.clone() {
             Some(color_profile) => color_profile.transform_content(input),
             None => input,
         };
+        if update_shadows {
+            self.update_shadows();
+        }
     }
     fn get_depth(&self) -> u32 {
         self.state.read().unwrap().depth

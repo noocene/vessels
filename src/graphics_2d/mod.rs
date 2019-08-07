@@ -472,7 +472,7 @@ pub trait ContextualGraphics: Graphics {
 }
 
 /// A 2-dimensional cartesian vector or point
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct Vector {
     /// X-axis position.
     pub x: f64,

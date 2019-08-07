@@ -1,22 +1,9 @@
-use vitruvia::path::Primitive;
-use vitruvia::graphics_2d;
-use vitruvia::graphics_2d::{Transform, Color};
+use vitruvia::{path::{Primitive, Shadow}, graphics_2d::{self, Transform, Color}};
 
 fn main() {
     let gfx = graphics_2d::new();
     let mut root = gfx.frame();
-    let mut squares = vec![];
-    for i in 0..100_000 {
-        squares.push({
-            let mut object = root.add(Primitive::square(1.).fill(Color::rgba(0, 255, 0, 255).into()).finalize().into());
-            object.apply_transform(Transform::default().with_position(i as f64));
-            object
-        });
-    }
-    root.add(Primitive::square(100.).fill(Color::rgba(0, 0, 255, 255).into()).finalize().into())
-        .apply_transform(Transform::default().with_position((500., 0.)));
-    let mut ctx = gfx.start(root);
-    let key = ctx.keyboard();
-    key.state();
-    ctx.run();
+    root.add(Primitive::square(100.).shadow(Shadow::new(Color::black().with_alpha(75)).offset((-10., -10.)).spread(10.).blur(10.)).shadow(Shadow::new(Color::black().with_alpha(150)).offset((10., 10.)).spread(10.).blur(10.)).fill(Color::rgba(0, 0, 255, 255).into()).finalize().into())
+        .apply_transform(Transform::default().with_position((50., 50.)));
+    gfx.start(root).run();
 }

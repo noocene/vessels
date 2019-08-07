@@ -53,7 +53,7 @@ pub struct LinearGradient {
 }
 
 /// A drop shadow.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Shadow {
     /// The color of the shadow.
     pub color: Color,
