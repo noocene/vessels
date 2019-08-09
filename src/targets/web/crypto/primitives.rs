@@ -1,44 +1,46 @@
-use crate::{crypto::primitives::SymmetricKey, executor};
+use crate::{crypto::primitives::{SymmetricKey, NonceProvider, Nonce}, executor};
 use failure::Error;
 use futures::{lazy, sync::mpsc::channel, Future, Sink, Stream};
 use stdweb::{
     unstable::TryInto,
     web::{ArrayBuffer, TypedArray},
 };
+use std::sync::Mutex;
 
 type CryptoKey = stdweb::Value;
 
-pub(crate) struct AESKey {
+pub(crate) struct AESKey<T: NonceProvider> {
     key: CryptoKey,
+    nonce_provider: Mutex<T>
 }
 
-impl SymmetricKey for AESKey {
+impl<T: NonceProvider> SymmetricKey<T> for AESKey<T> {
     fn encrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>
     where
         Self: Sized,
     {
         let (sender, receiver) = channel(0);
-        let data: TypedArray<u8> = data.into();
+        let iv = self.nonce_provider.lock().unwrap().next_encrypt();
+        let js_iv: TypedArray<u8> = iv.as_ref().clone().as_ref().into();
+        let data: TypedArray<u8> = data.to_owned().as_slice().into();
         js! {
-            let iv = window.crypto.getRandomValues(new Uint8Array(12));
+            let iv = @{js_iv};
             window.crypto.subtle.encrypt({
                 name: "AES-GCM",
                 iv: iv,
-            }, @{&self.key}, @{data}).then((data) => {
-                @{move |data: ArrayBuffer, iv: ArrayBuffer| {
+            }, @{&self.key}, @{data}).then(
+                @{move |data: ArrayBuffer| {
                     let s = sender.clone();
-                    executor::spawn(sender.clone().send(iv).then(move |_| s.clone().send(data).then(|_| Ok(()))));
-                }}(data, iv.buffer);
-            });
+                    let mut data: Vec<u8> = data.into();
+                    iv.after_encrypt(&mut data);
+                    executor::spawn(sender.clone().send(data).then(|_| Ok(())));
+                }}
+            );
         };
         Box::new(
             receiver
-                .take(2)
-                .fold(vec![], |acc, i| {
-                    let mut acc = acc;
-                    acc.extend(Vec::from(i).iter());
-                    Ok(acc)
-                })
+                .take(1)
+                .into_future().and_then(|data| Ok(data.0.unwrap()))
                 .map_err(|_| failure::err_msg("temp err")),
         )
     }
@@ -47,14 +49,14 @@ impl SymmetricKey for AESKey {
         Self: Sized,
     {
         let (sender, receiver) = channel(0);
-        let data: TypedArray<u8> = data.into();
+        let mut data = data.to_owned();
+        let iv: TypedArray<u8> = self.nonce_provider.lock().unwrap().next_decrypt(&mut data).as_ref().into();
+        let data: TypedArray<u8> = data.as_slice().into();
         js! {
-            let iv = @{&data}.slice(0, 12);
-            let data = @{&data}.slice(12);
             window.crypto.subtle.decrypt({
                 name: "AES-GCM",
-                iv: iv,
-            }, @{&self.key}, data).then((decrypted) => {
+                iv: @{iv},
+            }, @{&self.key}, @{data}).then((decrypted) => {
                 @{move |data: ArrayBuffer| {
                     let s = sender.clone();
                     executor::spawn(sender.clone().send(data).then(|_| Ok(())));
@@ -92,8 +94,8 @@ impl SymmetricKey for AESKey {
     }
 }
 
-impl AESKey {
-    pub(crate) fn new() -> impl Future<Item = Box<dyn SymmetricKey + 'static>, Error = Error> {
+impl<T: NonceProvider + 'static> AESKey<T> {
+    pub(crate) fn new() -> impl Future<Item = Box<dyn SymmetricKey<T> + 'static>, Error = Error> {
         let (sender, receiver) = channel(0);
         js! {
             window.crypto.subtle.generateKey({
@@ -109,14 +111,15 @@ impl AESKey {
             .take(1)
             .into_future()
             .and_then(|item| {
-                let key: Box<dyn SymmetricKey> = Box::new(AESKey {
+                let key: Box<dyn SymmetricKey<T>> = Box::new(AESKey {
                     key: item.0.unwrap(),
+                    nonce_provider: Mutex::new(T::new())
                 });
                 Ok(key)
             })
             .map_err(|_| failure::err_msg("temp err"))
     }
-    pub(crate) fn from_bytes(data: [u8; 16]) -> impl Future<Item = Box<dyn SymmetricKey + 'static>, Error = Error> {
+    pub(crate) fn from_bytes(data: [u8; 16]) -> impl Future<Item = Box<dyn SymmetricKey<T> + 'static>, Error = Error> {
         let (sender, receiver) = channel(0);
         let data: TypedArray<u8> = data.as_ref().into();
         js! {
@@ -130,8 +133,9 @@ impl AESKey {
             .take(1)
             .into_future()
             .and_then(|item| {
-                let key: Box<dyn SymmetricKey> = Box::new(AESKey {
+                let key: Box<dyn SymmetricKey<T>> = Box::new(AESKey {
                     key: item.0.unwrap(),
+                    nonce_provider: Mutex::new(T::new()),
                 });
                 Ok(key)
             })
