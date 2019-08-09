@@ -8,9 +8,9 @@ use std::fmt;
 /// 
 /// AES-256 is not used as the probability of success for a brute-force attack on AES-128 is already far more slim than necessary and the AES-256 key schedule is less well designed.
 pub trait SymmetricKey: Send {
-    /// Encrypts the provided data.
+    /// Encrypts and signs the provided data.
     fn encrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
-    /// Decrypts the provided data.
+    /// Decrypts and authenticates the provided data.
     fn decrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
     /// Exports a key as a raw 128-bit byte array.
     fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error>>;
