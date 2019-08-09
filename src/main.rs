@@ -1,4 +1,4 @@
-use vessels::{crypto::SymmetricKey, executor};
+use vessels::{crypto::primitives::SymmetricKey, executor};
 use futures::Future;
 
 #[macro_use]
@@ -9,7 +9,7 @@ fn main() {
         key.encrypt("hello".as_bytes()).and_then(move |encrypted| {
             console!(log, &encrypted);
             key.decrypt(encrypted.as_slice()).and_then(|decrypted| {
-                console!(log, unsafe { String::from_utf8_unchecked(decrypted) });
+                console!(log, String::from_utf8(decrypted).unwrap());
                 Ok(())
             })
         })
