@@ -10,5 +10,7 @@ pub mod primitives;
 /// Generates random bytes using a secure source of entropy.
 pub fn random(bytes: u32) -> impl Future<Item = Vec<u8>, Error = Error> {
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
-    targets::web::crypto::random(bytes)
+    return targets::web::crypto::random(bytes);
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    return targets::native::crypto::random(bytes);
 }

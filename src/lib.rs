@@ -25,6 +25,10 @@ extern crate stdweb;
 #[macro_use]
 extern crate vessels_derive;
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+#[macro_use]
+extern crate lazy_static;
+
 /// Provides abstracted cryptographic primitives.
 pub mod crypto;
 mod errors;
