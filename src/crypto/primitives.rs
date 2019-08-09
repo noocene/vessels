@@ -93,19 +93,23 @@ pub trait SymmetricKey<T>: Send {
     /// Decrypts and authenticates the provided data.
     fn decrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
     /// Exports a key as a raw 128-bit byte array.
-    fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error>>;
+    fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error> + Send>;
 }
 
 impl<T: NonceProvider + 'static> dyn SymmetricKey<T> {
     /// Constructs a new random key from a secure source of entropy.
     pub fn new() -> impl Future<Item = Box<dyn SymmetricKey<T> + 'static>, Error = Error> {
         #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
-        targets::web::crypto::primitives::AESKey::new()
+        return targets::web::crypto::primitives::AESKey::new();
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        return targets::native::crypto::primitives::AESKey::new();
     }
     /// Imports a key from a raw 128-bit byte array.
     pub fn from_bytes(data: [u8; 16]) -> impl Future<Item = Box<dyn SymmetricKey<T> + 'static>, Error = Error> {
         #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
-        targets::web::crypto::primitives::AESKey::from_bytes(data)
+        return targets::web::crypto::primitives::AESKey::from_bytes(data);
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        return targets::native::crypto::primitives::AESKey::from_bytes(data);
     }
 }
 

@@ -71,7 +71,7 @@ impl<T: NonceProvider> SymmetricKey<T> for AESKey<T> {
                 .map_err(|_| failure::err_msg("temp err")),
         )
     }
-    fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error>> {
+    fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error> + Send> {
         let (sender, receiver) = channel(0);
         js! {
             window.crypto.subtle.exportKey("raw", @{&self.key}).then((key) => {
