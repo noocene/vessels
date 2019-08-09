@@ -1,57 +1,17 @@
-use futures::Future as Fut;
-use futures::{lazy, IntoFuture, Stream};
-use vessels::{
-    executor,
-    protocol::{self, protocol, Future, Value},
-};
+use vessels::{crypto::SymmetricKey, executor};
+use futures::Future;
 
-#[derive(Value, Debug)]
-pub enum TestEnum {
-    Numbers(u64, u32),
-    Text(String),
-    Empty,
-}
-
-#[derive(Value)]
-pub struct TestStruct {
-    data: String,
-    number: u64,
-    future: Future<TestEnum, ()>,
-}
-
-#[protocol]
-pub trait TestProtocol {
-    fn test(&self, number: u64) -> Future<TestStruct, ()>;
-    fn sec_test(&self);
-}
-
-struct Test;
-
-impl TestProtocol for Test {
-    fn test(&self, number: u64) -> Future<TestStruct, ()> {
-        println!("test");
-        protocol::Future::new(
-            Ok(TestStruct {
-                data: "test".to_owned(),
-                number,
-                future: Future::new(Ok(TestEnum::Numbers(number, 25)).into_future()),
-            })
-            .into_future(),
-        )
-    }
-    fn sec_test(&self) {
-        println!("sec_test");
-    }
-}
+#[macro_use]
+extern crate stdweb;
 
 fn main() {
-    let rem = TestProtocol::remote();
-    let (rsink, rstream) = rem.clone().split();
-    let (sink, stream) = Test.into_protocol().split();
-    executor::run(lazy(move || {
-        executor::spawn(rstream.forward(sink).then(|_| Ok(())));
-        executor::spawn(stream.forward(rsink).then(|_| Ok(())));
-        println!("{:?}", rem.test(52).wait().unwrap().future.wait());
-        Ok(())
-    }));
+    executor::spawn(SymmetricKey::new().and_then(|key| {
+        key.encrypt("hello".as_bytes()).and_then(move |encrypted| {
+            console!(log, &encrypted);
+            key.decrypt(encrypted.as_slice()).and_then(|decrypted| {
+                console!(log, unsafe { String::from_utf8_unchecked(decrypted) });
+                Ok(())
+            })
+        })
+    }).then(|_| Ok(())));
 }

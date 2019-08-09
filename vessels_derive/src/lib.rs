@@ -757,7 +757,10 @@ pub fn protocol(attr: TokenStream, item: TokenStream) -> TokenStream {
                     FnArg::Captured(argument) => {
                         let ty = &argument.ty;
                         let ident = Ident::new(
-                            &format!("_{}_{}_arg_{}_AssertSerializeDeserialize", &input.ident, index, arg_index),
+                            &format!(
+                                "_{}_{}_arg_{}_AssertSerializeDeserialize",
+                                &input.ident, index, arg_index
+                            ),
                             Span::call_site(),
                         );
                         assert_stream.extend(TokenStream::from(quote_spanned! {
