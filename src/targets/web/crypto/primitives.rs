@@ -69,13 +69,16 @@ impl SymmetricKey for AESKey {
                 .map_err(|_| failure::err_msg("temp err")),
         )
     }
-    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
+    fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error>> {
         let (sender, receiver) = channel(0);
         js! {
             window.crypto.subtle.exportKey("raw", @{&self.key}).then((key) => {
                 @{move |data: ArrayBuffer| {
                     let s = sender.clone();
-                    executor::spawn(sender.clone().send(data).then(|_| Ok(())));
+                    let data: Vec<u8> = data.into();
+                    let mut a: [u8; 16] = Default::default();
+                    a.copy_from_slice(data.as_slice());
+                    executor::spawn(sender.clone().send(a).then(|_| Ok(())));
                 }}(key);
             });
         };
@@ -113,9 +116,9 @@ impl AESKey {
             })
             .map_err(|_| failure::err_msg("temp err"))
     }
-    pub(crate) fn from_bytes(data: &'_ [u8]) -> impl Future<Item = Box<dyn SymmetricKey + 'static>, Error = Error> {
+    pub(crate) fn from_bytes(data: [u8; 16]) -> impl Future<Item = Box<dyn SymmetricKey + 'static>, Error = Error> {
         let (sender, receiver) = channel(0);
-        let data: TypedArray<u8> = data.into();
+        let data: TypedArray<u8> = data.as_ref().into();
         js! {
             window.crypto.subtle.importKey("raw", @{data}, "AES-GCM", true, ["encrypt", "decrypt"]).then(@{move |key: CryptoKey| {
                 executor::spawn(sender.clone().send(key).then(|_| Ok(())));
