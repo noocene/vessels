@@ -1,4 +1,4 @@
-use vessels::{crypto::primitives::SymmetricKey, executor};
+use vessels::{crypto::{primitives::SymmetricKey, self}, executor};
 use futures::Future;
 
 #[macro_use]
