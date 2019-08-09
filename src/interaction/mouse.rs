@@ -20,6 +20,28 @@ pub enum Button {
     Auxiliary(u8),
 }
 
+impl From<Button> for u8 {
+    fn from(input: Button) -> u8 {
+        match input {
+            Button::Left => 0,
+            Button::Right => 1,
+            Button::Middle => 2,
+            Button::Auxiliary(index) => index + 3
+        }
+    }
+}
+
+impl From<u8> for Button {
+    fn from(input: u8) -> Button {
+        match input {
+            0 => Button::Left,
+            1 => Button::Right,
+            2 => Button::Middle,
+            index => Button::Auxiliary(index - 3)
+        }
+    }
+}
+
 /// A mouse state-change action
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
