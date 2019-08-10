@@ -188,10 +188,7 @@ impl VerifyingKey for ECDSAPublicKey {
 }
 
 impl SigningKey for ECDSAPrivateKey {
-    fn sign(
-        &self,
-        data: &'_ [u8],
-    ) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+    fn sign(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
         let (sender, receiver) = channel(0);
         let data: TypedArray<u8> = data.into();
         js! {

@@ -96,7 +96,7 @@ pub mod nonce_providers {
     }
 }
 
-/// Backed by AES-128 in GCM on all platforms, interoperable.
+/// Symmetric encryption backed by AES-128 in GCM on all platforms, interoperable.
 ///
 /// AES-256 is not used as the probability of success for a brute-force attack on AES-128 is already far more slim than necessary and the AES-256 key schedule is less well designed.
 pub trait SymmetricKey<T>: Send {
@@ -160,11 +160,17 @@ impl<'de, T: NonceProvider + 'static> Deserialize<'de> for Box<dyn SymmetricKey<
     }
 }
 
+/// Private key for cryptographic signing.
+///
+/// Be careful with this. Having it compromised/disseminated in plaintext is generally a pretty bad idea in almost any conceivable cryptosystem.
 pub trait SigningKey: Send {
+    /// Signs the provided data guaranteeing authenticity and integrity.
     fn sign(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
 }
 
+/// Public key for cryptographic signature verification.
 pub trait VerifyingKey: Send {
+    /// Verifies the provided data for integrity and authenticity using the provided signature.
     fn verify(
         &self,
         data: &'_ [u8],
@@ -172,9 +178,14 @@ pub trait VerifyingKey: Send {
     ) -> Box<dyn Future<Item = bool, Error = Error> + Send>;
 }
 
+/// Asymmetric cryptographic signatures backed by ECDSA using NIST P-256 curve and SHA-256 for hashing.
+///
+/// Trusting P-256? Well, we'd hope the tech backing our abstractions (SubtleCrypto and therefore the user's browser, `ring` and therefore BoringSSL essentially and therefore Chrome) is a solid implementation. With regards to backdoors or
+/// "cooked" seeding if you're up against an entity with the resources to backdoor everyone's crypto in such a way that 15+ years of cryptanalysis can't figure out how it's been done your signature algorithm is probably the least of your concerns.
 pub trait SigningKeyPair {}
 
 impl dyn SigningKeyPair {
+    /// Creates a new key pair.
     pub fn new() -> impl Future<
         Item = (
             Box<dyn SigningKey + 'static>,
