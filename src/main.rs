@@ -1,14 +1,21 @@
-use vessels::{crypto::primitives::{SymmetricKey, nonce_providers::Random}, executor};
 use futures::Future;
+use vessels::{
+    crypto::primitives::{nonce_providers::Random, SigningKeyPair, SigningKey, VerifyingKey},
+    executor,
+};
+
+#[macro_use]
+extern crate stdweb;
 
 fn main() {
-    executor::run(SymmetricKey::new().and_then(|key: Box<dyn SymmetricKey<Random>>| {
-        key.encrypt("hello".as_bytes()).and_then(move |encrypted| {
-            println!("{:?}", &encrypted);
-            key.decrypt(encrypted.as_slice()).and_then(|decrypted| {
-                println!("{}", unsafe { String::from_utf8_unchecked(decrypted) });
-                Ok(())
+    executor::run(
+        SigningKeyPair::new().and_then(|(private_key, public_key)| {
+            private_key.sign("hello".as_bytes()).and_then(move |signature| {
+                public_key.verify("hello".as_bytes(), &signature).and_then(|result| {
+                    console!(log, result);
+                    Ok(())
+                })
             })
-        })
-    }).then(|_| Ok(())));
+        }).then(|_| Ok(()))
+    );
 }

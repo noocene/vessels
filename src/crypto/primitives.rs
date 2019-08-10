@@ -1,7 +1,12 @@
-use crate::{targets, crypto};
+use crate::{crypto, targets};
 use failure::Error;
 use futures::Future;
-use serde::{de::DeserializeOwned, Serialize, ser::Serializer, de::{Visitor, Deserialize, Deserializer}};
+use serde::{
+    de::DeserializeOwned,
+    de::{Deserialize, Deserializer, Visitor},
+    ser::Serializer,
+    Serialize,
+};
 use std::{fmt, marker::PhantomData};
 
 /// A single-use cryptographic nonce.
@@ -29,7 +34,10 @@ pub trait NonceProvider: Send {
 
 /// Various nonce sequence providers intended for symmetric encryption use.
 pub mod nonce_providers {
-    use crate::crypto::{self, primitives::{NonceProvider, Nonce}};
+    use crate::crypto::{
+        self,
+        primitives::{Nonce, NonceProvider},
+    };
     use futures::Future;
 
     /// A randomly generated cryptographic nonce.
@@ -41,27 +49,31 @@ pub mod nonce_providers {
     /// NIST recommends using this technique for no more than 4 billion messages per key.
     #[allow(missing_copy_implementations)]
     pub struct RandomNonce {
-        nonce: [u8; 12]
+        nonce: [u8; 12],
     }
 
     impl RandomNonce {
         fn new() -> Self {
             let mut nonce: [u8; 12] = Default::default();
             nonce.copy_from_slice(&crypto::random(12).wait().unwrap());
-            RandomNonce {
-                nonce
-            }
+            RandomNonce { nonce }
         }
     }
 
     impl Nonce for RandomNonce {
         fn after_encrypt(&self, data: &mut Vec<u8>) {
-            *data = self.nonce.as_ref().iter().copied().chain(data.iter().copied()).collect::<Vec<_>>();
+            *data = self
+                .nonce
+                .as_ref()
+                .iter()
+                .copied()
+                .chain(data.iter().copied())
+                .collect::<Vec<_>>();
         }
     }
 
     impl AsRef<[u8; 12]> for RandomNonce {
-        fn as_ref(&self) -> &[u8; 12] { 
+        fn as_ref(&self) -> &[u8; 12] {
             &self.nonce
         }
     }
@@ -85,7 +97,7 @@ pub mod nonce_providers {
 }
 
 /// Backed by AES-128 in GCM on all platforms, interoperable.
-/// 
+///
 /// AES-256 is not used as the probability of success for a brute-force attack on AES-128 is already far more slim than necessary and the AES-256 key schedule is less well designed.
 pub trait SymmetricKey<T>: Send {
     /// Encrypts and signs the provided data.
@@ -105,7 +117,9 @@ impl<T: NonceProvider + 'static> dyn SymmetricKey<T> {
         return targets::native::crypto::primitives::AESKey::new();
     }
     /// Imports a key from a raw 128-bit byte array.
-    pub fn from_bytes(data: [u8; 16]) -> impl Future<Item = Box<dyn SymmetricKey<T> + 'static>, Error = Error> {
+    pub fn from_bytes(
+        data: [u8; 16],
+    ) -> impl Future<Item = Box<dyn SymmetricKey<T> + 'static>, Error = Error> {
         #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
         return targets::web::crypto::primitives::AESKey::from_bytes(data);
         #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
@@ -127,7 +141,7 @@ struct SymmetricKeyVisitor<T: NonceProvider + 'static>(PhantomData<T>);
 impl<'de, T: NonceProvider + 'static> Visitor<'de> for SymmetricKeyVisitor<T> {
     type Value = Box<dyn SymmetricKey<T>>;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result { 
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("raw binary AES key data")
     }
     fn visit_bytes<E>(self, v: &'_ [u8]) -> Result<Self::Value, E> {
@@ -143,5 +157,32 @@ impl<'de, T: NonceProvider + 'static> Deserialize<'de> for Box<dyn SymmetricKey<
         D: Deserializer<'de>,
     {
         deserializer.deserialize_bytes(SymmetricKeyVisitor(PhantomData))
+    }
+}
+
+pub trait SigningKey: Send {
+    fn sign(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
+}
+
+pub trait VerifyingKey: Send {
+    fn verify(
+        &self,
+        data: &'_ [u8],
+        signature: &'_ [u8],
+    ) -> Box<dyn Future<Item = bool, Error = Error> + Send>;
+}
+
+pub trait SigningKeyPair {}
+
+impl dyn SigningKeyPair {
+    pub fn new() -> impl Future<
+        Item = (
+            Box<dyn SigningKey + 'static>,
+            Box<dyn VerifyingKey + 'static>,
+        ),
+        Error = Error,
+    > {
+        #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
+        targets::web::crypto::primitives::ECDSAKeyPair::new()
     }
 }
