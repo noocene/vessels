@@ -185,6 +185,23 @@ impl VerifyingKey for ECDSAPublicKey {
                 .map_err(|_| failure::err_msg("temp err")),
         )
     }
+    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+        let (sender, receiver) = channel(0);
+        js! {
+            window.crypto.subtle.exportKey("raw", @{&self.key}).then((key) => {
+                @{move |data: ArrayBuffer| {
+                    executor::spawn(sender.clone().send(data.into()).then(|_| Ok(())));
+                }}(key);
+            });
+        };
+        Box::new(
+            receiver
+                .take(1)
+                .into_future()
+                .and_then(|i| Ok(i.0.unwrap()))
+                .map_err(|_| failure::err_msg("temp err")),
+        )
+    }
 }
 
 impl SigningKey for ECDSAPrivateKey {
@@ -206,10 +223,85 @@ impl SigningKey for ECDSAPrivateKey {
                 .map_err(|_| failure::err_msg("temp err")),
         )
     }
+    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+        let (sender, receiver) = channel(0);
+        js! {
+            window.crypto.subtle.exportKey("pkcs8", @{&self.key}).then((key) => {
+                @{move |data: ArrayBuffer| {
+                    executor::spawn(sender.clone().send(data.into()).then(|_| Ok(())));
+                }}(key);
+            });
+        };
+        Box::new(
+            receiver
+                .take(1)
+                .into_future()
+                .and_then(|i| Ok(i.0.unwrap()))
+                .map_err(|_| failure::err_msg("temp err")),
+        )
+    }
 }
 
 pub(crate) struct ECDSAPublicKey {
     key: CryptoKey,
+}
+
+impl ECDSAPublicKey {
+    pub(crate) fn from_bytes(
+        data: &'_ [u8],
+    ) -> impl Future<Item = Box<dyn VerifyingKey + 'static>, Error = Error> {
+        let (sender, receiver) = channel(0);
+        let data: TypedArray<u8> = data.as_ref().into();
+        js! {
+            window.crypto.subtle.importKey("raw", @{data}, {
+                name: "ECDSA",
+                namedCurve: "P-256"
+            }, true, ["verify"]).then(@{move |key: CryptoKey| {
+                executor::spawn(sender.clone().send(key).then(|_| Ok(())));
+            }}).catch((err) => {
+                console.log(err);
+            });
+        };
+        receiver
+            .take(1)
+            .into_future()
+            .and_then(|item| {
+                let key: Box<dyn VerifyingKey> = Box::new(ECDSAPublicKey {
+                    key: item.0.unwrap(),
+                });
+                Ok(key)
+            })
+            .map_err(|_| failure::err_msg("temp err"))
+    }
+}
+
+impl ECDSAPrivateKey {
+    pub(crate) fn from_bytes(
+        data: &'_ [u8],
+    ) -> impl Future<Item = Box<dyn SigningKey + 'static>, Error = Error> {
+        let (sender, receiver) = channel(0);
+        let data: TypedArray<u8> = data.as_ref().into();
+        js! {
+            window.crypto.subtle.importKey("pkcs8", @{data}, {
+                name: "ECDSA",
+                namedCurve: "P-256"
+            }, true, ["sign"]).then(@{move |key: CryptoKey| {
+                executor::spawn(sender.clone().send(key).then(|_| Ok(())));
+            }}).catch((err) => {
+                console.log(err);
+            });
+        };
+        receiver
+            .take(1)
+            .into_future()
+            .and_then(|item| {
+                let key: Box<dyn SigningKey> = Box::new(ECDSAPrivateKey {
+                    key: item.0.unwrap(),
+                });
+                Ok(key)
+            })
+            .map_err(|_| failure::err_msg("temp err"))
+    }
 }
 
 impl ECDSAKeyPair {
