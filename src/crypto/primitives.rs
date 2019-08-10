@@ -166,6 +166,8 @@ impl<'de, T: NonceProvider + 'static> Deserialize<'de> for Box<dyn SymmetricKey<
 pub trait SigningKey: Send {
     /// Signs the provided data guaranteeing authenticity and integrity.
     fn sign(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
+    /// Exports the underlying key-pair in PKCS#11 compatible form.
+    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
 }
 
 /// Public key for cryptographic signature verification.
@@ -176,6 +178,8 @@ pub trait VerifyingKey: Send {
         data: &'_ [u8],
         signature: &'_ [u8],
     ) -> Box<dyn Future<Item = bool, Error = Error> + Send>;
+    /// Exports the raw public key.
+    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
 }
 
 /// Asymmetric cryptographic signatures backed by ECDSA using NIST P-256 curve and SHA-256 for hashing.
@@ -197,5 +201,91 @@ impl dyn SigningKeyPair {
         return targets::web::crypto::primitives::ECDSAKeyPair::new();
         #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
         return targets::native::crypto::primitives::ECDSAKeyPair::new();
+    }
+}
+
+impl dyn VerifyingKey {
+    /// Imports a public key for signature verification from the raw key bytes.
+    pub fn from_bytes(
+        data: &'_ [u8],
+    ) -> impl Future<Item = Box<dyn VerifyingKey + 'static>, Error = Error> {
+        #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
+        return targets::web::crypto::primitives::ECDSAPublicKey::from_bytes(data);
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        return targets::native::crypto::primitives::ECDSAPublicKey::from_bytes(data);
+    }
+}
+
+impl dyn SigningKey {
+    /// Imports a key pair for cryptographic signing from a PKCS#8 compatible byte slice.
+    pub fn from_bytes(
+        data: &'_ [u8],
+    ) -> impl Future<Item = Box<dyn SigningKey + 'static>, Error = Error> {
+        #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
+        return targets::web::crypto::primitives::ECDSAPrivateKey::from_bytes(data);
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        return targets::native::crypto::primitives::ECDSAPrivateKey::from_bytes(data);
+    }
+}
+
+struct SigningKeyVisitor;
+
+impl<'de> Visitor<'de> for SigningKeyVisitor {
+    type Value = Box<dyn SigningKey>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("pkcs#8 compatible ECDSA keypair data")
+    }
+    fn visit_bytes<E>(self, v: &'_ [u8]) -> Result<Self::Value, E> {
+        Ok(SigningKey::from_bytes(v).wait().unwrap())
+    }
+}
+
+impl<'de> Deserialize<'de> for Box<dyn SigningKey> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_bytes(SigningKeyVisitor)
+    }
+}
+
+struct VerifyingKeyVisitor;
+
+impl<'de> Visitor<'de> for VerifyingKeyVisitor {
+    type Value = Box<dyn VerifyingKey>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("pkcs#8 compatible ECDSA keypair data")
+    }
+    fn visit_bytes<E>(self, v: &'_ [u8]) -> Result<Self::Value, E> {
+        Ok(VerifyingKey::from_bytes(v).wait().unwrap())
+    }
+}
+
+impl<'de> Deserialize<'de> for Box<dyn VerifyingKey> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_bytes(VerifyingKeyVisitor)
+    }
+}
+
+impl Serialize for Box<dyn SigningKey> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_bytes(&self.as_bytes().wait().unwrap())
+    }
+}
+
+impl Serialize for Box<dyn VerifyingKey> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_bytes(&self.as_bytes().wait().unwrap())
     }
 }

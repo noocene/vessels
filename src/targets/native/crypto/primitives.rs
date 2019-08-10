@@ -104,11 +104,30 @@ impl<T: NonceProvider + 'static> SymmetricKey<T> for AESKey<T> {
 
 struct ECDSAPrivateKeyState {
     key: EcdsaKeyPair,
-    key_data: Document,
+    key_data: Vec<u8>,
 }
 
 pub(crate) struct ECDSAPrivateKey {
     state: Arc<Mutex<ECDSAPrivateKeyState>>,
+}
+
+impl ECDSAPrivateKey {
+    pub(crate) fn from_bytes(
+        data: &'_ [u8],
+    ) -> impl Future<Item = Box<dyn SigningKey + 'static>, Error = Error> {
+        let data = data.to_owned();
+        lazy(move || {
+            let key = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, data.as_slice())
+                .unwrap();
+            let private_key: Box<dyn SigningKey> = Box::new(ECDSAPrivateKey {
+                state: Arc::new(Mutex::new(ECDSAPrivateKeyState {
+                    key,
+                    key_data: data,
+                })),
+            });
+            Ok(private_key)
+        })
+    }
 }
 
 impl SigningKey for ECDSAPrivateKey {
@@ -125,14 +144,35 @@ impl SigningKey for ECDSAPrivateKey {
                 .to_owned())
         }))
     }
+    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+        Box::new(ok(Vec::from(self.state.lock().unwrap().key_data.clone())))
+    }
 }
 
 struct ECDSAPublicKeyState {
     key: UnparsedPublicKey<Vec<u8>>,
+    key_data: Vec<u8>,
 }
 
 pub(crate) struct ECDSAPublicKey {
     state: Arc<Mutex<ECDSAPublicKeyState>>,
+}
+
+impl ECDSAPublicKey {
+    pub(crate) fn from_bytes(
+        data: &'_ [u8],
+    ) -> impl Future<Item = Box<dyn VerifyingKey + 'static>, Error = Error> {
+        let data = data.to_owned();
+        lazy(move || {
+            let public_key: Box<dyn VerifyingKey> = Box::new(ECDSAPublicKey {
+                state: Arc::new(Mutex::new(ECDSAPublicKeyState {
+                    key: UnparsedPublicKey::new(&ECDSA_P256_SHA256_FIXED, data.clone()),
+                    key_data: data,
+                })),
+            });
+            Ok(public_key)
+        })
+    }
 }
 
 impl VerifyingKey for ECDSAPublicKey {
@@ -152,6 +192,9 @@ impl VerifyingKey for ECDSAPublicKey {
                 .is_ok())
         }))
     }
+    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+        Box::new(ok(self.state.lock().unwrap().key_data.clone()))
+    }
 }
 
 pub(crate) struct ECDSAKeyPair;
@@ -165,20 +208,25 @@ impl ECDSAKeyPair {
         Error = Error,
     > {
         lazy(|| {
-            let key_data =
-                EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &*RNG.read().unwrap()).unwrap();
+            let key_data = EcdsaKeyPair::generate_pkcs8(
+                &ECDSA_P256_SHA256_FIXED_SIGNING,
+                &*RNG.read().unwrap(),
+            )
+            .unwrap();
             let key = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, key_data.as_ref())
                 .unwrap();
+            let public_key_data = key.public_key().as_ref().to_owned();
             let public_key: Box<dyn VerifyingKey> = Box::new(ECDSAPublicKey {
                 state: Arc::new(Mutex::new(ECDSAPublicKeyState {
-                    key: UnparsedPublicKey::new(
-                        &ECDSA_P256_SHA256_FIXED,
-                        key.public_key().as_ref().to_owned(),
-                    ),
+                    key: UnparsedPublicKey::new(&ECDSA_P256_SHA256_FIXED, public_key_data.clone()),
+                    key_data: public_key_data,
                 })),
             });
             let private_key: Box<dyn SigningKey> = Box::new(ECDSAPrivateKey {
-                state: Arc::new(Mutex::new(ECDSAPrivateKeyState { key, key_data })),
+                state: Arc::new(Mutex::new(ECDSAPrivateKeyState {
+                    key,
+                    key_data: Vec::from(key_data.as_ref()),
+                })),
             });
             Ok((private_key, public_key))
         })
