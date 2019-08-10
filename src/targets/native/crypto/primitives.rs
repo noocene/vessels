@@ -1,8 +1,11 @@
-use ring::aead::{AES_128_GCM, LessSafeKey, UnboundKey, Aad, Nonce as RingNonce};
-use crate::crypto::{primitives::{NonceProvider, SymmetricKey, Nonce}, self};
-use futures::{future::ok, Future, lazy};
+use crate::crypto::{
+    self,
+    primitives::{Nonce, NonceProvider, SymmetricKey},
+};
 use failure::Error;
-use std::sync::{Mutex, Arc};
+use futures::{future::ok, lazy, Future};
+use ring::aead::{Aad, LessSafeKey, Nonce as RingNonce, UnboundKey, AES_128_GCM};
+use std::sync::{Arc, Mutex};
 
 struct AESKeyState<T: NonceProvider + 'static> {
     key: LessSafeKey,
@@ -23,13 +26,15 @@ impl<T: NonceProvider + 'static> AESKey<T> {
                 state: Arc::new(Mutex::new(AESKeyState {
                     key_bytes: a,
                     key: LessSafeKey::new(UnboundKey::new(&AES_128_GCM, &bytes).unwrap()),
-                    nonce_provider: T::new()
-                }))
+                    nonce_provider: T::new(),
+                })),
             });
             Ok(key)
         })
     }
-    pub(crate) fn from_bytes(bytes: [u8; 16]) -> impl Future<Item = Box<dyn SymmetricKey<T> + 'static>, Error = Error> {
+    pub(crate) fn from_bytes(
+        bytes: [u8; 16],
+    ) -> impl Future<Item = Box<dyn SymmetricKey<T> + 'static>, Error = Error> {
         let bytes = bytes.to_owned();
         lazy(move || {
             let mut a: [u8; 16] = Default::default();
@@ -38,8 +43,8 @@ impl<T: NonceProvider + 'static> AESKey<T> {
                 state: Arc::new(Mutex::new(AESKeyState {
                     key_bytes: a,
                     key: LessSafeKey::new(UnboundKey::new(&AES_128_GCM, &bytes).unwrap()),
-                    nonce_provider: T::new()
-                }))
+                    nonce_provider: T::new(),
+                })),
             });
             Ok(key)
         })
@@ -57,7 +62,14 @@ impl<T: NonceProvider + 'static> SymmetricKey<T> for AESKey<T> {
             let mut data = data;
             let mut state = state.lock().unwrap();
             let iv = state.nonce_provider.next_encrypt();
-            state.key.seal_in_place_append_tag(RingNonce::assume_unique_for_key(*iv.as_ref()), Aad::empty(), &mut data).unwrap();
+            state
+                .key
+                .seal_in_place_append_tag(
+                    RingNonce::assume_unique_for_key(*iv.as_ref()),
+                    Aad::empty(),
+                    &mut data,
+                )
+                .unwrap();
             iv.after_encrypt(&mut data);
             Ok(data)
         }))
@@ -69,7 +81,15 @@ impl<T: NonceProvider + 'static> SymmetricKey<T> for AESKey<T> {
             let mut data = data;
             let mut state = state.lock().unwrap();
             let iv = state.nonce_provider.next_decrypt(&mut data);
-            Ok(state.key.open_in_place(RingNonce::assume_unique_for_key(iv), Aad::empty(), &mut data).unwrap().to_owned())
+            Ok(state
+                .key
+                .open_in_place(
+                    RingNonce::assume_unique_for_key(iv),
+                    Aad::empty(),
+                    &mut data,
+                )
+                .unwrap()
+                .to_owned())
         }))
     }
 }

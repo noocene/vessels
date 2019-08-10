@@ -1,6 +1,6 @@
-use futures::{Future, lazy};
-use ring::rand::{SystemRandom, SecureRandom};
 use failure::Error;
+use futures::{lazy, Future};
+use ring::rand::{SecureRandom, SystemRandom};
 
 pub(crate) mod primitives;
 

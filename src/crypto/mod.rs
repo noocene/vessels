@@ -1,9 +1,9 @@
-use failure::Error;
 use crate::targets;
+use failure::Error;
 use futures::Future;
 
 /// Abstracted cryptographic primitives.
-/// 
+///
 /// It is not recommended to use these primitives directly, instead use a pre-defined cryptosystem.
 pub mod primitives;
 
