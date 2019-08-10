@@ -1,10 +1,18 @@
+use super::RNG;
 use crate::crypto::{
     self,
-    primitives::{Nonce, NonceProvider, SymmetricKey},
+    primitives::{Nonce, NonceProvider, SigningKey, SymmetricKey, VerifyingKey},
 };
 use failure::Error;
 use futures::{future::ok, lazy, Future};
-use ring::aead::{Aad, LessSafeKey, Nonce as RingNonce, UnboundKey, AES_128_GCM};
+use ring::{
+    aead::{Aad, LessSafeKey, Nonce as RingNonce, UnboundKey, AES_128_GCM},
+    pkcs8::Document,
+    signature::{
+        EcdsaKeyPair, KeyPair, UnparsedPublicKey, ECDSA_P256_SHA256_FIXED,
+        ECDSA_P256_SHA256_FIXED_SIGNING,
+    },
+};
 use std::sync::{Arc, Mutex};
 
 struct AESKeyState<T: NonceProvider + 'static> {
@@ -91,5 +99,88 @@ impl<T: NonceProvider + 'static> SymmetricKey<T> for AESKey<T> {
                 .unwrap()
                 .to_owned())
         }))
+    }
+}
+
+struct ECDSAPrivateKeyState {
+    key: EcdsaKeyPair,
+    key_data: Document,
+}
+
+pub(crate) struct ECDSAPrivateKey {
+    state: Arc<Mutex<ECDSAPrivateKeyState>>,
+}
+
+impl SigningKey for ECDSAPrivateKey {
+    fn sign(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+        let state = self.state.clone();
+        let data = data.to_owned();
+        Box::new(lazy(move || {
+            let state = state.lock().unwrap();
+            Ok(state
+                .key
+                .sign(&*RNG.read().unwrap(), data.as_slice())
+                .unwrap()
+                .as_ref()
+                .to_owned())
+        }))
+    }
+}
+
+struct ECDSAPublicKeyState {
+    key: UnparsedPublicKey<Vec<u8>>,
+}
+
+pub(crate) struct ECDSAPublicKey {
+    state: Arc<Mutex<ECDSAPublicKeyState>>,
+}
+
+impl VerifyingKey for ECDSAPublicKey {
+    fn verify(
+        &self,
+        data: &'_ [u8],
+        signature: &'_ [u8],
+    ) -> Box<dyn Future<Item = bool, Error = Error> + Send> {
+        let state = self.state.clone();
+        let data = data.to_owned();
+        let signature = signature.to_owned();
+        Box::new(lazy(move || {
+            let state = state.lock().unwrap();
+            Ok(state
+                .key
+                .verify(data.as_slice(), signature.as_slice())
+                .is_ok())
+        }))
+    }
+}
+
+pub(crate) struct ECDSAKeyPair;
+
+impl ECDSAKeyPair {
+    pub(crate) fn new() -> impl Future<
+        Item = (
+            Box<dyn SigningKey + 'static>,
+            Box<dyn VerifyingKey + 'static>,
+        ),
+        Error = Error,
+    > {
+        lazy(|| {
+            let key_data =
+                EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &*RNG.read().unwrap()).unwrap();
+            let key = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, key_data.as_ref())
+                .unwrap();
+            let public_key: Box<dyn VerifyingKey> = Box::new(ECDSAPublicKey {
+                state: Arc::new(Mutex::new(ECDSAPublicKeyState {
+                    key: UnparsedPublicKey::new(
+                        &ECDSA_P256_SHA256_FIXED,
+                        key.public_key().as_ref().to_owned(),
+                    ),
+                })),
+            });
+            let private_key: Box<dyn SigningKey> = Box::new(ECDSAPrivateKey {
+                state: Arc::new(Mutex::new(ECDSAPrivateKeyState { key, key_data })),
+            });
+            Ok((private_key, public_key))
+        })
     }
 }

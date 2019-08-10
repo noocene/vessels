@@ -194,6 +194,8 @@ impl dyn SigningKeyPair {
         Error = Error,
     > {
         #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
-        targets::web::crypto::primitives::ECDSAKeyPair::new()
+        return targets::web::crypto::primitives::ECDSAKeyPair::new();
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        return targets::native::crypto::primitives::ECDSAKeyPair::new();
     }
 }

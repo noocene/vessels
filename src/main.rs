@@ -1,11 +1,8 @@
 use futures::Future;
 use vessels::{
-    crypto::primitives::{nonce_providers::Random, SigningKeyPair},
+    crypto::primitives::SigningKeyPair,
     executor,
 };
-
-#[macro_use]
-extern crate stdweb;
 
 fn main() {
     executor::run(
@@ -17,7 +14,7 @@ fn main() {
                         public_key
                             .verify("hello".as_bytes(), &signature)
                             .and_then(|result| {
-                                console!(log, result);
+                                println!("{:?}", result);
                                 Ok(())
                             })
                     })
