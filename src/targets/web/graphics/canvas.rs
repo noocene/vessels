@@ -171,6 +171,7 @@ impl CanvasFrame {
             let spread = shadow.spread * 2.;
             let size = entity.bounds().size;
             let scale = (size + spread) / size;
+            self.update_clip(entity);
             state.context.begin_path();
             let segments = entity.segments.iter();
             let offset: Vector = (
@@ -229,6 +230,34 @@ impl CanvasFrame {
         );
         state.context.set_shadow_color("rgba(255,255,255,0)");
     }
+    fn update_clip(&self, entity: &Path) {
+        let state = self.state.read().unwrap();
+        if !entity.clip_segments.is_empty() {
+            state.context.begin_path();
+            entity
+                .clip_segments
+                .iter()
+                .for_each(|segment| match segment {
+                    Segment::LineTo(point) => {
+                        state.context.line_to(point.x, point.y);
+                    }
+                    Segment::MoveTo(point) => {
+                        state.context.move_to(point.x, point.y);
+                    }
+                    Segment::CubicTo(point, handle_1, handle_2) => {
+                        state.context.bezier_curve_to(
+                            handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
+                        );
+                    }
+                    Segment::QuadraticTo(point, handle) => {
+                        state
+                            .context
+                            .quadratic_curve_to(handle.x, handle.y, point.x, point.y);
+                    }
+                });
+            state.context.clip(FillRule::NonZero);
+        }
+    }
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
         state.context.restore();
@@ -237,6 +266,7 @@ impl CanvasFrame {
             matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
         );
         self.draw_shadows(matrix, &entity);
+        self.update_clip(entity);
         state.context.begin_path();
         let segments = entity.segments.iter();
         state.context.move_to(0., 0.);
