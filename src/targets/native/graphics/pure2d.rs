@@ -187,46 +187,41 @@ impl CairoImage {
         }
     }
     fn blur(&self, radius: f64) {
-        let surface = &self.0.lock().unwrap().0;
+        let (width, height) = {
+            let surface = &self.0.lock().unwrap().0;
+            (surface.get_width() as u32, surface.get_height() as u32)
+        };
         let data: &mut [[u8; 4]] = unsafe {
-            cairo_sys::cairo_surface_flush(surface.to_raw_none());
-            match Status::from(cairo_sys::cairo_surface_status(surface.to_raw_none())) {
-                Status::Success => (),
-                _ => panic!("Cairo Surface borrow error!"),
-            }
-            if cairo_sys::cairo_image_surface_get_data(surface.to_raw_none()).is_null() {
-                panic!("Cairo Surface borrow error!");
-            }
             std::slice::from_raw_parts_mut(
-                cairo_sys::cairo_image_surface_get_data(surface.to_raw_none()) as *mut [u8; 4],
-                (surface.get_height() * surface.get_width()) as usize,
+                self.get_data_ptr() as *mut [u8; 4],
+                (width * height) as usize,
             )
         };
         let boxes = boxes_for_gauss(radius, 3);
         for channel in 0..=2 {
             self.box_blur(
                 data,
-                surface.get_width() as u32,
-                surface.get_height() as u32,
+                width,
+                height,
                 (boxes[0] - 1) / 2,
                 channel,
             );
             self.box_blur(
                 data,
-                surface.get_width() as u32,
-                surface.get_height() as u32,
+                width,
+                height,
                 (boxes[1] - 1) / 2,
                 channel,
             );
             self.box_blur(
                 data,
-                surface.get_width() as u32,
-                surface.get_height() as u32,
+                width,
+                height,
                 (boxes[2] - 1) / 2,
                 channel,
             );
         }
-        unsafe { cairo_sys::cairo_surface_mark_dirty(surface.to_raw_none()) };
+        unsafe { cairo_sys::cairo_surface_mark_dirty(self.0.lock().unwrap().0.to_raw_none()) };
     }
     fn get_data_ptr(&self) -> *const c_void {
         let surface = &self.0.lock().unwrap().0;
