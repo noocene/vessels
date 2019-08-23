@@ -11,18 +11,12 @@ use crate::targets::native;
 use crate::text::{Origin, Text, Weight, Wrap};
 use crate::util::ObserverCell;
 
-use std::any::Any;
-use std::ffi::{c_void, CString};
-use std::ops::Deref;
-use std::sync::{Arc, Mutex, RwLock};
-use std::time::SystemTime;
+use std::{any::Any, ops::Deref, sync::{Arc, Mutex, RwLock}, time::SystemTime, ffi::{c_void, CString}};
 
-use glutin::dpi::LogicalSize;
-use glutin::ContextTrait;
+use glutin::{dpi::LogicalSize, ContextTrait};
 
-use cairo::Status;
 use cairo::{
-    Antialias, FontOptions, Format, Gradient, HintStyle, ImageSurface, LineCap, LineJoin,
+    Status, Antialias, FontOptions, Format, Gradient, HintStyle, ImageSurface, LineCap, LineJoin,
     LinearGradient, Matrix, Pattern, RadialGradient, SubpixelOrder,
 };
 
@@ -869,9 +863,16 @@ impl CairoObject {
                     );
                     context.fill();
                     let image = CairoImage::new(CairoSurface(surface));
+                    let ptr = image.get_data_ptr() as *mut u8;
                     image.blur(shadow.blur);
+                    let surface = image.0.lock().unwrap();
+                    let data = unsafe { std::slice::from_raw_parts_mut(
+                        ptr,
+                        (surface.get_height() * surface.get_width()) as usize * 4,
+                    ) };
+                    let image = ImageSurface::create_for_data(data, Format::ARgb32, new_size.x as i32, new_size.y as i32, surface.get_stride()).unwrap();
                     base_context.set_source_surface(
-                        &image.0.lock().unwrap().0,
+                        &image,
                         scale_offset.x + shadow.offset.x + shadow.blur - corners.0.x,
                         scale_offset.y + shadow.offset.y + shadow.blur - corners.0.y,
                     );
@@ -1192,9 +1193,9 @@ void main()
                     .downcast::<CairoImage>()
                     .unwrap()
                     .get_data_ptr();
-            } else {
-                frame.draw();
             }
+
+            frame.draw();
 
             let size = state.size.get();
 
