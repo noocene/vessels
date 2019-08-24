@@ -204,10 +204,8 @@ impl CairoImage {
             )
         };
         let boxes = boxes_for_gauss(radius, 3);
-        for channel in 0..=3 {
-            self.box_blur(data, width, height, (boxes[0] - 1) / 2, channel);
-            self.box_blur(data, width, height, (boxes[1] - 1) / 2, channel);
-            self.box_blur(data, width, height, (boxes[2] - 1) / 2, channel);
+        for b in 0..=2 {
+            self.box_blur(data, width, height, (boxes[b] - 1) / 2, 3);
         }
         unsafe { cairo_sys::cairo_surface_mark_dirty(self.0.lock().unwrap().0.to_raw_none()) };
     }
@@ -459,9 +457,8 @@ impl CairoFrame {
         }
         let context = state.context.lock().unwrap();
         update_clip(&*context, entity);
-        let segments = entity.segments.iter();
         context.move_to(0., 0.);
-        segments.for_each(|segment| match segment {
+        entity.segments.iter().for_each(|segment| match segment {
             Segment::LineTo(point) => {
                 context.line_to(point.x, point.y);
             }
@@ -722,7 +719,7 @@ impl Frame for CairoFrame {
         state.contents.iter().for_each(|object| {
             let object_state = object.state.read().unwrap();
             let matrix = object_state.orientation.to_matrix();
-            object.update_shadows();
+            object.update_shadows(state.pixel_ratio);
             (*object.shadow_surface.lock().unwrap())
                 .iter()
                 .for_each(|surface| {
@@ -752,7 +749,7 @@ struct CairoObjectState {
     orientation: Transform,
     content: Rasterizable,
     depth: u32,
-    update_shadows: bool,
+    update_shadows: Mutex<bool>,
 }
 
 #[derive(Clone)]
@@ -777,17 +774,19 @@ impl CairoObject {
                     None => content,
                 },
                 depth,
-                update_shadows: true,
+                update_shadows: Mutex::new(true),
             })),
             color_profile,
             shadow_surface: Arc::new(Mutex::new(None)),
         }
     }
-    fn update_shadows(&self) {
+    fn update_shadows(&self, pixel_ratio: f64) {
         let state = self.state.read().unwrap();
-        if !state.update_shadows {
+        let mut update_shadows = state.update_shadows.lock().unwrap();
+        if !*update_shadows {
             return;
         }
+        *update_shadows = false;
         if let Rasterizable::Path(path) = &state.content {
             if !path.shadows.is_empty() {
                 let mut corners = (Vector::from((0., 0.)), Vector::from((0., 0.)));
@@ -896,9 +895,9 @@ impl Object for CairoObject {
     }
     fn update(&mut self, input: Rasterizable) {
         let mut state = self.state.write().unwrap();
-        state.update_shadows = if let Rasterizable::Path(path) = &input {
+        *state.update_shadows.lock().unwrap() = if let Rasterizable::Path(path) = &input {
             if let Rasterizable::Path(current_path) = &self.state.read().unwrap().content {
-                current_path.shadows != path.shadows
+                current_path.shadows != path.shadows || current_path.segments != path.segments
             } else {
                 false
             }

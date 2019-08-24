@@ -8,7 +8,7 @@ use std::fmt::{Debug, Formatter};
 const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
 
 /// A path segment.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Segment {
     /// A line to the given point.
     LineTo(Vector),
