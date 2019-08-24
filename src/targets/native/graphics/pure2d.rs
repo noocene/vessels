@@ -11,13 +11,19 @@ use crate::targets::native;
 use crate::text::{Origin, Text, Weight, Wrap};
 use crate::util::ObserverCell;
 
-use std::{any::Any, ops::Deref, sync::{Arc, Mutex, RwLock}, time::SystemTime, ffi::{c_void, CString}};
+use std::{
+    any::Any,
+    ffi::{c_void, CString},
+    ops::Deref,
+    sync::{Arc, Mutex, RwLock},
+    time::SystemTime,
+};
 
 use glutin::{dpi::LogicalSize, ContextTrait};
 
 use cairo::{
-    Status, Antialias, FontOptions, Format, Gradient, HintStyle, ImageSurface, LineCap, LineJoin,
-    LinearGradient, Matrix, Pattern, RadialGradient, SubpixelOrder,
+    Antialias, FontOptions, Format, Gradient, HintStyle, ImageSurface, LineCap, LineJoin,
+    LinearGradient, Matrix, Pattern, RadialGradient, Status, SubpixelOrder,
 };
 
 use pango::{FontDescription, Layout, LayoutExt};
@@ -198,28 +204,10 @@ impl CairoImage {
             )
         };
         let boxes = boxes_for_gauss(radius, 3);
-        for channel in 0..=2 {
-            self.box_blur(
-                data,
-                width,
-                height,
-                (boxes[0] - 1) / 2,
-                channel,
-            );
-            self.box_blur(
-                data,
-                width,
-                height,
-                (boxes[1] - 1) / 2,
-                channel,
-            );
-            self.box_blur(
-                data,
-                width,
-                height,
-                (boxes[2] - 1) / 2,
-                channel,
-            );
+        for channel in 0..=3 {
+            self.box_blur(data, width, height, (boxes[0] - 1) / 2, channel);
+            self.box_blur(data, width, height, (boxes[1] - 1) / 2, channel);
+            self.box_blur(data, width, height, (boxes[2] - 1) / 2, channel);
         }
         unsafe { cairo_sys::cairo_surface_mark_dirty(self.0.lock().unwrap().0.to_raw_none()) };
     }
@@ -819,32 +807,46 @@ impl CairoObject {
                 let base_context = CairoContext(cairo::Context::new(&base_surface));
                 update_clip(&base_context, &path.clone().with_origin(corners.0));
                 for shadow in &path.shadows {
+                    let mut shadow = shadow.clone();
+                    shadow.blur /= 2.;
                     let spread = shadow.spread * 2.;
                     let size = path.bounds().size;
                     let scale = (size + spread) / size;
                     let segments = path.segments.iter();
-                    let new_size = size + spread + (shadow.blur * 2.);
+                    let new_size = size + spread + (shadow.blur * 8.);
                     let surface =
                         ImageSurface::create(Format::ARgb32, new_size.x as i32, new_size.y as i32)
                             .unwrap();
                     let context = CairoContext(cairo::Context::new(&surface));
                     let scale_offset = (size - new_size) / 2.;
                     context.scale(scale.x, scale.y);
+                    let blur_offset = shadow.blur * 4.;
                     segments.for_each(|segment| match segment {
                         Segment::LineTo(point) => {
-                            context.line_to(point.x, point.y);
+                            context.line_to(point.x + blur_offset, point.y + blur_offset);
                         }
                         Segment::MoveTo(point) => {
-                            context.move_to(point.x, point.y);
+                            context.move_to(point.x + blur_offset, point.y + blur_offset);
                         }
                         Segment::CubicTo(point, handle_1, handle_2) => {
                             context.curve_to(
-                                handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
+                                handle_1.x + blur_offset,
+                                handle_1.y + blur_offset,
+                                handle_2.x + blur_offset,
+                                handle_2.y + blur_offset,
+                                point.x + blur_offset,
+                                point.y + blur_offset,
                             );
                         }
                         Segment::QuadraticTo(point, handle) => {
-                            context
-                                .curve_to(handle.x, handle.y, handle.x, handle.y, point.x, point.y);
+                            context.curve_to(
+                                handle.x + blur_offset,
+                                handle.y + blur_offset,
+                                handle.x + blur_offset,
+                                handle.y + blur_offset,
+                                point.x + blur_offset,
+                                point.y + blur_offset,
+                            );
                         }
                     });
                     if path.closed {
@@ -858,18 +860,13 @@ impl CairoObject {
                     );
                     context.fill();
                     let image = CairoImage::new(CairoSurface(surface));
-                    let ptr = image.get_data_ptr() as *mut u8;
-                    image.blur(shadow.blur);
-                    let surface = image.0.lock().unwrap();
-                    let data = unsafe { std::slice::from_raw_parts_mut(
-                        ptr,
-                        (surface.get_height() * surface.get_width()) as usize * 4,
-                    ) };
-                    let image = ImageSurface::create_for_data(data, Format::ARgb32, new_size.x as i32, new_size.y as i32, surface.get_stride()).unwrap();
+                    if shadow.blur != 0. {
+                        image.blur(shadow.blur);
+                    }
                     base_context.set_source_surface(
-                        &image,
-                        scale_offset.x + shadow.offset.x + shadow.blur - corners.0.x,
-                        scale_offset.y + shadow.offset.y + shadow.blur - corners.0.y,
+                        &image.0.lock().unwrap().0,
+                        scale_offset.x + shadow.offset.x - shadow.blur - corners.0.x,
+                        scale_offset.y + shadow.offset.y - shadow.blur - corners.0.y,
                     );
                     base_context.paint();
                 }
