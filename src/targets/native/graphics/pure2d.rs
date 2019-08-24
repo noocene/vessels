@@ -722,6 +722,7 @@ impl Frame for CairoFrame {
         state.contents.iter().for_each(|object| {
             let object_state = object.state.read().unwrap();
             let matrix = object_state.orientation.to_matrix();
+            object.update_shadows();
             (*object.shadow_surface.lock().unwrap())
                 .iter()
                 .for_each(|surface| {
@@ -751,6 +752,7 @@ struct CairoObjectState {
     orientation: Transform,
     content: Rasterizable,
     depth: u32,
+    update_shadows: bool,
 }
 
 #[derive(Clone)]
@@ -767,7 +769,7 @@ impl CairoObject {
         depth: u32,
         color_profile: Option<Profile>,
     ) -> CairoObject {
-        let mut object = CairoObject {
+        CairoObject {
             state: Arc::new(RwLock::new(CairoObjectState {
                 orientation,
                 content: match color_profile.clone() {
@@ -775,15 +777,18 @@ impl CairoObject {
                     None => content,
                 },
                 depth,
+                update_shadows: true,
             })),
             color_profile,
             shadow_surface: Arc::new(Mutex::new(None)),
-        };
-        object.update_shadows();
-        object
+        }
     }
-    fn update_shadows(&mut self) {
-        if let Rasterizable::Path(path) = &self.state.read().unwrap().content {
+    fn update_shadows(&self) {
+        let state = self.state.read().unwrap();
+        if !state.update_shadows {
+            return;
+        }
+        if let Rasterizable::Path(path) = &state.content {
             if !path.shadows.is_empty() {
                 let mut corners = (Vector::from((0., 0.)), Vector::from((0., 0.)));
                 for shadow in &path.shadows {
@@ -890,7 +895,8 @@ impl Object for CairoObject {
         self.state.write().unwrap().orientation = transform;
     }
     fn update(&mut self, input: Rasterizable) {
-        let update_shadows = if let Rasterizable::Path(path) = &input {
+        let mut state = self.state.write().unwrap();
+        state.update_shadows = if let Rasterizable::Path(path) = &input {
             if let Rasterizable::Path(current_path) = &self.state.read().unwrap().content {
                 current_path.shadows != path.shadows
             } else {
@@ -899,13 +905,10 @@ impl Object for CairoObject {
         } else {
             false
         };
-        self.state.write().unwrap().content = match self.color_profile.clone() {
+        state.content = match self.color_profile.clone() {
             Some(color_profile) => color_profile.transform_content(input),
             None => input,
         };
-        if update_shadows {
-            self.update_shadows();
-        }
     }
     fn get_depth(&self) -> u32 {
         self.state.read().unwrap().depth
