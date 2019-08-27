@@ -726,6 +726,7 @@ impl Frame for CairoFrame {
                     let context = state.context.lock().unwrap();
                     context.restore();
                     context.save();
+                    context.scale(1.0/state.pixel_ratio, 1.0/state.pixel_ratio);
                     context.transform(Matrix {
                         xx: matrix[0],
                         yx: matrix[2],
@@ -807,23 +808,23 @@ impl CairoObject {
                     (corners.1.y - corners.0.y).abs(),
                 ));
                 let base_surface =
-                    ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
+                    ImageSurface::create(Format::ARgb32, size.x as i32 * pixel_ratio as i32, size.y as i32 * pixel_ratio as i32).unwrap();
                 let base_context = CairoContext(cairo::Context::new(&base_surface));
+                base_context.scale(pixel_ratio, pixel_ratio);
                 update_clip(&base_context, &path.clone().with_origin(corners.0));
                 for shadow in &path.shadows {
                     let mut shadow = shadow.clone();
-                    shadow.blur /= 2.;
                     let spread = shadow.spread * 2.;
                     let size = path.bounds().size;
                     let scale = (size + spread) / size;
                     let segments = path.segments.iter();
                     let new_size = size + spread + (shadow.blur * 8.);
                     let surface =
-                        ImageSurface::create(Format::ARgb32, new_size.x as i32, new_size.y as i32)
+                        ImageSurface::create(Format::ARgb32, new_size.x as i32 * pixel_ratio as i32, new_size.y as i32 * pixel_ratio as i32)
                             .unwrap();
                     let context = CairoContext(cairo::Context::new(&surface));
                     let scale_offset = (size - new_size) / 2.;
-                    context.scale(scale.x, scale.y);
+                    context.scale(scale.x * pixel_ratio, scale.y * pixel_ratio);
                     let blur_offset = shadow.blur * 4.;
                     segments.for_each(|segment| match segment {
                         Segment::LineTo(point) => {
@@ -865,7 +866,7 @@ impl CairoObject {
                     context.fill();
                     let image = CairoImage::new(CairoSurface(surface));
                     if shadow.blur != 0. {
-                        image.blur(shadow.blur);
+                        image.blur(shadow.blur / pixel_ratio);
                     }
                     base_context.set_source_surface(
                         &image.0.lock().unwrap().0,
