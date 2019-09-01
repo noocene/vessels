@@ -809,10 +809,9 @@ impl CairoObject {
                 let base_surface =
                     ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
                 let base_context = CairoContext(cairo::Context::new(&base_surface));
-                update_clip(
-                    &base_context,
-                    &path.clone().with_origin(corners.0 * pixel_ratio),
-                );
+                base_context.scale(pixel_ratio, pixel_ratio);
+                update_clip(&base_context, &path.clone().with_origin(corners.0));
+                base_context.scale(1. / pixel_ratio, 1. / pixel_ratio);
                 for shadow in &path.shadows {
                     let spread = shadow.spread * 2.;
                     let size = path.bounds().size;
