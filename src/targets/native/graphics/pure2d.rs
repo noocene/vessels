@@ -726,7 +726,6 @@ impl Frame for CairoFrame {
                     let context = state.context.lock().unwrap();
                     context.restore();
                     context.save();
-                    context.scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
                     context.transform(Matrix {
                         xx: matrix[0],
                         yx: matrix[2],
@@ -735,6 +734,7 @@ impl Frame for CairoFrame {
                         x0: matrix[4],
                         y0: matrix[5],
                     });
+                    context.scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
                     context.set_source_surface(&surface.0.get_target(), surface.1.x, surface.1.y);
                     context.paint();
                 });
@@ -792,12 +792,11 @@ impl CairoObject {
             if !path.shadows.is_empty() {
                 let mut corners = (Vector::from((0., 0.)), Vector::from((0., 0.)));
                 for shadow in &path.shadows {
-                    let spread = shadow.spread * 2.;
                     let size = path.bounds().size;
-                    let new_size = size + spread + (shadow.blur * 2.);
+                    let new_size = size + (shadow.spread * 4.);
                     let scale_offset = (size - new_size) / 2.;
-                    let near_corner = scale_offset + shadow.offset;
-                    let far_corner = near_corner + new_size;
+                    let near_corner = scale_offset + shadow.offset - shadow.blur;
+                    let far_corner = near_corner + new_size + shadow.blur;
                     corners.1.x = corners.1.x.max(far_corner.x);
                     corners.1.y = corners.1.y.max(far_corner.y);
                     corners.0.x = corners.0.x.min(near_corner.x);
@@ -806,58 +805,46 @@ impl CairoObject {
                 let size = Vector::from((
                     (corners.1.x - corners.0.x).abs(),
                     (corners.1.y - corners.0.y).abs(),
-                ));
-                let base_surface = ImageSurface::create(
-                    Format::ARgb32,
-                    size.x as i32 * pixel_ratio as i32,
-                    size.y as i32 * pixel_ratio as i32,
-                )
-                .unwrap();
+                )) * pixel_ratio;
+                let base_surface =
+                    ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
                 let base_context = CairoContext(cairo::Context::new(&base_surface));
-                base_context.scale(pixel_ratio, pixel_ratio);
-                update_clip(&base_context, &path.clone().with_origin(corners.0));
+                update_clip(
+                    &base_context,
+                    &path.clone().with_origin(corners.0 * pixel_ratio),
+                );
                 for shadow in &path.shadows {
                     let spread = shadow.spread * 2.;
                     let size = path.bounds().size;
                     let scale = (size + spread) / size;
                     let segments = path.segments.iter();
-                    let new_size = size + spread + (shadow.blur * 8.);
+                    let new_size = size + spread;
                     let surface = ImageSurface::create(
                         Format::ARgb32,
-                        new_size.x as i32 * pixel_ratio as i32,
-                        new_size.y as i32 * pixel_ratio as i32,
+                        ((new_size.x + (shadow.blur * 4.)) * pixel_ratio) as i32,
+                        ((new_size.y + (shadow.blur * 4.)) * pixel_ratio) as i32,
                     )
                     .unwrap();
                     let context = CairoContext(cairo::Context::new(&surface));
                     let scale_offset = (size - new_size) / 2.;
-                    context.scale(scale.x * pixel_ratio, scale.y * pixel_ratio);
-                    let blur_offset = shadow.blur * 4.;
+                    context.scale(pixel_ratio, pixel_ratio);
+                    context.translate(shadow.blur * 2., shadow.blur * 2.);
+                    context.scale(scale.x, scale.y);
                     segments.for_each(|segment| match segment {
                         Segment::LineTo(point) => {
-                            context.line_to(point.x + blur_offset, point.y + blur_offset);
+                            context.line_to(point.x, point.y);
                         }
                         Segment::MoveTo(point) => {
-                            context.move_to(point.x + blur_offset, point.y + blur_offset);
+                            context.move_to(point.x, point.y);
                         }
                         Segment::CubicTo(point, handle_1, handle_2) => {
                             context.curve_to(
-                                handle_1.x + blur_offset,
-                                handle_1.y + blur_offset,
-                                handle_2.x + blur_offset,
-                                handle_2.y + blur_offset,
-                                point.x + blur_offset,
-                                point.y + blur_offset,
+                                handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
                             );
                         }
                         Segment::QuadraticTo(point, handle) => {
-                            context.curve_to(
-                                handle.x + blur_offset,
-                                handle.y + blur_offset,
-                                handle.x + blur_offset,
-                                handle.y + blur_offset,
-                                point.x + blur_offset,
-                                point.y + blur_offset,
-                            );
+                            context
+                                .curve_to(handle.x, handle.y, handle.x, handle.y, point.x, point.y);
                         }
                     });
                     if path.closed {
@@ -872,18 +859,20 @@ impl CairoObject {
                     context.fill();
                     let image = CairoImage::new(CairoSurface(surface));
                     if shadow.blur != 0. {
-                        image.blur(shadow.blur / pixel_ratio);
+                        image.blur(shadow.blur);
                     }
                     base_context.set_source_surface(
                         &image.0.lock().unwrap().0,
-                        scale_offset.x + shadow.offset.x - shadow.blur - corners.0.x,
-                        scale_offset.y + shadow.offset.y - shadow.blur - corners.0.y,
+                        (scale_offset.x + shadow.offset.x - (shadow.blur * 2.) - corners.0.x)
+                            * pixel_ratio,
+                        (scale_offset.y + shadow.offset.y - (shadow.blur * 2.) - corners.0.y)
+                            * pixel_ratio,
                     );
                     base_context.paint();
                 }
                 *self.shadow_surface.lock().unwrap() = Some((
                     base_context,
-                    (corners.0.x.min(0.), corners.0.y.min(0.)).into(),
+                    Vector::from((corners.0.x.min(0.), corners.0.y.min(0.))) * pixel_ratio,
                 ));
             }
         }

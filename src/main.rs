@@ -8,7 +8,7 @@ fn main() {
     let mut root = gfx.frame();
     root.add(
         Primitive::square(100.)
-            .clip(Primitive::circle(120.).finalize().with_origin((20., 20.)))
+            //.clip(Primitive::circle(120.).finalize().with_origin((20., 20.)))
             .shadow(
                 Shadow::new(Color::black().with_alpha(75))
                     .offset((-10., -10.))
