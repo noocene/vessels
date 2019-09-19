@@ -302,8 +302,8 @@ impl CanvasFrame {
                 .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
             let frame = state.clip_frame.as_ref().unwrap();
             let mut matrix = matrix;
-            matrix[3] *= state.pixel_ratio;
-            matrix[0] *= state.pixel_ratio;
+            matrix[3] = state.pixel_ratio;
+            matrix[0] = state.pixel_ratio;
             frame.draw_path(matrix, entity);
             frame.composite_clip(matrix, entity);
             state.context.translate(-matrix[4], -matrix[5]);

@@ -23,7 +23,6 @@ fn main() {
             )
             .fill(Color::rgba(0, 0, 255, 255).into())
             .finalize()
-            .with_origin((10., 10.))
             .into(),
     )
     .apply_transform(
