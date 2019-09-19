@@ -23,14 +23,19 @@ fn main() {
             )
             .fill(Color::rgba(0, 0, 255, 255).into())
             .finalize()
+            .with_origin((10., 10.))
             .into(),
     )
-    .apply_transform(Transform::default().with_position((50., 50.)));
-    root.add(
+    .apply_transform(
+        Transform::default()
+            .with_position((50., 50.))
+            .with_scale((2., 2.)),
+    );
+    /*root.add(
         Primitive::circle(30.)
             .fill(Color::black().into())
             .finalize()
             .into(),
-    );
+    );*/
     gfx.start(root).run();
 }

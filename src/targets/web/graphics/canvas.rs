@@ -129,6 +129,7 @@ struct CanvasFrameState {
     pixel_ratio: f64,
     viewport: Rect,
     size: Vector,
+    clip_frame: Option<CanvasFrame>,
 }
 
 impl Drop for CanvasFrameState {
@@ -142,6 +143,25 @@ struct CanvasFrame {
 }
 
 impl CanvasFrame {
+    fn new_raw(pixel_ratio: f64) -> CanvasFrame {
+        let canvas: CanvasElement = document()
+            .create_element("canvas")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
+        CanvasFrame {
+            state: Arc::new(RwLock::new(CanvasFrameState {
+                canvas,
+                pixel_ratio,
+                context,
+                contents: vec![],
+                size: (1., 1.).into(),
+                viewport: Rect::default(),
+                clip_frame: None,
+            })),
+        }
+    }
     fn new() -> Box<CanvasFrame> {
         let canvas: CanvasElement = document()
             .create_element("canvas")
@@ -149,6 +169,7 @@ impl CanvasFrame {
             .try_into()
             .unwrap();
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
+        let clip_frame = Some(CanvasFrame::new_raw(window().device_pixel_ratio()));
         Box::new(CanvasFrame {
             state: Arc::new(RwLock::new(CanvasFrameState {
                 canvas,
@@ -157,8 +178,19 @@ impl CanvasFrame {
                 contents: vec![],
                 size: Vector::default(),
                 viewport: Rect::default(),
+                clip_frame,
             })),
         })
+    }
+    fn set_root(&self) {
+        let state = self.state.read().unwrap();
+        js! {
+            let elem = document.querySelector(".root");
+            if (elem !== null) {
+                @{|| {panic!("A graphics context has already been started")}}();
+            }
+        };
+        state.canvas.class_list().add("root").unwrap();
     }
     fn draw_shadows(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
@@ -171,7 +203,6 @@ impl CanvasFrame {
             let spread = shadow.spread * 2.;
             let size = entity.bounds().size;
             let scale = (size + spread) / size;
-            self.update_clip(entity);
             state.context.begin_path();
             let segments = entity.segments.iter();
             let offset: Vector = (
@@ -258,6 +289,72 @@ impl CanvasFrame {
             state.context.clip(FillRule::NonZero);
         }
     }
+    fn draw_path_clipped(&self, matrix: [f64; 6], entity: &Path) {
+        let state = self.state.read().unwrap();
+        if !entity.clip_segments.is_empty() && state.clip_frame.is_some() {
+            state.context.restore();
+            state.context.save();
+            state.context.transform(
+                matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+            );
+            state
+                .context
+                .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
+            let frame = state.clip_frame.as_ref().unwrap();
+            let mut matrix = matrix;
+            matrix[3] *= state.pixel_ratio;
+            matrix[0] *= state.pixel_ratio;
+            frame.draw_path(matrix, entity);
+            frame.composite_clip(matrix, entity);
+            state.context.translate(-matrix[4], -matrix[5]);
+            let el = frame.element();
+            js! {
+                @{&state.context}.imageSmoothingEnabled = false;
+                @{&state.context}.drawImage(@{&el}, 0, 0);
+            }
+            frame.clear();
+        } else {
+            self.draw_path(matrix, entity);
+        }
+    }
+    fn clear(&self) {
+        let state = self.state.read().unwrap();
+        state.context.clear_rect(-1000., -1000., 2000., 2000.);
+    }
+    fn composite_clip(&self, matrix: [f64; 6], entity: &Path) {
+        let state = self.state.read().unwrap();
+        state.context.restore();
+        state.context.save();
+        state.context.transform(
+            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+        );
+        state.context.begin_path();
+        entity
+            .clip_segments
+            .iter()
+            .for_each(|segment| match segment {
+                Segment::LineTo(point) => {
+                    state.context.line_to(point.x, point.y);
+                }
+                Segment::MoveTo(point) => {
+                    state.context.move_to(point.x, point.y);
+                }
+                Segment::CubicTo(point, handle_1, handle_2) => {
+                    state.context.bezier_curve_to(
+                        handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
+                    );
+                }
+                Segment::QuadraticTo(point, handle) => {
+                    state
+                        .context
+                        .quadratic_curve_to(handle.x, handle.y, point.x, point.y);
+                }
+            });
+        js! {
+            @{&state.context}.globalCompositeOperation = "destination-in";
+        };
+        state.context.fill(FillRule::NonZero);
+    }
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
         state.context.restore();
@@ -266,7 +363,6 @@ impl CanvasFrame {
             matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
         );
         self.draw_shadows(matrix, &entity);
-        self.update_clip(entity);
         state.context.begin_path();
         let segments = entity.segments.iter();
         state.context.move_to(0., 0.);
@@ -681,7 +777,7 @@ impl Frame for CanvasFrame {
                 let object = object.state.read().unwrap();
                 let matrix = object.orientation.to_matrix();
                 match &object.content {
-                    Rasterizable::Path(path) => self.draw_path(matrix, &path),
+                    Rasterizable::Path(path) => self.draw_path_clipped(matrix, &path),
                     Rasterizable::Text(input) => self.draw_text(matrix, &input),
                 };
             });
@@ -703,12 +799,18 @@ impl Frame for CanvasFrame {
     fn set_viewport(&self, viewport: Rect) {
         let mut state = self.state.write().unwrap();
         state.viewport = viewport;
+        if let Some(frame) = &state.clip_frame {
+            frame.set_viewport(viewport);
+        }
     }
     fn resize(&self, size: Vector) {
         let mut state = self.state.write().unwrap();
         state.size = size;
         state.canvas.set_height((size.y * state.pixel_ratio) as u32);
         state.canvas.set_width((size.x * state.pixel_ratio) as u32);
+        if let Some(frame) = &state.clip_frame {
+            frame.resize(size);
+        }
     }
     fn get_size(&self) -> Vector {
         let state = self.state.read().unwrap();
@@ -848,6 +950,8 @@ impl ContextualGraphics for Canvas {
         {
             let mut state = self.state.write().unwrap();
             let size = state.size.get();
+            let frame = root.as_any().downcast::<CanvasFrame>().unwrap();
+            frame.set_root();
             root.resize(size);
             root.set_viewport(Rect::new((0., 0.), size));
             state.root_frame = Some(root);
@@ -890,6 +994,12 @@ impl Canvas {
 }
 
 pub(crate) fn new() -> Box<dyn ContextualGraphics> {
+    js! {
+        let elem = document.querySelector(".root");
+        if (elem !== null) {
+            @{|| {panic!("A graphics context has already been started")}}();
+        }
+    };
     document()
         .head()
         .unwrap()
@@ -897,7 +1007,7 @@ pub(crate) fn new() -> Box<dyn ContextualGraphics> {
             r#"
 <title></title>
 <style>
-body, html, canvas {
+body, html, canvas.root {
     height: 100%;
 }
 body {
@@ -905,7 +1015,11 @@ body {
     overflow: hidden;
 }
 canvas {
+    display: none;
+}
+canvas.root {
     width: 100%;
+    display: initial;
 }
 </style>
             "#,

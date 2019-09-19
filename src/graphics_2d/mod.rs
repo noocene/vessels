@@ -393,7 +393,7 @@ impl From<Content> for Rasterizable {
     }
 }
 
-/// A type that can rasterized.
+/// A type that can be rasterized.
 #[derive(Debug, Clone)]
 pub enum Rasterizable {
     /// Some [Text].
