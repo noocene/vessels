@@ -7,28 +7,28 @@ use stdweb::web::event::{
 };
 use stdweb::web::{document, IEventTarget};
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 pub(crate) struct MouseState {
     handlers: Vec<Box<dyn Fn(Event)>>,
     position: Vector,
 }
 
+#[derive(Clone)]
 pub(crate) struct Mouse {
-    state: Rc<RefCell<MouseState>>,
+    state: Arc<RwLock<MouseState>>,
 }
 
 impl interaction::Source for Mouse {
     type Event = Event;
-    fn bind(&self, handler: Box<dyn Fn(Event) + 'static>) {
-        self.state.borrow_mut().handlers.push(handler);
+    fn bind(&self, handler: Box<dyn Fn(Event) + 'static + Sync + Send>) {
+        self.state.write().unwrap().handlers.push(handler);
     }
 }
 
 impl interaction::Mouse for Mouse {
     fn position(&self) -> Vector {
-        self.state.borrow().position
+        self.state.read().unwrap().position
     }
 }
 
@@ -36,7 +36,7 @@ impl Mouse {
     #[allow(clippy::new_ret_no_self)]
     pub(crate) fn new() -> Box<dyn interaction::Mouse> {
         let mouse = Mouse {
-            state: Rc::new(RefCell::new(MouseState {
+            state: Arc::new(RwLock::new(MouseState {
                 handlers: vec![],
                 position: Vector::default(),
             })),
@@ -52,7 +52,7 @@ impl Mouse {
         let body = document().body().unwrap();
         body.add_event_listener(move |event: MouseDownEvent| {
             event.prevent_default();
-            let state = state.borrow();
+            let state = state.read().unwrap();
             state.handlers.iter().for_each(|handler| {
                 handler(Event {
                     action: Action::Down(match event.button() {
@@ -68,7 +68,7 @@ impl Mouse {
         });
         body.add_event_listener(move |event: MouseUpEvent| {
             event.prevent_default();
-            let state = up_state.borrow();
+            let state = up_state.read().unwrap();
             state.handlers.iter().for_each(|handler| {
                 handler(Event {
                     action: Action::Up(match event.button() {
@@ -83,7 +83,7 @@ impl Mouse {
             });
         });
         body.add_event_listener(move |event: MouseMoveEvent| {
-            let mut state = move_state.borrow_mut();
+            let mut state = move_state.write().unwrap();
             event.prevent_default();
             state.position = (f64::from(event.client_x()), f64::from(event.client_y())).into();
             state.handlers.iter().for_each(|handler| {
@@ -96,7 +96,7 @@ impl Mouse {
             })
         });
         body.add_event_listener(move |event: MouseWheelEvent| {
-            let state = scroll_state.borrow();
+            let state = scroll_state.read().unwrap();
             event.prevent_default();
             state.handlers.iter().for_each(|handler| {
                 handler(Event {

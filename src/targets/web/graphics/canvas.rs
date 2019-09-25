@@ -1,6 +1,6 @@
 use crate::graphics_2d::{
-    Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics, Image,
-    ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
+    ActiveContextGraphics, Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics,
+    Image, ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
     Texture2D, Ticker, Transform, Vector,
 };
 use crate::interaction::Context;
@@ -114,8 +114,11 @@ impl Object for CanvasObject {
     fn get_depth(&self) -> u32 {
         self.state.read().unwrap().depth
     }
-    fn update(&mut self, interaction: Rasterizable) {
-        self.state.write().unwrap().content = interaction;
+    fn update(&mut self, input: Rasterizable) {
+        self.state.write().unwrap().content = input;
+    }
+    fn box_clone(&self) -> Box<dyn Object> {
+        Box::new(self.clone())
     }
 }
 
@@ -126,6 +129,7 @@ struct CanvasFrameState {
     pixel_ratio: f64,
     viewport: Rect,
     size: Vector,
+    clip_frame: Option<CanvasFrame>,
 }
 
 impl Drop for CanvasFrameState {
@@ -139,6 +143,25 @@ struct CanvasFrame {
 }
 
 impl CanvasFrame {
+    fn new_raw(pixel_ratio: f64) -> CanvasFrame {
+        let canvas: CanvasElement = document()
+            .create_element("canvas")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
+        CanvasFrame {
+            state: Arc::new(RwLock::new(CanvasFrameState {
+                canvas,
+                pixel_ratio,
+                context,
+                contents: vec![],
+                size: (1., 1.).into(),
+                viewport: Rect::default(),
+                clip_frame: None,
+            })),
+        }
+    }
     fn new() -> Box<CanvasFrame> {
         let canvas: CanvasElement = document()
             .create_element("canvas")
@@ -146,16 +169,28 @@ impl CanvasFrame {
             .try_into()
             .unwrap();
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
+        let clip_frame = Some(CanvasFrame::new_raw(window().device_pixel_ratio()));
         Box::new(CanvasFrame {
             state: Arc::new(RwLock::new(CanvasFrameState {
                 canvas,
-                pixel_ratio: window().device_pixel_ratio(),
+                pixel_ratio: 0.,
                 context,
                 contents: vec![],
                 size: Vector::default(),
                 viewport: Rect::default(),
+                clip_frame,
             })),
         })
+    }
+    fn set_root(&self) {
+        let state = self.state.read().unwrap();
+        js! {
+            let elem = document.querySelector(".root");
+            if (elem !== null) {
+                @{|| {panic!("A graphics context has already been started")}}();
+            }
+        };
+        state.canvas.class_list().add("root").unwrap();
     }
     fn draw_shadows(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
@@ -165,8 +200,9 @@ impl CanvasFrame {
             state.context.transform(
                 matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
             );
+            let spread = shadow.spread * 2.;
             let size = entity.bounds().size;
-            let scale = (size + shadow.spread) / size;
+            let scale = (size + spread) / size;
             state.context.begin_path();
             let segments = entity.segments.iter();
             let offset: Vector = (
@@ -174,7 +210,7 @@ impl CanvasFrame {
                 state.viewport.size.y + state.viewport.position.y,
             )
                 .into();
-            let new_size = size + shadow.spread;
+            let new_size = size + spread;
             let scale_offset = (size - new_size) / 2.;
             state.context.translate(scale_offset.x, scale_offset.y);
             state.context.scale(scale.x, scale.y);
@@ -224,6 +260,73 @@ impl CanvasFrame {
             matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
         );
         state.context.set_shadow_color("rgba(255,255,255,0)");
+    }
+    fn draw_path_clipped(&self, matrix: [f64; 6], entity: &Path) {
+        let state = self.state.read().unwrap();
+        if !entity.clip_segments.is_empty() && state.clip_frame.is_some() {
+            state.context.restore();
+            state.context.save();
+            state.context.transform(
+                matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+            );
+            state
+                .context
+                .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
+            let frame = state.clip_frame.as_ref().unwrap();
+            let mut matrix = matrix;
+            matrix[4] *= state.pixel_ratio;
+            matrix[5] *= state.pixel_ratio;
+            matrix[3] = state.pixel_ratio;
+            matrix[0] = state.pixel_ratio;
+            frame.draw_path(matrix, entity);
+            frame.composite_clip(matrix, entity);
+            let el = frame.element();
+            js! {
+                @{&state.context}.imageSmoothingEnabled = false;
+                @{&state.context}.drawImage(@{&el}, @{-matrix[4]}, @{-matrix[5]});
+            }
+            frame.clear();
+        } else {
+            self.draw_path(matrix, entity);
+        }
+    }
+    fn clear(&self) {
+        let state = self.state.read().unwrap();
+        state.context.clear_rect(-1000., -1000., 2000., 2000.);
+    }
+    fn composite_clip(&self, matrix: [f64; 6], entity: &Path) {
+        let state = self.state.read().unwrap();
+        state.context.restore();
+        state.context.save();
+        state.context.transform(
+            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+        );
+        state.context.begin_path();
+        entity
+            .clip_segments
+            .iter()
+            .for_each(|segment| match segment {
+                Segment::LineTo(point) => {
+                    state.context.line_to(point.x, point.y);
+                }
+                Segment::MoveTo(point) => {
+                    state.context.move_to(point.x, point.y);
+                }
+                Segment::CubicTo(point, handle_1, handle_2) => {
+                    state.context.bezier_curve_to(
+                        handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
+                    );
+                }
+                Segment::QuadraticTo(point, handle) => {
+                    state
+                        .context
+                        .quadratic_curve_to(handle.x, handle.y, point.x, point.y);
+                }
+            });
+        js! {
+            @{&state.context}.globalCompositeOperation = "destination-in";
+        };
+        state.context.fill(FillRule::NonZero);
     }
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
@@ -396,11 +499,11 @@ impl CanvasFrame {
             None => {}
         }
     }
-    fn update_text_style(&self, interaction: &Text) {
+    fn update_text_style(&self, input: &Text) {
         let state = self.state.read().unwrap();
-        state.context.set_font((match interaction.font {
+        state.context.set_font((match input.font {
                 Font::SystemFont => {
-                    format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if interaction.italic { "italic " } else { "" }, match interaction.weight {
+                    format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
                         Weight::Normal => "400",
                         Weight::Medium => "500",
                         Weight::SemiBold => "600",
@@ -410,22 +513,22 @@ impl CanvasFrame {
                         Weight::Thin => "200",
                         Weight::Light => "300",
                         Weight::Hairline => "100"
-                    }, interaction.size)
+                    }, input.size)
                 }
             }).as_str());
-        state.context.set_text_align(match interaction.align {
+        state.context.set_text_align(match input.align {
             Align::Center => TextAlign::Center,
             Align::End => TextAlign::End,
             Align::Start => TextAlign::Start,
         });
-        state.context.set_text_baseline(match interaction.origin {
+        state.context.set_text_baseline(match input.origin {
             Origin::Top => TextBaseline::Top,
             Origin::Baseline => TextBaseline::Alphabetic,
             Origin::Middle => TextBaseline::Middle,
         });
         state
             .context
-            .set_fill_style_color(&interaction.color.to_rgba_color());
+            .set_fill_style_color(&input.color.to_rgba_color());
     }
     fn fill_text_with_spacing(&self, text: &'_ str, position: Vector, spacing: f64) {
         if text == "" {
@@ -489,38 +592,34 @@ impl CanvasFrame {
         } {}
         spaced_width - spacing
     }
-    fn draw_text(&self, matrix: [f64; 6], interaction: &Text) {
+    fn draw_text(&self, matrix: [f64; 6], input: &Text) {
         let state = self.state.read().unwrap();
         state.context.restore();
         state.context.save();
         state.context.transform(
             matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
         );
-        let mut lines: Vec<String> = interaction
+        let mut lines: Vec<String> = input
             .content
             .split('\n')
             .map(std::borrow::ToOwned::to_owned)
             .collect();
-        self.update_text_style(&interaction);
-        if interaction.max_width.is_some() {
-            lines = self.wrap_text(&interaction);
+        self.update_text_style(&input);
+        if input.max_width.is_some() {
+            lines = self.wrap_text(&input);
         }
         for (index, line) in lines.iter().enumerate() {
-            if interaction.letter_spacing != 0. {
+            if input.letter_spacing != 0. {
                 self.fill_text_with_spacing(
                     line,
-                    (
-                        0.,
-                        (u32::from(interaction.line_height) * index as u32).into(),
-                    )
-                        .into(),
-                    interaction.letter_spacing,
+                    (0., input.line_height * f64::from(index as u32)).into(),
+                    input.letter_spacing,
                 );
             } else {
                 state.context.fill_text(
                     line,
                     0.,
-                    (u32::from(interaction.line_height) * index as u32).into(),
+                    input.line_height * f64::from(index as u32),
                     None,
                 );
             }
@@ -530,10 +629,10 @@ impl CanvasFrame {
         let state = self.state.read().unwrap();
         state.canvas.clone()
     }
-    fn measure_text_height(&self, interaction: Text) -> f64 {
-        let font = match interaction.font {
+    fn measure_text_height(&self, input: Text) -> f64 {
+        let font = match input.font {
             Font::SystemFont => {
-                format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if interaction.italic { "italic " } else { "" }, match interaction.weight {
+                format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
                     Weight::Normal => "400",
                     Weight::Medium => "500",
                     Weight::SemiBold => "600",
@@ -543,7 +642,7 @@ impl CanvasFrame {
                     Weight::Thin => "200",
                     Weight::Light => "300",
                     Weight::Hairline => "100"
-                }, interaction.size)
+                }, input.size)
             }
         };
         (js! {
@@ -561,13 +660,13 @@ impl CanvasFrame {
         .try_into()
         .unwrap()
     }
-    fn wrap_text(&self, interaction: &Text) -> Vec<String> {
-        let mut lines: Vec<String> = interaction
+    fn wrap_text(&self, input: &Text) -> Vec<String> {
+        let mut lines: Vec<String> = input
             .content
             .split('\n')
             .map(std::borrow::ToOwned::to_owned)
             .collect();
-        match interaction.wrap {
+        match input.wrap {
             Wrap::Normal => {
                 let mut test_string = "".to_owned();
                 lines.reverse();
@@ -583,8 +682,8 @@ impl CanvasFrame {
                             for (index, word) in words.iter().cloned().enumerate() {
                                 if self.measure_text_with_spacing(
                                     &(test_string.clone() + word),
-                                    interaction.letter_spacing,
-                                ) <= f64::from(interaction.max_width.unwrap())
+                                    input.letter_spacing,
+                                ) <= input.max_width.unwrap()
                                 {
                                     test_string += &format!(" {}", word);
                                 } else {
@@ -616,6 +715,10 @@ impl CanvasFrame {
 }
 
 impl Frame for CanvasFrame {
+    fn set_pixel_ratio(&self, ratio: f64) {
+        let mut state = self.state.write().unwrap();
+        state.pixel_ratio = ratio;
+    }
     fn draw(&self) {
         let state = self.state.read().unwrap();
         let viewport = state.viewport;
@@ -647,8 +750,8 @@ impl Frame for CanvasFrame {
                 let object = object.state.read().unwrap();
                 let matrix = object.orientation.to_matrix();
                 match &object.content {
-                    Rasterizable::Path(path) => self.draw_path(matrix, &path),
-                    Rasterizable::Text(interaction) => self.draw_text(matrix, &interaction),
+                    Rasterizable::Path(path) => self.draw_path_clipped(matrix, &path),
+                    Rasterizable::Text(input) => self.draw_text(matrix, &input),
                 };
             });
     }
@@ -669,12 +772,18 @@ impl Frame for CanvasFrame {
     fn set_viewport(&self, viewport: Rect) {
         let mut state = self.state.write().unwrap();
         state.viewport = viewport;
+        if let Some(frame) = &state.clip_frame {
+            frame.set_viewport(viewport);
+        }
     }
     fn resize(&self, size: Vector) {
         let mut state = self.state.write().unwrap();
         state.size = size;
         state.canvas.set_height((size.y * state.pixel_ratio) as u32);
         state.canvas.set_width((size.x * state.pixel_ratio) as u32);
+        if let Some(frame) = &state.clip_frame {
+            frame.resize(size);
+        }
     }
     fn get_size(&self) -> Vector {
         let state = self.state.read().unwrap();
@@ -685,27 +794,23 @@ impl Frame for CanvasFrame {
         self.draw();
         Box::new(state.canvas.clone())
     }
-    fn measure(&self, interaction: Rasterizable) -> Vector {
-        match interaction {
-            Rasterizable::Text(interaction) => {
-                self.update_text_style(&interaction);
-                let origin = interaction.origin;
-                let mut size: Vector = if interaction.max_width.is_some() {
-                    let lines = self.wrap_text(&interaction);
+    fn measure(&self, input: Rasterizable) -> Vector {
+        match input {
+            Rasterizable::Text(input) => {
+                self.update_text_style(&input);
+                let origin = input.origin;
+                let mut size: Vector = if input.max_width.is_some() {
+                    let lines = self.wrap_text(&input);
                     (
-                        f64::from(interaction.max_width.unwrap()),
-                        (f64::from((lines.len() - 1).max(0) as u32)
-                            * f64::from(interaction.line_height))
-                            + f64::from(interaction.size),
+                        input.max_width.unwrap(),
+                        (f64::from((lines.len() - 1).max(0) as u32) * input.line_height)
+                            + input.size,
                     )
                         .into()
                 } else {
                     (
-                        self.measure_text_with_spacing(
-                            &interaction.content,
-                            interaction.letter_spacing,
-                        ),
-                        self.measure_text_height(*interaction),
+                        self.measure_text_with_spacing(&input.content, input.letter_spacing),
+                        self.measure_text_height(*input),
                     )
                         .into()
                 };
@@ -714,10 +819,15 @@ impl Frame for CanvasFrame {
                 }
                 size
             }
-            Rasterizable::Path(interaction) => interaction.bounds().size,
+            Rasterizable::Path(input) => input.bounds().size,
         }
     }
     fn box_clone(&self) -> Box<dyn Frame> {
+        Box::new(CanvasFrame {
+            state: self.state.clone(),
+        })
+    }
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(CanvasFrame {
             state: self.state.clone(),
         })
@@ -735,9 +845,9 @@ struct CanvasState {
 }
 
 impl Rasterizer for Canvas {
-    fn rasterize(&self, interaction: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
+    fn rasterize(&self, input: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
         let mut frame = CanvasFrame::new();
-        if let Rasterizable::Text(text) = &interaction {
+        if let Rasterizable::Text(text) = &input {
             match &text.origin {
                 Origin::Top => {
                     frame.set_viewport(Rect::new(Vector::default(), size));
@@ -751,7 +861,7 @@ impl Rasterizer for Canvas {
             }
         }
         frame.resize(size);
-        frame.add(interaction.into());
+        frame.add(input.into());
         frame.draw();
         Box::new(frame.element())
     }
@@ -777,8 +887,17 @@ impl Ticker for Canvas {
 
 impl ContextGraphics for Canvas {}
 
+impl ActiveContextGraphics for Canvas {
+    fn box_clone(&self) -> Box<dyn ActiveContextGraphics> {
+        Box::new(self.clone())
+    }
+}
+
 impl InactiveContextGraphics for Canvas {
-    fn run(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>) {
+    fn run(self: Box<Self>) {
+        self.run_with(Box::new(|_| {}));
+    }
+    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveContextGraphics>) + 'static>) {
         {
             let state = self.state.read().unwrap();
             state.root_frame.as_ref().unwrap().show();
@@ -804,6 +923,8 @@ impl ContextualGraphics for Canvas {
         {
             let mut state = self.state.write().unwrap();
             let size = state.size.get();
+            let frame = root.as_any().downcast::<CanvasFrame>().unwrap();
+            frame.set_root();
             root.resize(size);
             root.set_viewport(Rect::new((0., 0.), size));
             state.root_frame = Some(root);
@@ -814,7 +935,9 @@ impl ContextualGraphics for Canvas {
 
 impl Graphics for Canvas {
     fn frame(&self) -> Box<dyn Frame> {
-        CanvasFrame::new()
+        let frame = CanvasFrame::new();
+        frame.set_pixel_ratio(window().device_pixel_ratio());
+        frame
     }
 }
 
@@ -844,6 +967,12 @@ impl Canvas {
 }
 
 pub(crate) fn new() -> Box<dyn ContextualGraphics> {
+    js! {
+        let elem = document.querySelector(".root");
+        if (elem !== null) {
+            @{|| {panic!("A graphics context has already been started")}}();
+        }
+    };
     document()
         .head()
         .unwrap()
@@ -851,7 +980,7 @@ pub(crate) fn new() -> Box<dyn ContextualGraphics> {
             r#"
 <title></title>
 <style>
-body, html, canvas {
+body, html, canvas.root {
     height: 100%;
 }
 body {
@@ -859,7 +988,11 @@ body {
     overflow: hidden;
 }
 canvas {
+    display: none;
+}
+canvas.root {
     width: 100%;
+    display: initial;
 }
 </style>
             "#,

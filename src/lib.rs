@@ -19,6 +19,15 @@
 #[macro_use]
 extern crate stdweb;
 
+#[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
+extern crate cairo;
+#[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
+extern crate cairo_sys;
+#[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
+extern crate gl;
+#[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
+extern crate glutin;
+
 mod errors;
 /// Provides interfaces to 2D graphics APIs.
 pub mod graphics_2d;

@@ -8,7 +8,7 @@ use std::fmt::{Debug, Formatter};
 const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
 
 /// A path segment.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Segment {
     /// A line to the given point.
     LineTo(Vector),
@@ -53,7 +53,7 @@ pub struct LinearGradient {
 }
 
 /// A drop shadow.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Shadow {
     /// The color of the shadow.
     pub color: Color,
@@ -211,6 +211,10 @@ where
 pub struct Path {
     /// The segments comprising the path.
     pub segments: Vec<Segment>,
+    /// The segments comprising the path's clipping mask.
+    ///
+    /// If this is empty the path is rendered in full.
+    pub clip_segments: Vec<Segment>,
     /// The exterior stroke styling.
     pub stroke: Option<Stroke>,
     /// The internal fill.
@@ -223,7 +227,7 @@ pub struct Path {
 
 impl Path {
     /// Adjusts the origin of the path.
-    pub fn with_origin<U>(mut self, offset: U) -> Self
+    pub fn with_offset<U>(mut self, offset: U) -> Self
     where
         U: Into<Vector>,
     {
@@ -233,20 +237,34 @@ impl Path {
             .iter()
             .map(|segment| match segment {
                 Segment::CubicTo(point, handle_1, handle_2) => {
-                    Segment::CubicTo(*point - offset, *handle_1 - offset, *handle_2 - offset)
+                    Segment::CubicTo(*point + offset, *handle_1 + offset, *handle_2 + offset)
                 }
                 Segment::QuadraticTo(point, handle) => {
-                    Segment::QuadraticTo(*point - offset, *handle - offset)
+                    Segment::QuadraticTo(*point + offset, *handle + offset)
                 }
-                Segment::MoveTo(point) => Segment::MoveTo(*point - offset),
-                Segment::LineTo(point) => Segment::LineTo(*point - offset),
+                Segment::MoveTo(point) => Segment::MoveTo(*point + offset),
+                Segment::LineTo(point) => Segment::LineTo(*point + offset),
+            })
+            .collect();
+        self.clip_segments = self
+            .clip_segments
+            .iter()
+            .map(|segment| match segment {
+                Segment::CubicTo(point, handle_1, handle_2) => {
+                    Segment::CubicTo(*point + offset, *handle_1 + offset, *handle_2 + offset)
+                }
+                Segment::QuadraticTo(point, handle) => {
+                    Segment::QuadraticTo(*point + offset, *handle + offset)
+                }
+                Segment::MoveTo(point) => Segment::MoveTo(*point + offset),
+                Segment::LineTo(point) => Segment::LineTo(*point + offset),
             })
             .collect();
         self
     }
     /// Computes an axis-aligned local coordinates bounding box of the path.
     pub fn bounds(&self) -> Rect {
-        let mut top_left = Vector::default();
+        let mut top_left: Vector = (std::f64::INFINITY, std::f64::INFINITY).into();
         let mut bottom_right = Vector::default();
         let mut update = |point: &Vector| {
             if point.x < top_left.x {
@@ -500,9 +518,22 @@ impl Primitive {
 pub struct StyleHelper {
     closed: bool,
     geometry: Vec<Segment>,
+    clip_geometry: Vec<Segment>,
     fill: Option<Fill>,
     stroke: Option<Stroke>,
     shadows: Vec<Shadow>,
+}
+
+impl Into<Vec<Segment>> for StyleHelper {
+    fn into(self) -> Vec<Segment> {
+        self.geometry
+    }
+}
+
+impl Into<Vec<Segment>> for Path {
+    fn into(self) -> Vec<Segment> {
+        self.segments
+    }
 }
 
 impl StyleHelper {
@@ -511,6 +542,7 @@ impl StyleHelper {
         StyleHelper {
             closed: false,
             geometry,
+            clip_geometry: vec![],
             fill: None,
             shadows: vec![],
             stroke: None,
@@ -519,6 +551,14 @@ impl StyleHelper {
     /// Marks the path as closed.
     pub fn close(mut self) -> Self {
         self.closed = true;
+        self
+    }
+    /// Applies the provided clipping mask.
+    ///
+    /// This clipping mask applies to shadows in addition to content, to draw shadows outside a clipped entity a separate path is necessary.
+    pub fn clip<T: Into<Vec<Segment>>>(mut self, clip_path: T) -> Self {
+        let clip_path = clip_path.into();
+        self.clip_geometry = clip_path;
         self
     }
     /// Fills the path with the provided texture.
@@ -544,6 +584,7 @@ impl StyleHelper {
             fill: self.fill,
             shadows: self.shadows,
             stroke: self.stroke,
+            clip_segments: self.clip_geometry,
         }
     }
 }

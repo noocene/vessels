@@ -3,7 +3,7 @@ use crate::path::{Path, Primitive, Texture};
 use crate::targets;
 use crate::text::Text;
 
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use std::borrow::Cow;
 
@@ -59,7 +59,7 @@ impl ImageRepresentation for Image<Color, Texture2D> {
 pub trait PixelFormat {}
 
 /// A standard 24-bit-depth RGB color with an 8-bit alpha channel.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Color {
     /// Red channel data.
     pub r: u8,
@@ -128,6 +128,14 @@ impl Color {
             b: 255,
             a: 255,
         }
+    }
+    /// Creates a new fully opaque color from the provided RGB values.
+    pub fn rgb(r: u8, g: u8, b: u8) -> Color {
+        Color { r, g, b, a: 255 }
+    }
+    /// Creates a new opaque color from the provided RGBA values.
+    pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Color {
+        Color { r, g, b, a }
     }
 }
 
@@ -282,6 +290,14 @@ pub trait Object: Sync + Send {
     fn set_depth(&mut self, depth: u32);
     /// Replaces the contents of the [Object] with new Rasterizable content. This may be costly.
     fn update(&mut self, content: Rasterizable);
+    #[doc(hidden)]
+    fn box_clone(&self) -> Box<dyn Object>;
+}
+
+impl Clone for Box<dyn Object> {
+    fn clone(&self) -> Box<dyn Object> {
+        self.box_clone()
+    }
 }
 
 /// An isolated rendering context.
@@ -304,6 +320,10 @@ pub trait Frame: Sync + Send {
     fn show(&self);
     #[doc(hidden)]
     fn draw(&self);
+    #[doc(hidden)]
+    fn set_pixel_ratio(&self, ratio: f64);
+    #[doc(hidden)]
+    fn as_any(&self) -> Box<dyn Any>;
 }
 
 impl Clone for Box<dyn Frame> {
@@ -337,6 +357,26 @@ impl Content {
     }
 }
 
+impl From<Path> for Content {
+    fn from(interaction: Path) -> Content {
+        Content {
+            content: interaction.into(),
+            depth: 0,
+            transform: Transform::default(),
+        }
+    }
+}
+
+impl From<Text> for Content {
+    fn from(interaction: Text) -> Content {
+        Content {
+            content: interaction.into(),
+            depth: 0,
+            transform: Transform::default(),
+        }
+    }
+}
+
 impl From<Rasterizable> for Content {
     fn from(interaction: Rasterizable) -> Content {
         Content {
@@ -353,7 +393,7 @@ impl From<Content> for Rasterizable {
     }
 }
 
-/// A type that can rasterized.
+/// A type that can be rasterized.
 #[derive(Debug, Clone)]
 pub enum Rasterizable {
     /// Some [Text].
@@ -396,13 +436,27 @@ pub trait Graphics: Rasterizer {
     fn frame(&self) -> Box<dyn Frame>;
 }
 
-/// A post-activation graphics context.
+/// An aggregated context with bound graphics.
 pub trait ContextGraphics: Graphics + Context + Ticker {}
+
+impl Clone for Box<dyn ActiveContextGraphics> {
+    fn clone(&self) -> Box<dyn ActiveContextGraphics> {
+        self.box_clone()
+    }
+}
+
+/// An active [ContextualGraphics] context.
+pub trait ActiveContextGraphics: ContextGraphics {
+    #[doc(hidden)]
+    fn box_clone(&self) -> Box<dyn ActiveContextGraphics>;
+}
 
 /// An inactive [ContextualGraphics] context.
 pub trait InactiveContextGraphics: ContextGraphics {
+    /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate. Calls the provided callback once upon execution and moves an active context graphics into it.
+    fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ActiveContextGraphics>) + 'static>);
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
-    fn run(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ContextGraphics>) + 'static>);
+    fn run(self: Box<Self>);
 }
 
 /// A type that permits the binding of tick handlers.
@@ -418,7 +472,7 @@ pub trait ContextualGraphics: Graphics {
 }
 
 /// A 2-dimensional cartesian vector or point
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct Vector {
     /// X-axis position.
     pub x: f64,
@@ -437,7 +491,10 @@ impl From<(f64, f64)> for Vector {
 
 impl From<f64> for Vector {
     fn from(interaction: f64) -> Vector {
-        Vector { x: interaction, y: interaction }
+        Vector {
+            x: interaction,
+            y: interaction,
+        }
     }
 }
 
@@ -478,6 +535,17 @@ where
         Vector {
             x: self.x - other.x,
             y: self.y - other.y,
+        }
+    }
+}
+
+impl Neg for Vector {
+    type Output = Vector;
+
+    fn neg(self) -> Self::Output {
+        Vector {
+            x: -self.x,
+            y: -self.y,
         }
     }
 }
@@ -575,5 +643,8 @@ impl Rect {
 /// Initializes a new graphics context.
 pub fn new() -> Box<dyn ContextualGraphics> {
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
-    targets::web::graphics::new()
+    return targets::web::graphics::new();
+
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    return targets::native::graphics::new();
 }

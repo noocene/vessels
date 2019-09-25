@@ -81,17 +81,17 @@ pub struct Text {
     /// The actual text content to render.
     pub content: String,
     /// The font size in pixels.
-    pub size: u16,
+    pub size: f64,
     /// The color of the rendered text.
     pub color: Color,
     /// Whether the text is styled as oblique/italic.
     pub italic: bool,
     /// The maximum width or wrap width of the text.
-    pub max_width: Option<u32>,
+    pub max_width: Option<f64>,
     /// The justification or alignment style of the text.
     pub align: Align,
     /// The line height in pixels.
-    pub line_height: u16,
+    pub line_height: f64,
     /// The type of text wrap used.
     pub wrap: Wrap,
     /// The font weight used.
@@ -122,12 +122,12 @@ impl Text {
         self
     }
     /// Sets the font size of the text.
-    pub fn with_size(mut self, size: u16) -> Self {
+    pub fn with_size(mut self, size: f64) -> Self {
         self.size = size;
         self
     }
     /// Sets the line height of the text.
-    pub fn with_line_height(mut self, line_height: u16) -> Self {
+    pub fn with_line_height(mut self, line_height: f64) -> Self {
         self.line_height = line_height;
         self
     }
@@ -137,7 +137,7 @@ impl Text {
         self
     }
     /// Sets the max width of the text.
-    pub fn with_max_width(mut self, max_width: u32) -> Self {
+    pub fn with_max_width(mut self, max_width: f64) -> Self {
         self.max_width = Some(max_width);
         self
     }
@@ -178,13 +178,13 @@ impl Default for Text {
         Text {
             font: Font::SystemFont,
             content: "".to_owned(),
-            size: 15,
+            size: 15.,
             color: Color::black(),
             italic: false,
             max_width: None,
             align: Align::Start,
             letter_spacing: 0.,
-            line_height: 26,
+            line_height: 26.,
             wrap: Wrap::None,
             origin: Origin::Top,
             weight: Weight::Normal,

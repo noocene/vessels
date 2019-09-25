@@ -1,16 +1,23 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
 /// An interaction event [Source](super::Source) that represents a keyboard.
-pub trait Keyboard: super::Source<Event = Event> + State {}
+pub trait Keyboard: super::Source<Event = Event> + State {
+    fn state(&self) -> Box<dyn State>;
+}
 
 /// A context that permits active polling of key states.
-pub trait State {
+pub trait State: Sync + Send {
     /// Returns a [bool] representing whether the provided key is pressed.
     fn poll(&mut self, key: Key) -> bool;
+    #[doc(hidden)]
+    fn box_clone(&self) -> Box<dyn State>;
+}
+
+impl Clone for Box<dyn State> {
+    fn clone(&self) -> Self {
+        self.box_clone()
+    }
 }
 
 /// A number pad key.
@@ -257,7 +264,7 @@ pub enum Key {
     /// The Scroll Lock key.
     ScrollLock,
     /// The Context Menu key.
-    ContextMenu,
+    Menu,
     /// The Print Screen key.
     PrintScreen,
     /// An alphabetic key.
@@ -291,7 +298,7 @@ pub struct Event {
     /// The associated layout-dependant printable character of the relevant key if applicable.
     pub printable: Option<char>,
     /// A [State] to permit polling of the associated keyboard.
-    pub state: Rc<RefCell<dyn State>>,
+    pub state: Box<dyn State>,
 }
 
 impl Debug for Event {
