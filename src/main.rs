@@ -8,7 +8,7 @@ fn main() {
     let mut root = gfx.frame();
     root.add(
         Primitive::square(100.)
-            .clip(Primitive::circle(120.).finalize().with_origin((20., 20.)))
+            //.clip(Primitive::circle(120.).finalize().with_offset((-20., -20.)))
             .shadow(
                 Shadow::new(Color::black().with_alpha(75))
                     .offset((-10., -10.))
@@ -23,13 +23,10 @@ fn main() {
             )
             .fill(Color::rgba(0, 0, 255, 255).into())
             .finalize()
+            .with_offset((-10., -10.))
             .into(),
     )
-    .apply_transform(
-        Transform::default()
-            .with_position((50., 50.))
-            .with_scale((2., 2.)),
-    );
+    .apply_transform(Transform::default().with_position((50., 50.)));
     /*root.add(
         Primitive::circle(30.)
             .fill(Color::black().into())

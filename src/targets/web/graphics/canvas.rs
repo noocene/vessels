@@ -261,34 +261,6 @@ impl CanvasFrame {
         );
         state.context.set_shadow_color("rgba(255,255,255,0)");
     }
-    fn update_clip(&self, entity: &Path) {
-        let state = self.state.read().unwrap();
-        if !entity.clip_segments.is_empty() {
-            state.context.begin_path();
-            entity
-                .clip_segments
-                .iter()
-                .for_each(|segment| match segment {
-                    Segment::LineTo(point) => {
-                        state.context.line_to(point.x, point.y);
-                    }
-                    Segment::MoveTo(point) => {
-                        state.context.move_to(point.x, point.y);
-                    }
-                    Segment::CubicTo(point, handle_1, handle_2) => {
-                        state.context.bezier_curve_to(
-                            handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
-                        );
-                    }
-                    Segment::QuadraticTo(point, handle) => {
-                        state
-                            .context
-                            .quadratic_curve_to(handle.x, handle.y, point.x, point.y);
-                    }
-                });
-            state.context.clip(FillRule::NonZero);
-        }
-    }
     fn draw_path_clipped(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.read().unwrap();
         if !entity.clip_segments.is_empty() && state.clip_frame.is_some() {
@@ -302,15 +274,16 @@ impl CanvasFrame {
                 .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
             let frame = state.clip_frame.as_ref().unwrap();
             let mut matrix = matrix;
+            matrix[4] *= state.pixel_ratio;
+            matrix[5] *= state.pixel_ratio;
             matrix[3] = state.pixel_ratio;
             matrix[0] = state.pixel_ratio;
             frame.draw_path(matrix, entity);
             frame.composite_clip(matrix, entity);
-            state.context.translate(-matrix[4], -matrix[5]);
             let el = frame.element();
             js! {
                 @{&state.context}.imageSmoothingEnabled = false;
-                @{&state.context}.drawImage(@{&el}, 0, 0);
+                @{&state.context}.drawImage(@{&el}, @{-matrix[4]}, @{-matrix[5]});
             }
             frame.clear();
         } else {

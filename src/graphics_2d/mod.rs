@@ -3,7 +3,7 @@ use crate::path::{Path, Primitive, Texture};
 use crate::targets;
 use crate::text::Text;
 
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use std::borrow::Cow;
 
@@ -535,6 +535,17 @@ where
         Vector {
             x: self.x - other.x,
             y: self.y - other.y,
+        }
+    }
+}
+
+impl Neg for Vector {
+    type Output = Vector;
+
+    fn neg(self) -> Self::Output {
+        Vector {
+            x: -self.x,
+            y: -self.y,
         }
     }
 }

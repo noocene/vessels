@@ -227,7 +227,7 @@ pub struct Path {
 
 impl Path {
     /// Adjusts the origin of the path.
-    pub fn with_origin<U>(mut self, offset: U) -> Self
+    pub fn with_offset<U>(mut self, offset: U) -> Self
     where
         U: Into<Vector>,
     {
@@ -237,13 +237,13 @@ impl Path {
             .iter()
             .map(|segment| match segment {
                 Segment::CubicTo(point, handle_1, handle_2) => {
-                    Segment::CubicTo(*point - offset, *handle_1 - offset, *handle_2 - offset)
+                    Segment::CubicTo(*point + offset, *handle_1 + offset, *handle_2 + offset)
                 }
                 Segment::QuadraticTo(point, handle) => {
-                    Segment::QuadraticTo(*point - offset, *handle - offset)
+                    Segment::QuadraticTo(*point + offset, *handle + offset)
                 }
-                Segment::MoveTo(point) => Segment::MoveTo(*point - offset),
-                Segment::LineTo(point) => Segment::LineTo(*point - offset),
+                Segment::MoveTo(point) => Segment::MoveTo(*point + offset),
+                Segment::LineTo(point) => Segment::LineTo(*point + offset),
             })
             .collect();
         self.clip_segments = self
@@ -251,20 +251,20 @@ impl Path {
             .iter()
             .map(|segment| match segment {
                 Segment::CubicTo(point, handle_1, handle_2) => {
-                    Segment::CubicTo(*point - offset, *handle_1 - offset, *handle_2 - offset)
+                    Segment::CubicTo(*point + offset, *handle_1 + offset, *handle_2 + offset)
                 }
                 Segment::QuadraticTo(point, handle) => {
-                    Segment::QuadraticTo(*point - offset, *handle - offset)
+                    Segment::QuadraticTo(*point + offset, *handle + offset)
                 }
-                Segment::MoveTo(point) => Segment::MoveTo(*point - offset),
-                Segment::LineTo(point) => Segment::LineTo(*point - offset),
+                Segment::MoveTo(point) => Segment::MoveTo(*point + offset),
+                Segment::LineTo(point) => Segment::LineTo(*point + offset),
             })
             .collect();
         self
     }
     /// Computes an axis-aligned local coordinates bounding box of the path.
     pub fn bounds(&self) -> Rect {
-        let mut top_left = Vector::default();
+        let mut top_left: Vector = (std::f64::INFINITY, std::f64::INFINITY).into();
         let mut bottom_right = Vector::default();
         let mut update = |point: &Vector| {
             if point.x < top_left.x {

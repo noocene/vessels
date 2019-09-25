@@ -23,7 +23,7 @@ use glutin::{dpi::LogicalSize, ContextTrait};
 
 use cairo::{
     Antialias, FontOptions, Format, Gradient, HintStyle, ImageSurface, LineCap, LineJoin,
-    LinearGradient, Matrix, Pattern, RadialGradient, Status, SubpixelOrder,
+    LinearGradient, Matrix, Operator, Pattern, RadialGradient, Status, SubpixelOrder,
 };
 
 use pango::{FontDescription, Layout, LayoutExt};
@@ -291,8 +291,7 @@ struct CairoFrame {
     state: Arc<RwLock<CairoFrameState>>,
 }
 
-fn update_clip(context: &CairoContext, entity: &Path) {
-    context.reset_clip();
+fn composite_clip(context: &CairoContext, entity: &Path) {
     if !entity.clip_segments.is_empty() {
         context.move_to(0., 0.);
         entity
@@ -314,7 +313,173 @@ fn update_clip(context: &CairoContext, entity: &Path) {
                     context.curve_to(handle.x, handle.y, handle.x, handle.y, point.x, point.y);
                 }
             });
-        context.clip();
+        context.set_source_rgb(0., 0., 0.);
+        context.set_operator(Operator::DestIn);
+        context.fill();
+        context.set_operator(Operator::Over);
+    }
+}
+
+fn draw_path(context: &CairoContext, entity: &Path, pixel_ratio: f64) {
+    context.move_to(0., 0.);
+    entity.segments.iter().for_each(|segment| match segment {
+        Segment::LineTo(point) => {
+            context.line_to(point.x, point.y);
+        }
+        Segment::MoveTo(point) => {
+            context.move_to(point.x, point.y);
+        }
+        Segment::CubicTo(point, handle_1, handle_2) => {
+            context.curve_to(
+                handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
+            );
+        }
+        Segment::QuadraticTo(point, handle) => {
+            context.curve_to(handle.x, handle.y, handle.x, handle.y, point.x, point.y);
+        }
+    });
+    if entity.closed {
+        context.close_path();
+    }
+    match &entity.stroke {
+        Some(stroke) => {
+            context.set_line_cap(match &stroke.cap {
+                StrokeCapType::Butt => LineCap::Butt,
+                StrokeCapType::Round => LineCap::Round,
+            });
+            context.set_line_join(match &stroke.join {
+                StrokeJoinType::Miter => LineJoin::Miter,
+                StrokeJoinType::Round => LineJoin::Round,
+                StrokeJoinType::Bevel => LineJoin::Bevel,
+            });
+            match &stroke.content {
+                Texture::Solid(color) => {
+                    context.set_source_rgba(
+                        f64::from(color.r) / 255.,
+                        f64::from(color.g) / 255.,
+                        f64::from(color.b) / 255.,
+                        f64::from(color.a) / 255.,
+                    );
+                }
+                Texture::LinearGradient(gradient) => {
+                    let canvas_gradient = LinearGradient::new(
+                        gradient.start.x,
+                        gradient.start.y,
+                        gradient.end.x,
+                        gradient.end.y,
+                    );
+                    gradient.stops.iter().for_each(|stop| {
+                        canvas_gradient.add_color_stop_rgba(
+                            stop.offset,
+                            f64::from(stop.color.r) / 255.,
+                            f64::from(stop.color.g) / 255.,
+                            f64::from(stop.color.b) / 255.,
+                            f64::from(stop.color.a) / 255.,
+                        )
+                    });
+                    context.set_source(&Pattern::LinearGradient(canvas_gradient));
+                }
+                Texture::Image(image) => {
+                    let pattern = image.as_any().downcast::<CairoImage>().unwrap();
+                    let surface = &pattern.0.lock().unwrap().0;
+                    //TODO: coordinates here probd shouldn't be 0, 0
+                    context.set_source_surface(surface, 0.0, 0.0);
+                }
+                Texture::RadialGradient(gradient) => {
+                    let canvas_gradient = RadialGradient::new(
+                        gradient.start.x,
+                        gradient.start.y,
+                        gradient.start_radius,
+                        gradient.end.x,
+                        gradient.end.y,
+                        gradient.end_radius,
+                    );
+                    gradient.stops.iter().for_each(|stop| {
+                        canvas_gradient.add_color_stop_rgba(
+                            stop.offset,
+                            f64::from(stop.color.r) / 255.,
+                            f64::from(stop.color.g) / 255.,
+                            f64::from(stop.color.b) / 255.,
+                            f64::from(stop.color.a) / 255.,
+                        );
+                    });;
+                    context.set_source(&Pattern::RadialGradient(canvas_gradient));
+                }
+            }
+            context.set_line_width(f64::from(stroke.width));
+            if entity.fill.is_some() {
+                context.stroke_preserve();
+            } else {
+                context.stroke();
+            }
+            if let Texture::Image(_image) = &stroke.content {
+                context.scale(pixel_ratio, pixel_ratio);
+            }
+        }
+        None => {}
+    }
+    match &entity.fill {
+        Some(fill) => {
+            match &fill.content {
+                Texture::Solid(color) => {
+                    context.set_source_rgba(
+                        f64::from(color.r) / 255.,
+                        f64::from(color.g) / 255.,
+                        f64::from(color.b) / 255.,
+                        f64::from(color.a) / 255.,
+                    );
+                }
+                Texture::Image(image) => {
+                    let pattern = image.as_any().downcast::<CairoImage>().unwrap();
+                    let surface = &pattern.0.lock().unwrap().0;
+                    //TODO: coordinates here probd shouldn't be 0, 0
+                    context.set_source_surface(surface, 0.0, 0.0);
+                }
+                Texture::LinearGradient(gradient) => {
+                    let canvas_gradient = LinearGradient::new(
+                        gradient.start.x,
+                        gradient.start.y,
+                        gradient.end.x,
+                        gradient.end.y,
+                    );
+                    gradient.stops.iter().for_each(|stop| {
+                        canvas_gradient.add_color_stop_rgba(
+                            stop.offset,
+                            f64::from(stop.color.r) / 255.,
+                            f64::from(stop.color.g) / 255.,
+                            f64::from(stop.color.b) / 255.,
+                            f64::from(stop.color.a) / 255.,
+                        )
+                    });
+                    context.set_source(&Pattern::LinearGradient(canvas_gradient));
+                }
+                Texture::RadialGradient(gradient) => {
+                    let canvas_gradient = RadialGradient::new(
+                        gradient.start.x,
+                        gradient.start.y,
+                        gradient.start_radius,
+                        gradient.end.x,
+                        gradient.end.y,
+                        gradient.end_radius,
+                    );
+                    gradient.stops.iter().for_each(|stop| {
+                        canvas_gradient.add_color_stop_rgba(
+                            stop.offset,
+                            f64::from(stop.color.r) / 255.,
+                            f64::from(stop.color.g) / 255.,
+                            f64::from(stop.color.b) / 255.,
+                            f64::from(stop.color.a) / 255.,
+                        );
+                    });
+                    context.set_source(&Pattern::RadialGradient(canvas_gradient));
+                }
+            }
+            context.fill();
+            if let Texture::Image(_image) = &fill.content {
+                context.scale(pixel_ratio, pixel_ratio);
+            }
+        }
+        None => {}
     }
 }
 
@@ -456,166 +621,8 @@ impl CairoFrame {
             });
         }
         let context = state.context.lock().unwrap();
-        update_clip(&*context, entity);
-        context.move_to(0., 0.);
-        entity.segments.iter().for_each(|segment| match segment {
-            Segment::LineTo(point) => {
-                context.line_to(point.x, point.y);
-            }
-            Segment::MoveTo(point) => {
-                context.move_to(point.x, point.y);
-            }
-            Segment::CubicTo(point, handle_1, handle_2) => {
-                context.curve_to(
-                    handle_1.x, handle_1.y, handle_2.x, handle_2.y, point.x, point.y,
-                );
-            }
-            Segment::QuadraticTo(point, handle) => {
-                context.curve_to(handle.x, handle.y, handle.x, handle.y, point.x, point.y);
-            }
-        });
-        if entity.closed {
-            context.close_path();
-        }
-        match &entity.stroke {
-            Some(stroke) => {
-                context.set_line_cap(match &stroke.cap {
-                    StrokeCapType::Butt => LineCap::Butt,
-                    StrokeCapType::Round => LineCap::Round,
-                });
-                context.set_line_join(match &stroke.join {
-                    StrokeJoinType::Miter => LineJoin::Miter,
-                    StrokeJoinType::Round => LineJoin::Round,
-                    StrokeJoinType::Bevel => LineJoin::Bevel,
-                });
-                match &stroke.content {
-                    Texture::Solid(color) => {
-                        context.set_source_rgba(
-                            f64::from(color.r) / 255.,
-                            f64::from(color.g) / 255.,
-                            f64::from(color.b) / 255.,
-                            f64::from(color.a) / 255.,
-                        );
-                    }
-                    Texture::LinearGradient(gradient) => {
-                        let canvas_gradient = LinearGradient::new(
-                            gradient.start.x,
-                            gradient.start.y,
-                            gradient.end.x,
-                            gradient.end.y,
-                        );
-                        gradient.stops.iter().for_each(|stop| {
-                            canvas_gradient.add_color_stop_rgba(
-                                stop.offset,
-                                f64::from(stop.color.r) / 255.,
-                                f64::from(stop.color.g) / 255.,
-                                f64::from(stop.color.b) / 255.,
-                                f64::from(stop.color.a) / 255.,
-                            )
-                        });
-                        context.set_source(&Pattern::LinearGradient(canvas_gradient));
-                    }
-                    Texture::Image(image) => {
-                        let pattern = image.as_any().downcast::<CairoImage>().unwrap();
-                        let surface = &pattern.0.lock().unwrap().0;
-                        //TODO: coordinates here probd shouldn't be 0, 0
-                        context.set_source_surface(surface, 0.0, 0.0);
-                    }
-                    Texture::RadialGradient(gradient) => {
-                        let canvas_gradient = RadialGradient::new(
-                            gradient.start.x,
-                            gradient.start.y,
-                            gradient.start_radius,
-                            gradient.end.x,
-                            gradient.end.y,
-                            gradient.end_radius,
-                        );
-                        gradient.stops.iter().for_each(|stop| {
-                            canvas_gradient.add_color_stop_rgba(
-                                stop.offset,
-                                f64::from(stop.color.r) / 255.,
-                                f64::from(stop.color.g) / 255.,
-                                f64::from(stop.color.b) / 255.,
-                                f64::from(stop.color.a) / 255.,
-                            );
-                        });;
-                        context.set_source(&Pattern::RadialGradient(canvas_gradient));
-                    }
-                }
-                context.set_line_width(f64::from(stroke.width));
-                if entity.fill.is_some() {
-                    context.stroke_preserve();
-                } else {
-                    context.stroke();
-                }
-                if let Texture::Image(_image) = &stroke.content {
-                    context.scale(state.pixel_ratio, state.pixel_ratio);
-                }
-            }
-            None => {}
-        }
-        match &entity.fill {
-            Some(fill) => {
-                match &fill.content {
-                    Texture::Solid(color) => {
-                        context.set_source_rgba(
-                            f64::from(color.r) / 255.,
-                            f64::from(color.g) / 255.,
-                            f64::from(color.b) / 255.,
-                            f64::from(color.a) / 255.,
-                        );
-                    }
-                    Texture::Image(image) => {
-                        let pattern = image.as_any().downcast::<CairoImage>().unwrap();
-                        let surface = &pattern.0.lock().unwrap().0;
-                        //TODO: coordinates here probd shouldn't be 0, 0
-                        context.set_source_surface(surface, 0.0, 0.0);
-                    }
-                    Texture::LinearGradient(gradient) => {
-                        let canvas_gradient = LinearGradient::new(
-                            gradient.start.x,
-                            gradient.start.y,
-                            gradient.end.x,
-                            gradient.end.y,
-                        );
-                        gradient.stops.iter().for_each(|stop| {
-                            canvas_gradient.add_color_stop_rgba(
-                                stop.offset,
-                                f64::from(stop.color.r) / 255.,
-                                f64::from(stop.color.g) / 255.,
-                                f64::from(stop.color.b) / 255.,
-                                f64::from(stop.color.a) / 255.,
-                            )
-                        });
-                        context.set_source(&Pattern::LinearGradient(canvas_gradient));
-                    }
-                    Texture::RadialGradient(gradient) => {
-                        let canvas_gradient = RadialGradient::new(
-                            gradient.start.x,
-                            gradient.start.y,
-                            gradient.start_radius,
-                            gradient.end.x,
-                            gradient.end.y,
-                            gradient.end_radius,
-                        );
-                        gradient.stops.iter().for_each(|stop| {
-                            canvas_gradient.add_color_stop_rgba(
-                                stop.offset,
-                                f64::from(stop.color.r) / 255.,
-                                f64::from(stop.color.g) / 255.,
-                                f64::from(stop.color.b) / 255.,
-                                f64::from(stop.color.a) / 255.,
-                            );
-                        });
-                        context.set_source(&Pattern::RadialGradient(canvas_gradient));
-                    }
-                }
-                context.fill();
-                if let Texture::Image(_image) = &fill.content {
-                    context.scale(state.pixel_ratio, state.pixel_ratio);
-                }
-            }
-            None => {}
+        if entity.shadows.is_empty() && entity.clip_segments.is_empty() {
+            draw_path(&context, entity, state.pixel_ratio);
         }
     }
 }
@@ -719,8 +726,8 @@ impl Frame for CairoFrame {
         state.contents.iter().for_each(|object| {
             let object_state = object.state.read().unwrap();
             let matrix = object_state.orientation.to_matrix();
-            object.update_shadows(state.pixel_ratio);
-            (*object.shadow_surface.lock().unwrap())
+            object.redraw(state.pixel_ratio, matrix);
+            (*object.cache_surface.lock().unwrap())
                 .iter()
                 .for_each(|surface| {
                     let context = state.context.lock().unwrap();
@@ -750,14 +757,14 @@ struct CairoObjectState {
     orientation: Transform,
     content: Rasterizable,
     depth: u32,
-    update_shadows: Mutex<bool>,
+    redraw: Mutex<bool>,
 }
 
 #[derive(Clone)]
 struct CairoObject {
     state: Arc<RwLock<CairoObjectState>>,
     color_profile: Option<Profile>,
-    shadow_surface: Arc<Mutex<Option<(CairoContext, Vector)>>>,
+    cache_surface: Arc<Mutex<Option<(CairoContext, Vector)>>>,
 }
 
 impl CairoObject {
@@ -775,25 +782,29 @@ impl CairoObject {
                     None => content,
                 },
                 depth,
-                update_shadows: Mutex::new(true),
+                redraw: Mutex::new(true),
             })),
             color_profile,
-            shadow_surface: Arc::new(Mutex::new(None)),
+            cache_surface: Arc::new(Mutex::new(None)),
         }
     }
-    fn update_shadows(&self, pixel_ratio: f64) {
+    fn redraw(&self, pixel_ratio: f64, matrix: [f64; 6]) {
         let state = self.state.read().unwrap();
-        let mut update_shadows = state.update_shadows.lock().unwrap();
-        if !*update_shadows {
+        let mut redraw = state.redraw.lock().unwrap();
+        if !*redraw {
             return;
         }
-        *update_shadows = false;
+        *redraw = false;
         if let Rasterizable::Path(path) = &state.content {
-            if !path.shadows.is_empty() {
-                let mut corners = (Vector::from((0., 0.)), Vector::from((0., 0.)));
+            if !path.shadows.is_empty() || !path.clip_segments.is_empty() {
+                let mut corners = (
+                    Vector::from((std::f64::INFINITY, std::f64::INFINITY)),
+                    Vector::from((0., 0.)),
+                );
                 for shadow in &path.shadows {
-                    let size = path.bounds().size;
-                    let new_size = size + (shadow.spread * 4.);
+                    let bounds = path.bounds();
+                    let size = bounds.size;
+                    let new_size = size + ((shadow.spread + shadow.blur) * 2.);
                     let scale_offset = (size - new_size) / 2.;
                     let near_corner = scale_offset + shadow.offset - shadow.blur;
                     let far_corner = near_corner + new_size + shadow.blur;
@@ -802,6 +813,19 @@ impl CairoObject {
                     corners.0.x = corners.0.x.min(near_corner.x);
                     corners.0.y = corners.0.y.min(near_corner.y);
                 }
+                let bounds = path.bounds();
+                corners = (
+                    (
+                        bounds.position.x.min(corners.0.x),
+                        bounds.position.y.min(corners.0.y),
+                    )
+                        .into(),
+                    (
+                        (bounds.position + bounds.size).x.max(corners.1.x),
+                        (bounds.position + bounds.size).y.max(corners.1.y),
+                    )
+                        .into(),
+                );
                 let size = Vector::from((
                     (corners.1.x - corners.0.x).abs(),
                     (corners.1.y - corners.0.y).abs(),
@@ -809,12 +833,10 @@ impl CairoObject {
                 let base_surface =
                     ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
                 let base_context = CairoContext(cairo::Context::new(&base_surface));
-                base_context.scale(pixel_ratio, pixel_ratio);
-                update_clip(&base_context, &path.clone().with_origin(corners.0));
-                base_context.scale(1. / pixel_ratio, 1. / pixel_ratio);
                 for shadow in &path.shadows {
                     let spread = shadow.spread * 2.;
-                    let size = path.bounds().size;
+                    let bounds = path.bounds();
+                    let size = bounds.size;
                     let scale = (size + spread) / size;
                     let segments = path.segments.iter();
                     let new_size = size + spread;
@@ -829,6 +851,7 @@ impl CairoObject {
                     context.scale(pixel_ratio, pixel_ratio);
                     context.translate(shadow.blur * 2., shadow.blur * 2.);
                     context.scale(scale.x, scale.y);
+                    context.translate(-bounds.position.x, -bounds.position.y);
                     segments.for_each(|segment| match segment {
                         Segment::LineTo(point) => {
                             context.line_to(point.x, point.y);
@@ -862,14 +885,20 @@ impl CairoObject {
                     }
                     base_context.set_source_surface(
                         &image.0.lock().unwrap().0,
-                        (scale_offset.x + shadow.offset.x - (shadow.blur * 2.) - corners.0.x)
+                        (scale_offset.x + shadow.offset.x - (shadow.blur * 2.) - corners.0.x
+                            + bounds.position.x)
                             * pixel_ratio,
-                        (scale_offset.y + shadow.offset.y - (shadow.blur * 2.) - corners.0.y)
+                        (scale_offset.y + shadow.offset.y - (shadow.blur * 2.) - corners.0.y
+                            + bounds.position.y)
                             * pixel_ratio,
                     );
                     base_context.paint();
                 }
-                *self.shadow_surface.lock().unwrap() = Some((
+                base_context.scale(pixel_ratio, pixel_ratio);
+                let path = path.clone().with_offset(-corners.0);
+                draw_path(&base_context, &path, pixel_ratio);
+                composite_clip(&base_context, &path);
+                *self.cache_surface.lock().unwrap() = Some((
                     base_context,
                     Vector::from((corners.0.x.min(0.), corners.0.y.min(0.))) * pixel_ratio,
                 ));
@@ -890,9 +919,12 @@ impl Object for CairoObject {
     }
     fn update(&mut self, input: Rasterizable) {
         let mut state = self.state.write().unwrap();
-        *state.update_shadows.lock().unwrap() = if let Rasterizable::Path(path) = &input {
+        *state.redraw.lock().unwrap() = if let Rasterizable::Path(path) = &input {
             if let Rasterizable::Path(current_path) = &self.state.read().unwrap().content {
-                current_path.shadows != path.shadows || current_path.segments != path.segments
+                current_path.shadows != path.shadows
+                    || current_path.segments != path.segments
+                    || !(current_path.clip_segments.is_empty()
+                        && current_path.clip_segments.is_empty())
             } else {
                 false
             }
