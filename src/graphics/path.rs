@@ -1,4 +1,4 @@
-use crate::graphics::{Color, ImageRepresentation, Rect, Vector2};
+use crate::graphics::{ImageRepresentation, LDRColor, Rect, Vector2};
 
 use crate::errors::Error;
 
@@ -27,12 +27,12 @@ pub struct GradientStop {
     /// Zero represents the start of the gradient; one represents the end.
     pub offset: f64,
     /// The color of the stop.
-    pub color: Color,
+    pub color: LDRColor,
 }
 
 impl GradientStop {
     /// Creates a new gradient stop with the provided offset and color data.
-    pub fn new(offset: f64, color: Color) -> Result<Self, Error> {
+    pub fn new(offset: f64, color: LDRColor) -> Result<Self, Error> {
         if offset > 1.0 || offset < 0.0 {
             return Err(Error::color_stop());
         }
@@ -56,7 +56,7 @@ pub struct LinearGradient {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Shadow {
     /// The color of the shadow.
-    pub color: Color,
+    pub color: LDRColor,
     /// The offset of the shadow.
     pub offset: Vector2,
     /// The blur radius, in fractional pixels, of the shadow.
@@ -67,7 +67,7 @@ pub struct Shadow {
 
 impl Shadow {
     /// Creates a new shadow.
-    pub fn new(color: Color) -> Self {
+    pub fn new(color: LDRColor) -> Self {
         Shadow {
             color,
             offset: Vector2::default(),
@@ -114,7 +114,7 @@ pub struct RadialGradient {
 #[derive(Clone)]
 pub enum Texture {
     /// A solid color texture.
-    Solid(Color),
+    Solid(LDRColor),
     /// A linear gradient texture.
     LinearGradient(LinearGradient),
     /// A radial gradient texture.
@@ -123,8 +123,8 @@ pub enum Texture {
     Image(Box<dyn ImageRepresentation>),
 }
 
-impl From<Color> for Texture {
-    fn from(color: Color) -> Texture {
+impl From<LDRColor> for Texture {
+    fn from(color: LDRColor) -> Texture {
         Texture::Solid(color)
     }
 }
@@ -166,7 +166,7 @@ pub struct Stroke {
 impl Default for Stroke {
     fn default() -> Self {
         Stroke {
-            content: Color::black().into(),
+            content: LDRColor::black().into(),
             cap: StrokeCapType::Butt,
             join: StrokeJoinType::Miter,
             width: 1.,
@@ -634,11 +634,11 @@ impl StrokeBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::{Color, GradientStop};
+    use super::{GradientStop, LDRColor};
 
     #[test]
     fn gradient_stop_fail() {
-        assert!(GradientStop::new(5.0, Color::white()).is_err());
-        assert!(GradientStop::new(-5.0, Color::white()).is_err());
+        assert!(GradientStop::new(5.0, LDRColor::white()).is_err());
+        assert!(GradientStop::new(-5.0, LDRColor::white()).is_err());
     }
 }

@@ -1,7 +1,7 @@
 use crate::graphics::{
     canvas::Rasterizable,
     path::{Fill, GradientStop, Path, Texture},
-    Color,
+    LDRColor,
 };
 use lcms2::{Intent, PixelFormat, Transform};
 use std::collections::{HashMap, VecDeque};
@@ -82,8 +82,8 @@ unsafe impl Send for Profile {}
 struct ProfileState {
     display_profile: lcms2::Profile,
     srgb_profile: lcms2::Profile,
-    color_cache: HashMap<Color, Color>,
-    color_cache_queue: VecDeque<Color>,
+    color_cache: HashMap<LDRColor, LDRColor>,
+    color_cache_queue: VecDeque<LDRColor>,
 }
 
 #[derive(Clone)]
@@ -131,7 +131,7 @@ impl Profile {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         Err(())
     }
-    pub(crate) fn transform(&self, color: Color) -> Color {
+    pub(crate) fn transform(&self, color: LDRColor) -> LDRColor {
         let state = self.state.read().unwrap();
         if let Some(transformed_color) = state.color_cache.get(&color) {
             return transformed_color.clone();
@@ -146,7 +146,7 @@ impl Profile {
         .unwrap();
         let source_pixels: &mut [[u8; 4]] = &mut [[color.r, color.g, color.b, color.a]];
         t.transform_in_place(source_pixels);
-        let transformed_color = Color::rgba(
+        let transformed_color = LDRColor::rgba(
             source_pixels[0][0],
             source_pixels[0][1],
             source_pixels[0][2],

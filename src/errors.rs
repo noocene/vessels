@@ -13,7 +13,7 @@ impl Error {
     }
 
     pub(crate) fn color_stop() -> Error {
-        Error::from(ErrorKind::ColorStopOffsetError)
+        Error::from(ErrorKind::LDRColorStopOffsetError)
     }
 }
 
@@ -35,7 +35,7 @@ impl fmt::Display for Error {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum ErrorKind {
-    ColorStopOffsetError,
+    LDRColorStopOffsetError,
 
     #[doc(hidden)]
     __Nonexhaustive,
@@ -46,7 +46,7 @@ impl Copy for ErrorKind {}
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            ErrorKind::ColorStopOffsetError => write!(f, "Colorstop offset out of bounds"),
+            ErrorKind::LDRColorStopOffsetError => write!(f, "LDRColorstop offset out of bounds"),
             ErrorKind::__Nonexhaustive => panic!("Invalid Error!"),
         }
     }

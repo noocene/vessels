@@ -1,4 +1,4 @@
-use crate::graphics::Color;
+use crate::graphics::LDRColor;
 
 /// A font face.
 #[derive(Clone, Copy, Debug)]
@@ -83,7 +83,7 @@ pub struct Text {
     /// The font size in pixels.
     pub size: f64,
     /// The color of the rendered text.
-    pub color: Color,
+    pub color: LDRColor,
     /// Whether the text is styled as oblique/italic.
     pub italic: bool,
     /// The maximum width or wrap width of the text.
@@ -112,7 +112,7 @@ impl Text {
         self
     }
     /// Sets the color of the text.
-    pub fn with_color(mut self, color: Color) -> Self {
+    pub fn with_color(mut self, color: LDRColor) -> Self {
         self.color = color;
         self
     }
@@ -179,7 +179,7 @@ impl Default for Text {
             font: Font::SystemFont,
             content: "".to_owned(),
             size: 15.,
-            color: Color::black(),
+            color: LDRColor::black(),
             italic: false,
             max_width: None,
             align: Align::Start,

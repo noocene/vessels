@@ -5,7 +5,7 @@ use crate::graphics::{
         ActiveCanvas, Canvas as VesselsCanvas, CanvasContext, Content, Frame, InactiveCanvas,
         InteractiveCanvas, Object, Rasterizable, Rasterizer, Ticker,
     },
-    Color, Image, ImageRepresentation, Rect, Texture2D, Transform2, Vector2,
+    Image, ImageRepresentation, LDRColor, Rect, Texture2D, Transform2, Vector2,
 };
 use crate::interaction::Input;
 use crate::interaction::{Keyboard, Mouse, Window};
@@ -48,7 +48,7 @@ impl ImageRepresentation for CanvasImage {
     fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
-    fn as_texture(&self) -> Image<Color, Texture2D> {
+    fn as_texture(&self) -> Image<LDRColor, Texture2D> {
         Image {
             pixels: vec![],
             format: Texture2D {
@@ -57,7 +57,7 @@ impl ImageRepresentation for CanvasImage {
             },
         }
     }
-    fn from_texture(texture: Image<Color, Texture2D>) -> CanvasImage {
+    fn from_texture(texture: Image<LDRColor, Texture2D>) -> CanvasImage {
         let canvas: CanvasElement = document()
             .create_element("canvas")
             .unwrap()
@@ -505,7 +505,7 @@ impl CanvasFrame {
         let state = self.state.read().unwrap();
         state.context.set_font((match input.font {
                 Font::SystemFont => {
-                    format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
+                    format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple LDRColor Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
                         Weight::Normal => "400",
                         Weight::Medium => "500",
                         Weight::SemiBold => "600",
@@ -634,7 +634,7 @@ impl CanvasFrame {
     fn measure_text_height(&self, input: Text) -> f64 {
         let font = match input.font {
             Font::SystemFont => {
-                format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
+                format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple LDRColor Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
                     Weight::Normal => "400",
                     Weight::Medium => "500",
                     Weight::SemiBold => "600",

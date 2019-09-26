@@ -12,7 +12,7 @@ pub mod path;
 pub mod text;
 
 /// A conversion to an eight-character hex color string.
-pub trait ToHexColor {
+pub trait ToHexLDRColor {
     /// Performs the conversion.
     fn to_hex_color(&self) -> Cow<'_, str>;
 }
@@ -25,10 +25,10 @@ pub trait ImageRepresentation: Any + Sync + Send {
     fn as_any(&self) -> Box<dyn Any>;
     /// Returns the 2-d cartesian pixel size of the image.
     fn get_size(&self) -> Vector2;
-    /// Returns a conversion of the image to [Image<Color, Texture2D>]. This operation may be expensive.
-    fn as_texture(&self) -> Image<Color, Texture2D>;
-    /// Creates an image in the associated format from an [Image<Color, Texture2D>]. This operation may be expensive.
-    fn from_texture(texture: Image<Color, Texture2D>) -> Self
+    /// Returns a conversion of the image to [Image<LDRColor, Texture2D>]. This operation may be expensive.
+    fn as_texture(&self) -> Image<LDRColor, Texture2D>;
+    /// Creates an image in the associated format from an [Image<LDRColor, Texture2D>]. This operation may be expensive.
+    fn from_texture(texture: Image<LDRColor, Texture2D>) -> Self
     where
         Self: Sized;
 }
@@ -39,7 +39,7 @@ impl Clone for Box<dyn ImageRepresentation> {
     }
 }
 
-impl ImageRepresentation for Image<Color, Texture2D> {
+impl ImageRepresentation for Image<LDRColor, Texture2D> {
     fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
@@ -49,10 +49,10 @@ impl ImageRepresentation for Image<Color, Texture2D> {
     fn box_clone(&self) -> Box<dyn ImageRepresentation> {
         Box::new(self.clone())
     }
-    fn as_texture(&self) -> Image<Color, Texture2D> {
+    fn as_texture(&self) -> Image<LDRColor, Texture2D> {
         self.clone()
     }
-    fn from_texture(texture: Image<Color, Texture2D>) -> Image<Color, Texture2D> {
+    fn from_texture(texture: Image<LDRColor, Texture2D>) -> Image<LDRColor, Texture2D> {
         texture
     }
 }
@@ -60,9 +60,9 @@ impl ImageRepresentation for Image<Color, Texture2D> {
 /// Indicates that a type is a pixel format for image data.
 pub trait PixelFormat {}
 
-/// A standard 24-bit-depth RGB color with an 8-bit alpha channel.
+/// A standard 24-bit-depth LDR sRGB color with 8-bit alpha channel.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Color {
+pub struct LDRColor {
     /// Red channel data.
     pub r: u8,
     /// Green channel data.
@@ -73,9 +73,9 @@ pub struct Color {
     pub a: u8,
 }
 
-impl From<(u8, u8, u8)> for Color {
-    fn from(interaction: (u8, u8, u8)) -> Color {
-        Color {
+impl From<(u8, u8, u8)> for LDRColor {
+    fn from(interaction: (u8, u8, u8)) -> LDRColor {
+        LDRColor {
             r: interaction.0,
             g: interaction.1,
             b: interaction.2,
@@ -84,9 +84,9 @@ impl From<(u8, u8, u8)> for Color {
     }
 }
 
-impl From<(u8, u8, u8, u8)> for Color {
-    fn from(interaction: (u8, u8, u8, u8)) -> Color {
-        Color {
+impl From<(u8, u8, u8, u8)> for LDRColor {
+    fn from(interaction: (u8, u8, u8, u8)) -> LDRColor {
+        LDRColor {
             r: interaction.0,
             g: interaction.1,
             b: interaction.2,
@@ -95,7 +95,7 @@ impl From<(u8, u8, u8, u8)> for Color {
     }
 }
 
-impl Color {
+impl LDRColor {
     /// Returns a CSS-compatible rgba color string in form `rgba(r, g, b, a)` where `r`, `g`, and `b`
     /// are integers between 0 and 255 and `a` is the alpha channel represented as a floating point value between
     /// 0 and 1.
@@ -115,7 +115,7 @@ impl Color {
     }
     /// Returns a fully opaque black color.
     pub fn black() -> Self {
-        Color {
+        LDRColor {
             r: 0,
             g: 0,
             b: 0,
@@ -124,7 +124,7 @@ impl Color {
     }
     /// Returns a fully opaque white color.
     pub fn white() -> Self {
-        Color {
+        LDRColor {
             r: 255,
             g: 255,
             b: 255,
@@ -132,16 +132,16 @@ impl Color {
         }
     }
     /// Creates a new fully opaque color from the provided RGB values.
-    pub fn rgb(r: u8, g: u8, b: u8) -> Color {
-        Color { r, g, b, a: 255 }
+    pub fn rgb(r: u8, g: u8, b: u8) -> LDRColor {
+        LDRColor { r, g, b, a: 255 }
     }
     /// Creates a new opaque color from the provided RGBA values.
-    pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Color {
-        Color { r, g, b, a }
+    pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> LDRColor {
+        LDRColor { r, g, b, a }
     }
 }
 
-impl ToHexColor for Color {
+impl ToHexLDRColor for LDRColor {
     fn to_hex_color(&self) -> Cow<'_, str> {
         Cow::from(format!(
             "#{:x?}{:x?}{:x?}{:x?}",
@@ -150,7 +150,7 @@ impl ToHexColor for Color {
     }
 }
 
-impl PixelFormat for Color {}
+impl PixelFormat for LDRColor {}
 
 /// Indicates that a type is an organizational format for image data.
 pub trait ImageFormat {}

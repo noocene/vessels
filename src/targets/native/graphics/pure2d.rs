@@ -6,7 +6,7 @@ use crate::graphics::{
         ActiveCanvas, Canvas, CanvasContext, Content, Frame, InactiveCanvas, InteractiveCanvas,
         Object, Rasterizable, Rasterizer, Ticker,
     },
-    Color, Image, ImageRepresentation, Rect, Texture2D, Transform2, Vector2,
+    Image, ImageRepresentation, LDRColor, Rect, Texture2D, Transform2, Vector2,
 };
 use crate::interaction::{Event, Source};
 use crate::interaction::{Input, Keyboard, Mouse, Window};
@@ -254,7 +254,7 @@ impl ImageRepresentation for CairoImage {
         Box::new(CairoImage(self.0.clone()))
     }
 
-    fn as_texture(&self) -> Image<Color, Texture2D> {
+    fn as_texture(&self) -> Image<LDRColor, Texture2D> {
         Image {
             pixels: vec![],
             format: Texture2D {
@@ -264,7 +264,7 @@ impl ImageRepresentation for CairoImage {
         }
     }
 
-    fn from_texture(texture: Image<Color, Texture2D>) -> CairoImage {
+    fn from_texture(texture: Image<LDRColor, Texture2D>) -> CairoImage {
         CairoImage::new(CairoSurface(
             ImageSurface::create(
                 Format::ARgb32,
@@ -1121,7 +1121,7 @@ void main()
 
         let frag_id = new_shader(
             r#"#version 330 core
-out vec4 FragColor;
+out vec4 FragLDRColor;
   
 in vec2 coord;
 
@@ -1129,7 +1129,7 @@ uniform sampler2D tex;
 
 void main()
 {
-    FragColor = texture(tex, coord);
+    FragLDRColor = texture(tex, coord);
 }"#,
             gl::FRAGMENT_SHADER,
         );
