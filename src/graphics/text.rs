@@ -1,4 +1,4 @@
-use crate::graphics_2d::Color;
+use crate::graphics::Color;
 
 /// A font face.
 #[derive(Clone, Copy, Debug)]

@@ -1,10 +1,11 @@
-use vitruvia::{
-    graphics_2d::{self, Color, Transform},
+use vitruvia::graphics::{
+    self,
     path::{Primitive, Shadow},
+    Color, Transform,
 };
 
 fn main() {
-    let gfx = graphics_2d::new();
+    let gfx = graphics::new();
     let mut root = gfx.frame();
     root.add(
         Primitive::square(100.)

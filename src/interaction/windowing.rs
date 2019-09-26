@@ -1,4 +1,4 @@
-use crate::graphics_2d::Vector;
+use crate::graphics::Vector;
 
 /// An interaction event [Source](super::Source) that represents a window.
 pub trait Window: super::Source<Event = Event> {

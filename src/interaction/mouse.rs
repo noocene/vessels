@@ -1,4 +1,4 @@
-use crate::graphics_2d::Vector;
+use crate::graphics::Vector;
 
 /// An interaction event [Source](super::Source) that represents a mouse.
 pub trait Mouse: super::Source<Event = Event> {
@@ -26,7 +26,7 @@ impl From<Button> for u8 {
             Button::Left => 0,
             Button::Right => 1,
             Button::Middle => 2,
-            Button::Auxiliary(index) => index + 3
+            Button::Auxiliary(index) => index + 3,
         }
     }
 }
@@ -37,7 +37,7 @@ impl From<u8> for Button {
             0 => Button::Left,
             1 => Button::Right,
             2 => Button::Middle,
-            index => Button::Auxiliary(index - 3)
+            index => Button::Auxiliary(index - 3),
         }
     }
 }

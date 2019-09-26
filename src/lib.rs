@@ -30,12 +30,8 @@ extern crate glutin;
 
 mod errors;
 /// Provides interfaces to 2D graphics APIs.
-pub mod graphics_2d;
+pub mod graphics;
 /// Provides interfaces to user interaction/HID APIs.
 pub mod interaction;
-/// Provides helper types that allow ergonomic construction and styling of 2D vector graphics.
-pub mod path;
 mod targets;
-/// Contains types to help represent and construct styled text.
-pub mod text;
 mod util;

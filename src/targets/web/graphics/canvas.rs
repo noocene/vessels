@@ -1,13 +1,13 @@
-use crate::graphics_2d::{
+use crate::graphics::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
+use crate::graphics::text::{Align, Font, Origin, Text, Weight, Wrap};
+use crate::graphics::{
     ActiveContextGraphics, Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics,
     Image, ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
     Texture2D, Ticker, Transform, Vector,
 };
 use crate::interaction::Context;
 use crate::interaction::{Keyboard, Mouse, Window};
-use crate::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
 use crate::targets::web;
-use crate::text::{Align, Font, Origin, Text, Weight, Wrap};
 use crate::util::ObserverCell;
 
 use itertools::Itertools;

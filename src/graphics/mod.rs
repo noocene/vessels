@@ -1,13 +1,18 @@
+use crate::graphics::path::{Path, Primitive, Texture};
+use crate::graphics::text::Text;
 use crate::interaction::Context;
-use crate::path::{Path, Primitive, Texture};
 use crate::targets;
-use crate::text::Text;
 
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use std::borrow::Cow;
 
 use std::any::Any;
+
+/// Provides helper types that allow ergonomic construction and styling of 2D vector graphics.
+pub mod path;
+/// Contains types to help represent and construct styled text.
+pub mod text;
 
 /// A conversion to an eight-character hex color string.
 pub trait ToHexColor {

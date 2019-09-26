@@ -1,4 +1,4 @@
-use crate::graphics_2d::{Color, ImageRepresentation, Rect, Vector};
+use crate::graphics::{Color, ImageRepresentation, Rect, Vector};
 
 use crate::errors::Error;
 
