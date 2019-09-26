@@ -6,7 +6,7 @@ use crate::graphics::{
         ActiveCanvas, Canvas, CanvasContext, Content, Frame, InactiveCanvas, InteractiveCanvas,
         Object, Rasterizable, Rasterizer, Ticker,
     },
-    Image, ImageRepresentation, LDRColor, Rect, Texture2D, Transform2, Vector2,
+    Image, ImageRepresentation, LDRColor, Rect, Texture2, Transform2, Vector2,
 };
 use crate::interaction::{Event, Source};
 use crate::interaction::{Input, Keyboard, Mouse, Window};
@@ -254,17 +254,17 @@ impl ImageRepresentation for CairoImage {
         Box::new(CairoImage(self.0.clone()))
     }
 
-    fn as_texture(&self) -> Image<LDRColor, Texture2D> {
+    fn as_texture(&self) -> Image<LDRColor, Texture2> {
         Image {
             pixels: vec![],
-            format: Texture2D {
+            format: Texture2 {
                 height: 0,
                 width: 0,
             },
         }
     }
 
-    fn from_texture(texture: Image<LDRColor, Texture2D>) -> CairoImage {
+    fn from_texture(texture: Image<LDRColor, Texture2>) -> CairoImage {
         CairoImage::new(CairoSurface(
             ImageSurface::create(
                 Format::ARgb32,

@@ -5,7 +5,7 @@ use crate::graphics::{
         ActiveCanvas, Canvas as VesselsCanvas, CanvasContext, Content, Frame, InactiveCanvas,
         InteractiveCanvas, Object, Rasterizable, Rasterizer, Ticker,
     },
-    Image, ImageRepresentation, LDRColor, Rect, Texture2D, Transform2, Vector2,
+    Image, ImageRepresentation, LDRColor, Rect, Texture2, Transform2, Vector2,
 };
 use crate::interaction::Input;
 use crate::interaction::{Keyboard, Mouse, Window};
@@ -48,16 +48,16 @@ impl ImageRepresentation for CanvasImage {
     fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
-    fn as_texture(&self) -> Image<LDRColor, Texture2D> {
+    fn as_texture(&self) -> Image<LDRColor, Texture2> {
         Image {
             pixels: vec![],
-            format: Texture2D {
+            format: Texture2 {
                 height: 0,
                 width: 0,
             },
         }
     }
-    fn from_texture(texture: Image<LDRColor, Texture2D>) -> CanvasImage {
+    fn from_texture(texture: Image<LDRColor, Texture2>) -> CanvasImage {
         let canvas: CanvasElement = document()
             .create_element("canvas")
             .unwrap()

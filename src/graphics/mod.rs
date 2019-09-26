@@ -25,10 +25,10 @@ pub trait ImageRepresentation: Any + Sync + Send {
     fn as_any(&self) -> Box<dyn Any>;
     /// Returns the 2-d cartesian pixel size of the image.
     fn get_size(&self) -> Vector2;
-    /// Returns a conversion of the image to [Image<LDRColor, Texture2D>]. This operation may be expensive.
-    fn as_texture(&self) -> Image<LDRColor, Texture2D>;
-    /// Creates an image in the associated format from an [Image<LDRColor, Texture2D>]. This operation may be expensive.
-    fn from_texture(texture: Image<LDRColor, Texture2D>) -> Self
+    /// Returns a conversion of the image to [Image<LDRColor, Texture2>]. This operation may be expensive.
+    fn as_texture(&self) -> Image<LDRColor, Texture2>;
+    /// Creates an image in the associated format from an [Image<LDRColor, Texture2>]. This operation may be expensive.
+    fn from_texture(texture: Image<LDRColor, Texture2>) -> Self
     where
         Self: Sized;
 }
@@ -39,7 +39,7 @@ impl Clone for Box<dyn ImageRepresentation> {
     }
 }
 
-impl ImageRepresentation for Image<LDRColor, Texture2D> {
+impl ImageRepresentation for Image<LDRColor, Texture2> {
     fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
@@ -49,10 +49,10 @@ impl ImageRepresentation for Image<LDRColor, Texture2D> {
     fn box_clone(&self) -> Box<dyn ImageRepresentation> {
         Box::new(self.clone())
     }
-    fn as_texture(&self) -> Image<LDRColor, Texture2D> {
+    fn as_texture(&self) -> Image<LDRColor, Texture2> {
         self.clone()
     }
-    fn from_texture(texture: Image<LDRColor, Texture2D>) -> Image<LDRColor, Texture2D> {
+    fn from_texture(texture: Image<LDRColor, Texture2>) -> Image<LDRColor, Texture2> {
         texture
     }
 }
@@ -157,14 +157,14 @@ pub trait ImageFormat {}
 
 /// A typical two-dimensional grid image format with square pixels.
 #[derive(Clone, Copy, Debug)]
-pub struct Texture2D {
+pub struct Texture2 {
     /// Width of the image in pixels.
     pub width: u32,
     /// Height of the image in pixels.
     pub height: u32,
 }
 
-impl ImageFormat for Texture2D {}
+impl ImageFormat for Texture2 {}
 
 /// A concrete image composed of format data and a flat [Vec] of pixels
 #[derive(Clone, Debug)]
