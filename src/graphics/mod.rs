@@ -1,14 +1,11 @@
-use crate::graphics::path::{Path, Primitive, Texture};
-use crate::graphics::text::Text;
-use crate::interaction::Context;
-use crate::targets;
+use std::{
+    any::Any,
+    borrow::Cow,
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
+};
 
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
-
-use std::borrow::Cow;
-
-use std::any::Any;
-
+/// Provides bindings to 2D vector graphic rendering functionality.
+pub mod canvas;
 /// Provides helper types that allow ergonomic construction and styling of 2D vector graphics.
 pub mod path;
 /// Contains types to help represent and construct styled text.
@@ -27,7 +24,7 @@ pub trait ImageRepresentation: Any + Sync + Send {
     #[doc(hidden)]
     fn as_any(&self) -> Box<dyn Any>;
     /// Returns the 2-d cartesian pixel size of the image.
-    fn get_size(&self) -> Vector;
+    fn get_size(&self) -> Vector2;
     /// Returns a conversion of the image to [Image<Color, Texture2D>]. This operation may be expensive.
     fn as_texture(&self) -> Image<Color, Texture2D>;
     /// Creates an image in the associated format from an [Image<Color, Texture2D>]. This operation may be expensive.
@@ -46,7 +43,7 @@ impl ImageRepresentation for Image<Color, Texture2D> {
     fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
-    fn get_size(&self) -> Vector {
+    fn get_size(&self) -> Vector2 {
         (f64::from(self.format.width), f64::from(self.format.height)).into()
     }
     fn box_clone(&self) -> Box<dyn ImageRepresentation> {
@@ -153,12 +150,6 @@ impl ToHexColor for Color {
     }
 }
 
-impl Into<Texture> for Color {
-    fn into(self) -> Texture {
-        Texture::Solid(self)
-    }
-}
-
 impl PixelFormat for Color {}
 
 /// Indicates that a type is an organizational format for image data.
@@ -184,22 +175,191 @@ pub struct Image<T: PixelFormat, U: ImageFormat> {
     pub format: U,
 }
 
+/// A 2-dimensional cartesian vector or point
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
+pub struct Vector2 {
+    /// X-axis position.
+    pub x: f64,
+    /// Y-axis position.
+    pub y: f64,
+}
+
+impl From<(f64, f64)> for Vector2 {
+    fn from(interaction: (f64, f64)) -> Vector2 {
+        Vector2 {
+            x: interaction.0,
+            y: interaction.1,
+        }
+    }
+}
+
+impl From<f64> for Vector2 {
+    fn from(interaction: f64) -> Vector2 {
+        Vector2 {
+            x: interaction,
+            y: interaction,
+        }
+    }
+}
+
+impl<T> Add<T> for Vector2
+where
+    T: Into<Vector2>,
+{
+    type Output = Vector2;
+    fn add(self, other: T) -> Vector2 {
+        let other = other.into();
+        Vector2 {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
+    }
+}
+
+impl<T> AddAssign<T> for Vector2
+where
+    T: Into<Vector2>,
+{
+    fn add_assign(&mut self, other: T) {
+        let other = other.into();
+        *self = Vector2 {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
+    }
+}
+
+impl<T> Sub<T> for Vector2
+where
+    T: Into<Vector2>,
+{
+    type Output = Vector2;
+    fn sub(self, other: T) -> Vector2 {
+        let other = other.into();
+        Vector2 {
+            x: self.x - other.x,
+            y: self.y - other.y,
+        }
+    }
+}
+
+impl Neg for Vector2 {
+    type Output = Vector2;
+
+    fn neg(self) -> Self::Output {
+        Vector2 {
+            x: -self.x,
+            y: -self.y,
+        }
+    }
+}
+
+impl<T> SubAssign<T> for Vector2
+where
+    T: Into<Vector2>,
+{
+    fn sub_assign(&mut self, other: T) {
+        let other = other.into();
+        *self = Vector2 {
+            x: self.x - other.x,
+            y: self.y - other.y,
+        }
+    }
+}
+
+impl<T> Div<T> for Vector2
+where
+    T: Into<Vector2>,
+{
+    type Output = Vector2;
+    fn div(self, other: T) -> Vector2 {
+        let other = other.into();
+        Vector2 {
+            x: self.x / other.x,
+            y: self.y / other.y,
+        }
+    }
+}
+
+impl<T> DivAssign<T> for Vector2
+where
+    T: Into<Vector2>,
+{
+    fn div_assign(&mut self, other: T) {
+        let other = other.into();
+        *self = Vector2 {
+            x: self.x / other.x,
+            y: self.y / other.y,
+        }
+    }
+}
+
+impl<T> Mul<T> for Vector2
+where
+    T: Into<Vector2>,
+{
+    type Output = Vector2;
+    fn mul(self, other: T) -> Vector2 {
+        let other = other.into();
+        Vector2 {
+            x: self.x * other.x,
+            y: self.y * other.y,
+        }
+    }
+}
+
+impl<T> MulAssign<T> for Vector2
+where
+    T: Into<Vector2>,
+{
+    fn mul_assign(&mut self, other: T) {
+        let other = other.into();
+        *self = Vector2 {
+            x: self.x * other.x,
+            y: self.y * other.y,
+        }
+    }
+}
+
+/// A rectilinear area of 2-dimensional cartesian space
+#[derive(Clone, Copy, Default, Debug)]
+pub struct Rect {
+    /// The size of the delineated space.
+    pub size: Vector2,
+    /// The position of the origin of the delineated space.
+    pub position: Vector2,
+}
+
+impl Rect {
+    /// Creates a new [Rect] from the provided position and size
+    pub fn new<T, U>(position: T, size: U) -> Self
+    where
+        T: Into<Vector2>,
+        U: Into<Vector2>,
+    {
+        Rect {
+            size: size.into(),
+            position: position.into(),
+        }
+    }
+}
+
 /// A transformation or orientation in cartesian 2-space.
 #[derive(Clone, Copy, Debug)]
-pub struct Transform {
+pub struct Transform2 {
     /// Position data.
-    pub position: Vector,
+    pub position: Vector2,
     /// Scale data.
-    pub scale: Vector,
+    pub scale: Vector2,
     /// Rotation data in radians.
     pub rotation: f64,
 }
 
-impl Transform {
+impl Transform2 {
     /// Sets the position.
     pub fn with_position<T>(mut self, position: T) -> Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.position = position.into();
         self
@@ -207,7 +367,7 @@ impl Transform {
     /// Sets the scale.
     pub fn with_scale<T>(mut self, scale: T) -> Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.scale = scale.into();
         self
@@ -218,7 +378,7 @@ impl Transform {
         self
     }
     /// Creates a 3 by 2 matrix of floats representing the first two rows of the
-    /// 2-dimensional affine transformation contained in the [Transform].
+    /// 2-dimensional affine transformation contained in the [Transform2].
     pub fn to_matrix(&self) -> [f64; 6] {
         [
             self.scale.x * self.rotation.cos(),
@@ -232,7 +392,7 @@ impl Transform {
     /// Translates the position by the provided offset.
     pub fn translate<T>(&mut self, offset: T) -> &mut Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.position += offset.into();
         self
@@ -245,13 +405,13 @@ impl Transform {
     /// Multiplicatively scales the current scale by that provided.
     pub fn scale<T>(&mut self, scale: T) -> &mut Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.scale *= scale.into();
         self
     }
     /// Composes the transform with another provided transform.
-    pub fn transform(&mut self, transform: Transform) -> &mut Self {
+    pub fn transform(&mut self, transform: Transform2) -> &mut Self {
         self.scale *= transform.scale;
         self.rotation += transform.rotation;
         self.position += transform.position;
@@ -259,397 +419,24 @@ impl Transform {
     }
 }
 
-impl Default for Transform {
+impl Default for Transform2 {
     fn default() -> Self {
-        Transform {
-            scale: Vector { x: 1., y: 1. },
-            position: Vector::default(),
+        Transform2 {
+            scale: Vector2 { x: 1., y: 1. },
+            position: Vector2::default(),
             rotation: 0.,
         }
     }
 }
 
-impl From<Vector> for Transform {
-    fn from(interaction: Vector) -> Transform {
-        Transform::default().with_position(interaction)
+impl From<Vector2> for Transform2 {
+    fn from(interaction: Vector2) -> Transform2 {
+        Transform2::default().with_position(interaction)
     }
 }
 
-impl From<(f64, f64)> for Transform {
-    fn from(interaction: (f64, f64)) -> Transform {
-        Vector::from(interaction).into()
+impl From<(f64, f64)> for Transform2 {
+    fn from(interaction: (f64, f64)) -> Transform2 {
+        Vector2::from(interaction).into()
     }
-}
-
-/// Represents content optimized and cached for rendering.
-pub trait Object: Sync + Send {
-    /// Composes a transformation with the existing transformation of the [Object].
-    fn apply_transform(&mut self, transform: Transform);
-    /// Gets the current trasnformation of the [Object].
-    fn get_transform(&self) -> Transform;
-    /// Sets the current transfomration of the [Object].
-    fn set_transform(&mut self, transform: Transform);
-    /// Gets the current z-depth of the [Object].
-    fn get_depth(&self) -> u32;
-    /// Sets the current z-depth of the [Object].
-    fn set_depth(&mut self, depth: u32);
-    /// Replaces the contents of the [Object] with new Rasterizable content. This may be costly.
-    fn update(&mut self, content: Rasterizable);
-    #[doc(hidden)]
-    fn box_clone(&self) -> Box<dyn Object>;
-}
-
-impl Clone for Box<dyn Object> {
-    fn clone(&self) -> Box<dyn Object> {
-        self.box_clone()
-    }
-}
-
-/// An isolated rendering context.
-pub trait Frame: Sync + Send {
-    /// Adds content to the [Frame].
-    fn add(&mut self, content: Content) -> Box<dyn Object>;
-    /// Resizes the [Frame]. This does not resize the viewport.
-    fn resize(&self, size: Vector);
-    /// Sets the viewport.
-    fn set_viewport(&self, viewport: Rect);
-    /// Returns the size of the [Frame].
-    fn get_size(&self) -> Vector;
-    /// Returns an image that is a still rasterization of any rendered content.
-    fn to_image(&self) -> Box<dyn ImageRepresentation>;
-    /// Returns the measured dimensions of some provided content.
-    fn measure(&self, interaction: Rasterizable) -> Vector;
-    #[doc(hidden)]
-    fn box_clone(&self) -> Box<dyn Frame>;
-    #[doc(hidden)]
-    fn show(&self);
-    #[doc(hidden)]
-    fn draw(&self);
-    #[doc(hidden)]
-    fn set_pixel_ratio(&self, ratio: f64);
-    #[doc(hidden)]
-    fn as_any(&self) -> Box<dyn Any>;
-}
-
-impl Clone for Box<dyn Frame> {
-    fn clone(&self) -> Self {
-        self.box_clone()
-    }
-}
-
-/// Renderable content.
-#[derive(Debug, Clone)]
-pub struct Content {
-    pub(crate) content: Rasterizable,
-    pub(crate) depth: u32,
-    pub(crate) transform: Transform,
-}
-
-impl Content {
-    /// Sets the orientation of the content.
-    pub fn with_transform(mut self, transform: Transform) -> Self {
-        self.transform = transform;
-        self
-    }
-    /// Applies a transformation to the content.
-    pub fn apply_transform(&mut self, transform: Transform) {
-        self.transform = transform;
-    }
-    /// Sets the z-depth of the content.
-    pub fn with_depth(mut self, depth: u32) -> Self {
-        self.depth = depth;
-        self
-    }
-}
-
-impl From<Path> for Content {
-    fn from(interaction: Path) -> Content {
-        Content {
-            content: interaction.into(),
-            depth: 0,
-            transform: Transform::default(),
-        }
-    }
-}
-
-impl From<Text> for Content {
-    fn from(interaction: Text) -> Content {
-        Content {
-            content: interaction.into(),
-            depth: 0,
-            transform: Transform::default(),
-        }
-    }
-}
-
-impl From<Rasterizable> for Content {
-    fn from(interaction: Rasterizable) -> Content {
-        Content {
-            content: interaction,
-            depth: 0,
-            transform: Transform::default(),
-        }
-    }
-}
-
-impl From<Content> for Rasterizable {
-    fn from(interaction: Content) -> Rasterizable {
-        interaction.content
-    }
-}
-
-/// A type that can be rasterized.
-#[derive(Debug, Clone)]
-pub enum Rasterizable {
-    /// Some [Text].
-    Text(Box<Text>),
-    /// Some [Path].
-    Path(Box<Path>),
-}
-
-impl From<Path> for Rasterizable {
-    fn from(interaction: Path) -> Rasterizable {
-        Rasterizable::Path(Box::new(interaction))
-    }
-}
-
-impl From<Text> for Rasterizable {
-    fn from(interaction: Text) -> Rasterizable {
-        Rasterizable::Text(Box::new(interaction))
-    }
-}
-
-impl From<Box<dyn ImageRepresentation>> for Rasterizable {
-    fn from(interaction: Box<dyn ImageRepresentation>) -> Rasterizable {
-        Rasterizable::Path(Box::new(
-            Primitive::rectangle(interaction.get_size())
-                .fill(interaction.into())
-                .finalize(),
-        ))
-    }
-}
-
-/// Provides an interface for the rasterization of content.
-pub trait Rasterizer: Sync + Send {
-    /// Returns a rasterization of the interaction.
-    fn rasterize(&self, interaction: Rasterizable, vector: Vector) -> Box<dyn ImageRepresentation>;
-}
-
-/// Provides 2-dimensional euclidean rendering capabilities.
-pub trait Graphics: Rasterizer {
-    /// Returns a new [Frame].
-    fn frame(&self) -> Box<dyn Frame>;
-}
-
-/// An aggregated context with bound graphics.
-pub trait ContextGraphics: Graphics + Context + Ticker {}
-
-impl Clone for Box<dyn ActiveContextGraphics> {
-    fn clone(&self) -> Box<dyn ActiveContextGraphics> {
-        self.box_clone()
-    }
-}
-
-/// An active [ContextualGraphics] context.
-pub trait ActiveContextGraphics: ContextGraphics {
-    #[doc(hidden)]
-    fn box_clone(&self) -> Box<dyn ActiveContextGraphics>;
-}
-
-/// An inactive [ContextualGraphics] context.
-pub trait InactiveContextGraphics: ContextGraphics {
-    /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate. Calls the provided callback once upon execution and moves an active context graphics into it.
-    fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ActiveContextGraphics>) + 'static>);
-    /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
-    fn run(self: Box<Self>);
-}
-
-/// A type that permits the binding of tick handlers.
-pub trait Ticker {
-    /// Binds a handler to receive ticks.
-    fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>);
-}
-
-/// A graphics context that can provide interaction and windowing.
-pub trait ContextualGraphics: Graphics {
-    /// Starts a windowed context using the provided [Frame] as the document root.
-    fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics>;
-}
-
-/// A 2-dimensional cartesian vector or point
-#[derive(Clone, Copy, Default, Debug, PartialEq)]
-pub struct Vector {
-    /// X-axis position.
-    pub x: f64,
-    /// Y-axis position.
-    pub y: f64,
-}
-
-impl From<(f64, f64)> for Vector {
-    fn from(interaction: (f64, f64)) -> Vector {
-        Vector {
-            x: interaction.0,
-            y: interaction.1,
-        }
-    }
-}
-
-impl From<f64> for Vector {
-    fn from(interaction: f64) -> Vector {
-        Vector {
-            x: interaction,
-            y: interaction,
-        }
-    }
-}
-
-impl<T> Add<T> for Vector
-where
-    T: Into<Vector>,
-{
-    type Output = Vector;
-    fn add(self, other: T) -> Vector {
-        let other = other.into();
-        Vector {
-            x: self.x + other.x,
-            y: self.y + other.y,
-        }
-    }
-}
-
-impl<T> AddAssign<T> for Vector
-where
-    T: Into<Vector>,
-{
-    fn add_assign(&mut self, other: T) {
-        let other = other.into();
-        *self = Vector {
-            x: self.x + other.x,
-            y: self.y + other.y,
-        }
-    }
-}
-
-impl<T> Sub<T> for Vector
-where
-    T: Into<Vector>,
-{
-    type Output = Vector;
-    fn sub(self, other: T) -> Vector {
-        let other = other.into();
-        Vector {
-            x: self.x - other.x,
-            y: self.y - other.y,
-        }
-    }
-}
-
-impl Neg for Vector {
-    type Output = Vector;
-
-    fn neg(self) -> Self::Output {
-        Vector {
-            x: -self.x,
-            y: -self.y,
-        }
-    }
-}
-
-impl<T> SubAssign<T> for Vector
-where
-    T: Into<Vector>,
-{
-    fn sub_assign(&mut self, other: T) {
-        let other = other.into();
-        *self = Vector {
-            x: self.x - other.x,
-            y: self.y - other.y,
-        }
-    }
-}
-
-impl<T> Div<T> for Vector
-where
-    T: Into<Vector>,
-{
-    type Output = Vector;
-    fn div(self, other: T) -> Vector {
-        let other = other.into();
-        Vector {
-            x: self.x / other.x,
-            y: self.y / other.y,
-        }
-    }
-}
-
-impl<T> DivAssign<T> for Vector
-where
-    T: Into<Vector>,
-{
-    fn div_assign(&mut self, other: T) {
-        let other = other.into();
-        *self = Vector {
-            x: self.x / other.x,
-            y: self.y / other.y,
-        }
-    }
-}
-
-impl<T> Mul<T> for Vector
-where
-    T: Into<Vector>,
-{
-    type Output = Vector;
-    fn mul(self, other: T) -> Vector {
-        let other = other.into();
-        Vector {
-            x: self.x * other.x,
-            y: self.y * other.y,
-        }
-    }
-}
-
-impl<T> MulAssign<T> for Vector
-where
-    T: Into<Vector>,
-{
-    fn mul_assign(&mut self, other: T) {
-        let other = other.into();
-        *self = Vector {
-            x: self.x * other.x,
-            y: self.y * other.y,
-        }
-    }
-}
-
-/// A rectilinear area of 2-dimensional cartesian space
-#[derive(Clone, Copy, Default, Debug)]
-pub struct Rect {
-    /// The size of the delineated space.
-    pub size: Vector,
-    /// The position of the origin of the delineated space.
-    pub position: Vector,
-}
-
-impl Rect {
-    /// Creates a new [Rect] from the provided position and size
-    pub fn new<T, U>(position: T, size: U) -> Self
-    where
-        T: Into<Vector>,
-        U: Into<Vector>,
-    {
-        Rect {
-            size: size.into(),
-            position: position.into(),
-        }
-    }
-}
-
-/// Initializes a new graphics context.
-pub fn new() -> Box<dyn ContextualGraphics> {
-    #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
-    return targets::web::graphics::new();
-
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    return targets::native::graphics::new();
 }

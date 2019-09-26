@@ -1,4 +1,4 @@
-use crate::graphics::{Color, ImageRepresentation, Rect, Vector};
+use crate::graphics::{Color, ImageRepresentation, Rect, Vector2};
 
 use crate::errors::Error;
 
@@ -11,13 +11,13 @@ const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Segment {
     /// A line to the given point.
-    LineTo(Vector),
+    LineTo(Vector2),
     /// A movement of the pen to the given point.
-    MoveTo(Vector),
+    MoveTo(Vector2),
     /// A quadratic bezier curve to the given point with the given handle.
-    QuadraticTo(Vector, Vector),
+    QuadraticTo(Vector2, Vector2),
     /// A cubic bezier curve to the given point with the given handles.
-    CubicTo(Vector, Vector, Vector),
+    CubicTo(Vector2, Vector2, Vector2),
 }
 
 /// A gradient color stop.
@@ -47,9 +47,9 @@ pub struct LinearGradient {
     /// Associated color stops.
     pub stops: Vec<GradientStop>,
     /// The start point.
-    pub start: Vector,
+    pub start: Vector2,
     /// The end point.
-    pub end: Vector,
+    pub end: Vector2,
 }
 
 /// A drop shadow.
@@ -58,7 +58,7 @@ pub struct Shadow {
     /// The color of the shadow.
     pub color: Color,
     /// The offset of the shadow.
-    pub offset: Vector,
+    pub offset: Vector2,
     /// The blur radius, in fractional pixels, of the shadow.
     pub blur: f64,
     /// The spread radius, in fractional pixels, of the shadow.
@@ -70,7 +70,7 @@ impl Shadow {
     pub fn new(color: Color) -> Self {
         Shadow {
             color,
-            offset: Vector::default(),
+            offset: Vector2::default(),
             blur: 0.,
             spread: 0.,
         }
@@ -88,7 +88,7 @@ impl Shadow {
     /// Sets the offset.
     pub fn offset<T>(mut self, distance: T) -> Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.offset = distance.into();
         self
@@ -101,11 +101,11 @@ pub struct RadialGradient {
     /// Associated color stops.
     pub stops: Vec<GradientStop>,
     /// The start point.
-    pub start: Vector,
+    pub start: Vector2,
     /// The radius at the start.
     pub start_radius: f64,
     /// The end point.
-    pub end: Vector,
+    pub end: Vector2,
     /// The radius at the end.
     pub end_radius: f64,
 }
@@ -121,6 +121,12 @@ pub enum Texture {
     RadialGradient(RadialGradient),
     /// An image texture.
     Image(Box<dyn ImageRepresentation>),
+}
+
+impl From<Color> for Texture {
+    fn from(color: Color) -> Texture {
+        Texture::Solid(color)
+    }
 }
 
 impl Debug for Texture {
@@ -229,7 +235,7 @@ impl Path {
     /// Adjusts the origin of the path.
     pub fn with_offset<U>(mut self, offset: U) -> Self
     where
-        U: Into<Vector>,
+        U: Into<Vector2>,
     {
         let offset = offset.into();
         self.segments = self
@@ -264,9 +270,9 @@ impl Path {
     }
     /// Computes an axis-aligned local coordinates bounding box of the path.
     pub fn bounds(&self) -> Rect {
-        let mut top_left: Vector = (std::f64::INFINITY, std::f64::INFINITY).into();
-        let mut bottom_right = Vector::default();
-        let mut update = |point: &Vector| {
+        let mut top_left: Vector2 = (std::f64::INFINITY, std::f64::INFINITY).into();
+        let mut bottom_right = Vector2::default();
+        let mut update = |point: &Vector2| {
             if point.x < top_left.x {
                 top_left.x = point.x;
             }
@@ -320,7 +326,7 @@ impl Builder {
     /// Draws a line to the specified point.
     pub fn line_to<T>(mut self, to: T) -> Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.segments.push(Segment::LineTo(to.into()));
         self
@@ -328,7 +334,7 @@ impl Builder {
     /// Moves the pen to the specified point.
     pub fn move_to<T>(mut self, to: T) -> Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.segments.push(Segment::MoveTo(to.into()));
         self
@@ -336,7 +342,7 @@ impl Builder {
     /// Draws a quadratic bezier curve to the specified point with the given handle.
     pub fn quadratic_to<T>(mut self, to: T, handle: T) -> Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.segments
             .push(Segment::QuadraticTo(to.into(), handle.into()));
@@ -345,7 +351,7 @@ impl Builder {
     /// Draws a cubic bezier curve to the specified point with the given handles.
     pub fn cubic_to<T>(mut self, to: T, handle_1: T, handle_2: T) -> Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.segments.push(Segment::CubicTo(
             to.into(),
@@ -368,9 +374,9 @@ impl Primitive {
     /// Creates a rectangle.
     pub fn rectangle<T>(size: T) -> StyleHelper
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
-        let size: Vector = size.into();
+        let size: Vector2 = size.into();
         Builder::new()
             .move_to((0., 0.))
             .line_to((size.x, 0.))
@@ -382,7 +388,7 @@ impl Primitive {
     /// Creates a rounded rectangle.
     pub fn rounded_rectangle<T>(size: T, radius: f64) -> StyleHelper
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         let size = size.into();
         Builder::new()
@@ -480,7 +486,7 @@ impl Primitive {
     /// Creates cubic-bezier approximation of a superellipse with the provided radii and k-factor.
     pub fn continuous_curvature_rectangle<T>(radii: T, k_factor: f64) -> StyleHelper
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         let radii = radii.into();
         Builder::new()

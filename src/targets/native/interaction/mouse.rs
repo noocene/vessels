@@ -1,4 +1,4 @@
-use crate::graphics::Vector;
+use crate::graphics::Vector2;
 use crate::interaction;
 use crate::interaction::mouse::{Action, Button, Event};
 
@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 
 pub(crate) struct MouseState {
     handlers: Vec<Box<dyn Fn(Event) + Send + Sync>>,
-    position: Vector,
+    position: Vector2,
 }
 
 #[derive(Clone)]
@@ -22,7 +22,7 @@ impl interaction::Source for Mouse {
 }
 
 impl interaction::Mouse for Mouse {
-    fn position(&self) -> Vector {
+    fn position(&self) -> Vector2 {
         self.state.read().unwrap().position
     }
 }
@@ -35,7 +35,7 @@ impl Mouse {
         let mouse = Mouse {
             state: Arc::new(RwLock::new(MouseState {
                 handlers: vec![],
-                position: Vector::default(),
+                position: Vector2::default(),
             })),
         };
         mouse.initialize(event_handler);
@@ -49,8 +49,8 @@ impl Mouse {
             if let glutin::Event::WindowEvent { event, .. } = event {
                 match event {
                     glutin::WindowEvent::CursorMoved { position, .. } => {
-                        let movement: Vector =
-                            Vector::from((position.x, position.y)) - state.position;
+                        let movement: Vector2 =
+                            Vector2::from((position.x, position.y)) - state.position;
                         state.position = (position.x, position.y).into();
                         state.handlers.iter().for_each(|handler| {
                             handler(Event {
@@ -85,7 +85,7 @@ impl Mouse {
                         })
                     }),
                     glutin::WindowEvent::MouseWheel { delta, .. } => {
-                        let pixel_delta: Vector = match delta {
+                        let pixel_delta: Vector2 = match delta {
                             glutin::MouseScrollDelta::LineDelta(_x, _y) => {
                                 println!("LineDelta is not handled");
                                 (0., 0.).into()

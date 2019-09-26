@@ -1,9 +1,11 @@
 use crate::graphics::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
 use crate::graphics::text::{Align, Font, Origin, Text, Weight, Wrap};
 use crate::graphics::{
-    ActiveContextGraphics, Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics,
-    Image, ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
-    Texture2D, Ticker, Transform, Vector,
+    canvas::{
+        ActiveContextGraphics, Content, ContextGraphics, ContextualGraphics, Frame, Graphics,
+        InactiveContextGraphics, Object, Rasterizable, Rasterizer, Ticker,
+    },
+    Color, Image, ImageRepresentation, Rect, Texture2D, Transform2, Vector2,
 };
 use crate::interaction::Context;
 use crate::interaction::{Keyboard, Mouse, Window};
@@ -32,7 +34,7 @@ use std::any::Any;
 type CanvasImage = CanvasElement;
 
 impl ImageRepresentation for CanvasImage {
-    fn get_size(&self) -> Vector {
+    fn get_size(&self) -> Vector2 {
         let dpr = window().device_pixel_ratio();
         (
             f64::from(self.width()) / dpr,
@@ -76,7 +78,7 @@ impl ImageRepresentation for CanvasImage {
 }
 
 struct CanvasObjectState {
-    orientation: Transform,
+    orientation: Transform2,
     content: Rasterizable,
     depth: u32,
 }
@@ -87,7 +89,7 @@ struct CanvasObject {
 }
 
 impl CanvasObject {
-    fn new(content: Rasterizable, orientation: Transform, depth: u32) -> CanvasObject {
+    fn new(content: Rasterizable, orientation: Transform2, depth: u32) -> CanvasObject {
         CanvasObject {
             state: Arc::new(RwLock::new(CanvasObjectState {
                 orientation,
@@ -99,13 +101,13 @@ impl CanvasObject {
 }
 
 impl Object for CanvasObject {
-    fn get_transform(&self) -> Transform {
+    fn get_transform(&self) -> Transform2 {
         self.state.read().unwrap().orientation
     }
-    fn apply_transform(&mut self, transform: Transform) {
+    fn apply_transform(&mut self, transform: Transform2) {
         self.state.write().unwrap().orientation.transform(transform);
     }
-    fn set_transform(&mut self, transform: Transform) {
+    fn set_transform(&mut self, transform: Transform2) {
         self.state.write().unwrap().orientation = transform;
     }
     fn set_depth(&mut self, depth: u32) {
@@ -128,7 +130,7 @@ struct CanvasFrameState {
     contents: Vec<CanvasObject>,
     pixel_ratio: f64,
     viewport: Rect,
-    size: Vector,
+    size: Vector2,
     clip_frame: Option<CanvasFrame>,
 }
 
@@ -176,7 +178,7 @@ impl CanvasFrame {
                 pixel_ratio: 0.,
                 context,
                 contents: vec![],
-                size: Vector::default(),
+                size: Vector2::default(),
                 viewport: Rect::default(),
                 clip_frame,
             })),
@@ -205,7 +207,7 @@ impl CanvasFrame {
             let scale = (size + spread) / size;
             state.context.begin_path();
             let segments = entity.segments.iter();
-            let offset: Vector = (
+            let offset: Vector2 = (
                 state.viewport.size.x + state.viewport.position.x,
                 state.viewport.size.y + state.viewport.position.y,
             )
@@ -530,7 +532,7 @@ impl CanvasFrame {
             .context
             .set_fill_style_color(&input.color.to_rgba_color());
     }
-    fn fill_text_with_spacing(&self, text: &'_ str, position: Vector, spacing: f64) {
+    fn fill_text_with_spacing(&self, text: &'_ str, position: Vector2, spacing: f64) {
         if text == "" {
             return;
         }
@@ -776,7 +778,7 @@ impl Frame for CanvasFrame {
             frame.set_viewport(viewport);
         }
     }
-    fn resize(&self, size: Vector) {
+    fn resize(&self, size: Vector2) {
         let mut state = self.state.write().unwrap();
         state.size = size;
         state.canvas.set_height((size.y * state.pixel_ratio) as u32);
@@ -785,7 +787,7 @@ impl Frame for CanvasFrame {
             frame.resize(size);
         }
     }
-    fn get_size(&self) -> Vector {
+    fn get_size(&self) -> Vector2 {
         let state = self.state.read().unwrap();
         state.size
     }
@@ -794,12 +796,12 @@ impl Frame for CanvasFrame {
         self.draw();
         Box::new(state.canvas.clone())
     }
-    fn measure(&self, input: Rasterizable) -> Vector {
+    fn measure(&self, input: Rasterizable) -> Vector2 {
         match input {
             Rasterizable::Text(input) => {
                 self.update_text_style(&input);
                 let origin = input.origin;
-                let mut size: Vector = if input.max_width.is_some() {
+                let mut size: Vector2 = if input.max_width.is_some() {
                     let lines = self.wrap_text(&input);
                     (
                         input.max_width.unwrap(),
@@ -840,17 +842,17 @@ struct Canvas {
 
 struct CanvasState {
     root_frame: Option<Box<dyn Frame>>,
-    size: ObserverCell<Vector>,
+    size: ObserverCell<Vector2>,
     tick_handlers: Vec<Box<dyn FnMut(f64) + Send + Sync>>,
 }
 
 impl Rasterizer for Canvas {
-    fn rasterize(&self, input: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
+    fn rasterize(&self, input: Rasterizable, size: Vector2) -> Box<dyn ImageRepresentation> {
         let mut frame = CanvasFrame::new();
         if let Rasterizable::Text(text) = &input {
             match &text.origin {
                 Origin::Top => {
-                    frame.set_viewport(Rect::new(Vector::default(), size));
+                    frame.set_viewport(Rect::new(Vector2::default(), size));
                 }
                 Origin::Baseline => {
                     frame.set_viewport(Rect::new((0., -size.y), size));

@@ -1,4 +1,4 @@
-use crate::graphics::Vector;
+use crate::graphics::Vector2;
 use crate::interaction;
 use crate::interaction::mouse::{Action, Button, Event};
 
@@ -11,7 +11,7 @@ use std::sync::{Arc, RwLock};
 
 pub(crate) struct MouseState {
     handlers: Vec<Box<dyn Fn(Event)>>,
-    position: Vector,
+    position: Vector2,
 }
 
 #[derive(Clone)]
@@ -27,7 +27,7 @@ impl interaction::Source for Mouse {
 }
 
 impl interaction::Mouse for Mouse {
-    fn position(&self) -> Vector {
+    fn position(&self) -> Vector2 {
         self.state.read().unwrap().position
     }
 }
@@ -38,7 +38,7 @@ impl Mouse {
         let mouse = Mouse {
             state: Arc::new(RwLock::new(MouseState {
                 handlers: vec![],
-                position: Vector::default(),
+                position: Vector2::default(),
             })),
         };
         mouse.initialize();

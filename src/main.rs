@@ -1,11 +1,11 @@
 use vitruvia::graphics::{
     self,
     path::{Primitive, Shadow},
-    Color, Transform,
+    Color, Transform2,
 };
 
 fn main() {
-    let gfx = graphics::new();
+    let gfx = graphics::canvas::new();
     let mut root = gfx.frame();
     root.add(
         Primitive::square(100.)
@@ -27,7 +27,7 @@ fn main() {
             .with_offset((-10., -10.))
             .into(),
     )
-    .apply_transform(Transform::default().with_position((50., 50.)));
+    .apply_transform(Transform2::default().with_position((50., 50.)));
     /*root.add(
         Primitive::circle(30.)
             .fill(Color::black().into())

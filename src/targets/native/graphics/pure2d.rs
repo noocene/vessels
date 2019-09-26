@@ -2,9 +2,11 @@ use super::cm::Profile;
 use crate::graphics::path::{Path, Segment, StrokeCapType, StrokeJoinType, Texture};
 use crate::graphics::text::{Origin, Text, Weight, Wrap};
 use crate::graphics::{
-    ActiveContextGraphics, Color, Content, ContextGraphics, ContextualGraphics, Frame, Graphics,
-    Image, ImageRepresentation, InactiveContextGraphics, Object, Rasterizable, Rasterizer, Rect,
-    Texture2D, Ticker, Transform, Vector,
+    canvas::{
+        ActiveContextGraphics, Content, ContextGraphics, ContextualGraphics, Frame, Graphics,
+        InactiveContextGraphics, Object, Rasterizable, Rasterizer, Ticker,
+    },
+    Color, Image, ImageRepresentation, Rect, Texture2D, Transform2, Vector2,
 };
 use crate::interaction::{Context, Keyboard, Mouse, Window};
 use crate::interaction::{Event, Source};
@@ -240,7 +242,7 @@ fn pixels_to_pango_pixels(pixels: f64) -> i32 {
 }
 
 impl ImageRepresentation for CairoImage {
-    fn get_size(&self) -> Vector {
+    fn get_size(&self) -> Vector2 {
         (
             f64::from(self.0.lock().unwrap().get_width()),
             f64::from(self.0.lock().unwrap().get_height()),
@@ -283,7 +285,7 @@ struct CairoFrameState {
     contents: Vec<CairoObject>,
     viewport: Rect,
     color_profile: Option<Profile>,
-    size: Vector,
+    size: Vector2,
     pixel_ratio: f64,
 }
 
@@ -485,7 +487,7 @@ fn draw_path(context: &CairoContext, entity: &Path, pixel_ratio: f64) {
 
 impl CairoFrame {
     fn new() -> Box<CairoFrame> {
-        let size = Vector::default();
+        let size = Vector2::default();
         let surface = ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
         Box::new(CairoFrame {
             state: Arc::new(RwLock::new(CairoFrameState {
@@ -494,7 +496,7 @@ impl CairoFrame {
                 size,
                 color_profile: None,
                 viewport: Rect {
-                    size: Vector::default(),
+                    size: Vector2::default(),
                     position: (0., 0.).into(),
                 },
                 pixel_ratio: 1.,
@@ -568,7 +570,7 @@ impl CairoFrame {
         pangocairo::functions::update_layout(&context, &layout);
         layout
     }
-    fn measure_text(&self, entity: &Text) -> Vector {
+    fn measure_text(&self, entity: &Text) -> Vector2 {
         let layout = self.layout_text(entity);
         let size = layout.get_pixel_size();
         (f64::from(size.0), f64::from(size.1)).into()
@@ -662,14 +664,14 @@ impl Frame for CairoFrame {
         state.viewport = viewport;
     }
 
-    fn resize(&self, size: Vector) {
+    fn resize(&self, size: Vector2) {
         let mut state = self.state.write().unwrap();
         state.size = size;
         let surface = ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
         state.context = Mutex::new(CairoContext(cairo::Context::new(&surface)));
     }
 
-    fn get_size(&self) -> Vector {
+    fn get_size(&self) -> Vector2 {
         let state = self.state.read().unwrap();
         state.size / state.pixel_ratio
     }
@@ -678,7 +680,7 @@ impl Frame for CairoFrame {
         self.surface()
     }
 
-    fn measure(&self, input: Rasterizable) -> Vector {
+    fn measure(&self, input: Rasterizable) -> Vector2 {
         match input {
             Rasterizable::Text(input) => {
                 let mut size = self.measure_text(input.deref());
@@ -754,7 +756,7 @@ impl Frame for CairoFrame {
 }
 
 struct CairoObjectState {
-    orientation: Transform,
+    orientation: Transform2,
     content: Rasterizable,
     depth: u32,
     redraw: Mutex<bool>,
@@ -764,13 +766,13 @@ struct CairoObjectState {
 struct CairoObject {
     state: Arc<RwLock<CairoObjectState>>,
     color_profile: Option<Profile>,
-    cache_surface: Arc<Mutex<Option<(CairoContext, Vector)>>>,
+    cache_surface: Arc<Mutex<Option<(CairoContext, Vector2)>>>,
 }
 
 impl CairoObject {
     fn new(
         content: Rasterizable,
-        orientation: Transform,
+        orientation: Transform2,
         depth: u32,
         color_profile: Option<Profile>,
     ) -> CairoObject {
@@ -798,8 +800,8 @@ impl CairoObject {
         if let Rasterizable::Path(path) = &state.content {
             if !path.shadows.is_empty() || !path.clip_segments.is_empty() {
                 let mut corners = (
-                    Vector::from((std::f64::INFINITY, std::f64::INFINITY)),
-                    Vector::from((0., 0.)),
+                    Vector2::from((std::f64::INFINITY, std::f64::INFINITY)),
+                    Vector2::from((0., 0.)),
                 );
                 for shadow in &path.shadows {
                     let bounds = path.bounds();
@@ -826,7 +828,7 @@ impl CairoObject {
                     )
                         .into(),
                 );
-                let size = Vector::from((
+                let size = Vector2::from((
                     (corners.1.x - corners.0.x).abs(),
                     (corners.1.y - corners.0.y).abs(),
                 )) * pixel_ratio;
@@ -900,7 +902,7 @@ impl CairoObject {
                 composite_clip(&base_context, &path);
                 *self.cache_surface.lock().unwrap() = Some((
                     base_context,
-                    Vector::from((corners.0.x.min(0.), corners.0.y.min(0.))) * pixel_ratio,
+                    Vector2::from((corners.0.x.min(0.), corners.0.y.min(0.))) * pixel_ratio,
                 ));
             }
         }
@@ -908,13 +910,13 @@ impl CairoObject {
 }
 
 impl Object for CairoObject {
-    fn get_transform(&self) -> Transform {
+    fn get_transform(&self) -> Transform2 {
         self.state.read().unwrap().orientation
     }
-    fn apply_transform(&mut self, transform: Transform) {
+    fn apply_transform(&mut self, transform: Transform2) {
         self.state.write().unwrap().orientation.transform(transform);
     }
-    fn set_transform(&mut self, transform: Transform) {
+    fn set_transform(&mut self, transform: Transform2) {
         self.state.write().unwrap().orientation = transform;
     }
     fn update(&mut self, input: Rasterizable) {
@@ -1005,7 +1007,7 @@ struct CairoState {
     root_frame: Option<Box<dyn Frame>>,
     event_handler: EventHandler,
     tick_handlers: Vec<Box<dyn FnMut(f64) + Send + Sync>>,
-    size: ObserverCell<Vector>,
+    size: ObserverCell<Vector2>,
 }
 
 impl Ticker for Cairo {
@@ -1015,11 +1017,11 @@ impl Ticker for Cairo {
 }
 
 impl Rasterizer for Cairo {
-    fn rasterize(&self, input: Rasterizable, size: Vector) -> Box<dyn ImageRepresentation> {
+    fn rasterize(&self, input: Rasterizable, size: Vector2) -> Box<dyn ImageRepresentation> {
         //this is probably wrong, just temp
         let mut frame = CairoFrame::new();
         frame.resize(size);
-        frame.set_viewport(Rect::new(Vector::default(), size));
+        frame.set_viewport(Rect::new(Vector2::default(), size));
         frame.add(input.into());
         frame.draw();
         frame.surface()

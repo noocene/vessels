@@ -1,5 +1,8 @@
-use crate::graphics::path::{Fill, GradientStop, Path, Texture};
-use crate::graphics::{Color, Rasterizable};
+use crate::graphics::{
+    canvas::Rasterizable,
+    path::{Fill, GradientStop, Path, Texture},
+    Color,
+};
 use lcms2::{Intent, PixelFormat, Transform};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, RwLock};

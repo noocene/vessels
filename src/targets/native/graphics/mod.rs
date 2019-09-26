@@ -1,4 +1,4 @@
-use crate::graphics::*;
+use crate::graphics::canvas::ContextualGraphics;
 
 mod cm;
 mod pure2d;

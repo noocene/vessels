@@ -1,4 +1,4 @@
-use crate::graphics::ContextualGraphics;
+use crate::graphics::canvas::ContextualGraphics;
 
 mod canvas;
 
