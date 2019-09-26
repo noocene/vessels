@@ -20,7 +20,7 @@ pub trait Source {
 pub trait Event {}
 
 /// A context that provides interaction handling functionality.
-pub trait Context {
+pub trait Input {
     /// Returns windowing bindings.
     fn window(&self) -> Box<dyn Window>;
     /// Returns mouse interaction bindings.

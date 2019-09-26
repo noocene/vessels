@@ -3,6 +3,7 @@ use std::fmt::{Debug, Formatter};
 
 /// An interaction event [Source](super::Source) that represents a keyboard.
 pub trait Keyboard: super::Source<Event = Event> + State {
+    /// Returns the current state of the keyboard.
     fn state(&self) -> Box<dyn State>;
 }
 

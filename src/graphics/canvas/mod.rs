@@ -4,7 +4,7 @@ use crate::{
         text::Text,
         ImageRepresentation, Rect, Transform2, Vector2,
     },
-    interaction::Context,
+    interaction::Input,
     targets,
 };
 
@@ -166,30 +166,30 @@ pub trait Rasterizer: Sync + Send {
 }
 
 /// Provides 2-dimensional euclidean rendering capabilities.
-pub trait Graphics: Rasterizer {
+pub trait Canvas: Rasterizer {
     /// Returns a new [Frame].
     fn frame(&self) -> Box<dyn Frame>;
 }
 
 /// An aggregated context with bound graphics.
-pub trait ContextGraphics: Graphics + Context + Ticker {}
+pub trait CanvasContext: Canvas + Input + Ticker {}
 
-impl Clone for Box<dyn ActiveContextGraphics> {
-    fn clone(&self) -> Box<dyn ActiveContextGraphics> {
+impl Clone for Box<dyn ActiveCanvas> {
+    fn clone(&self) -> Box<dyn ActiveCanvas> {
         self.box_clone()
     }
 }
 
-/// An active [ContextualGraphics] context.
-pub trait ActiveContextGraphics: ContextGraphics {
+/// An active canvas.
+pub trait ActiveCanvas: CanvasContext {
     #[doc(hidden)]
-    fn box_clone(&self) -> Box<dyn ActiveContextGraphics>;
+    fn box_clone(&self) -> Box<dyn ActiveCanvas>;
 }
 
-/// An inactive [ContextualGraphics] context.
-pub trait InactiveContextGraphics: ContextGraphics {
+/// An inactive canvas.
+pub trait InactiveCanvas: CanvasContext {
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate. Calls the provided callback once upon execution and moves an active context graphics into it.
-    fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ActiveContextGraphics>) + 'static>);
+    fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + 'static>);
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
     fn run(self: Box<Self>);
 }
@@ -201,13 +201,13 @@ pub trait Ticker {
 }
 
 /// A graphics context that can provide interaction and windowing.
-pub trait ContextualGraphics: Graphics {
+pub trait InteractiveCanvas: Canvas {
     /// Starts a windowed context using the provided [Frame] as the document root.
-    fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics>;
+    fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveCanvas>;
 }
 
 /// Initializes a new graphics context.
-pub fn new() -> Box<dyn ContextualGraphics> {
+pub fn new() -> Box<dyn InteractiveCanvas> {
     #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
     return targets::web::graphics::new();
 

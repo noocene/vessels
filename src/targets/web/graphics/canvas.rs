@@ -2,12 +2,12 @@ use crate::graphics::path::{Path, Segment, StrokeCapType, StrokeJoinType, Textur
 use crate::graphics::text::{Align, Font, Origin, Text, Weight, Wrap};
 use crate::graphics::{
     canvas::{
-        ActiveContextGraphics, Content, ContextGraphics, ContextualGraphics, Frame, Graphics,
-        InactiveContextGraphics, Object, Rasterizable, Rasterizer, Ticker,
+        ActiveCanvas, Canvas as VesselsCanvas, CanvasContext, Content, Frame, InactiveCanvas,
+        InteractiveCanvas, Object, Rasterizable, Rasterizer, Ticker,
     },
     Color, Image, ImageRepresentation, Rect, Texture2D, Transform2, Vector2,
 };
-use crate::interaction::Context;
+use crate::interaction::Input;
 use crate::interaction::{Keyboard, Mouse, Window};
 use crate::targets::web;
 use crate::util::ObserverCell;
@@ -869,7 +869,7 @@ impl Rasterizer for Canvas {
     }
 }
 
-impl Context for Canvas {
+impl Input for Canvas {
     fn mouse(&self) -> Box<dyn Mouse> {
         web::interaction::Mouse::new()
     }
@@ -887,19 +887,19 @@ impl Ticker for Canvas {
     }
 }
 
-impl ContextGraphics for Canvas {}
+impl CanvasContext for Canvas {}
 
-impl ActiveContextGraphics for Canvas {
-    fn box_clone(&self) -> Box<dyn ActiveContextGraphics> {
+impl ActiveCanvas for Canvas {
+    fn box_clone(&self) -> Box<dyn ActiveCanvas> {
         Box::new(self.clone())
     }
 }
 
-impl InactiveContextGraphics for Canvas {
+impl InactiveCanvas for Canvas {
     fn run(self: Box<Self>) {
         self.run_with(Box::new(|_| {}));
     }
-    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveContextGraphics>) + 'static>) {
+    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + 'static>) {
         {
             let state = self.state.read().unwrap();
             state.root_frame.as_ref().unwrap().show();
@@ -920,8 +920,8 @@ impl Clone for Canvas {
     }
 }
 
-impl ContextualGraphics for Canvas {
-    fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics> {
+impl InteractiveCanvas for Canvas {
+    fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveCanvas> {
         {
             let mut state = self.state.write().unwrap();
             let size = state.size.get();
@@ -935,7 +935,7 @@ impl ContextualGraphics for Canvas {
     }
 }
 
-impl Graphics for Canvas {
+impl VesselsCanvas for Canvas {
     fn frame(&self) -> Box<dyn Frame> {
         let frame = CanvasFrame::new();
         frame.set_pixel_ratio(window().device_pixel_ratio());
@@ -968,7 +968,7 @@ impl Canvas {
     }
 }
 
-pub(crate) fn new() -> Box<dyn ContextualGraphics> {
+pub(crate) fn new() -> Box<dyn InteractiveCanvas> {
     js! {
         let elem = document.querySelector(".root");
         if (elem !== null) {

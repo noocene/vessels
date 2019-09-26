@@ -3,13 +3,13 @@ use crate::graphics::path::{Path, Segment, StrokeCapType, StrokeJoinType, Textur
 use crate::graphics::text::{Origin, Text, Weight, Wrap};
 use crate::graphics::{
     canvas::{
-        ActiveContextGraphics, Content, ContextGraphics, ContextualGraphics, Frame, Graphics,
-        InactiveContextGraphics, Object, Rasterizable, Rasterizer, Ticker,
+        ActiveCanvas, Canvas, CanvasContext, Content, Frame, InactiveCanvas, InteractiveCanvas,
+        Object, Rasterizable, Rasterizer, Ticker,
     },
     Color, Image, ImageRepresentation, Rect, Texture2D, Transform2, Vector2,
 };
-use crate::interaction::{Context, Keyboard, Mouse, Window};
 use crate::interaction::{Event, Source};
+use crate::interaction::{Input, Keyboard, Mouse, Window};
 use crate::targets::native;
 use crate::util::ObserverCell;
 
@@ -728,7 +728,7 @@ impl Frame for CairoFrame {
         state.contents.iter().for_each(|object| {
             let object_state = object.state.read().unwrap();
             let matrix = object_state.orientation.to_matrix();
-            object.redraw(state.pixel_ratio, matrix);
+            object.redraw(state.pixel_ratio);
             (*object.cache_surface.lock().unwrap())
                 .iter()
                 .for_each(|surface| {
@@ -790,7 +790,7 @@ impl CairoObject {
             cache_surface: Arc::new(Mutex::new(None)),
         }
     }
-    fn redraw(&self, pixel_ratio: f64, matrix: [f64; 6]) {
+    fn redraw(&self, pixel_ratio: f64) {
         let state = self.state.read().unwrap();
         let mut redraw = state.redraw.lock().unwrap();
         if !*redraw {
@@ -1028,7 +1028,7 @@ impl Rasterizer for Cairo {
     }
 }
 
-impl Context for Cairo {
+impl Input for Cairo {
     fn mouse(&self) -> Box<dyn Mouse> {
         native::interaction::Mouse::new(Box::new(self.state.read().unwrap().event_handler.clone()))
     }
@@ -1042,19 +1042,19 @@ impl Context for Cairo {
     }
 }
 
-impl ContextGraphics for Cairo {}
+impl CanvasContext for Cairo {}
 
-impl ActiveContextGraphics for Cairo {
-    fn box_clone(&self) -> Box<dyn ActiveContextGraphics> {
+impl ActiveCanvas for Cairo {
+    fn box_clone(&self) -> Box<dyn ActiveCanvas> {
         Box::new(self.clone())
     }
 }
 
-impl InactiveContextGraphics for Cairo {
+impl InactiveCanvas for Cairo {
     fn run(self: Box<Self>) {
         self.run_with(Box::new(|_| {}));
     }
-    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveContextGraphics>) + 'static>) {
+    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + 'static>) {
         let (mut el, frame, size, windowed_context) = {
             let state = self.state.read().unwrap();
             let size = state.size.get();
@@ -1248,8 +1248,8 @@ void main()
     }
 }
 
-impl ContextualGraphics for Cairo {
-    fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveContextGraphics> {
+impl InteractiveCanvas for Cairo {
+    fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveCanvas> {
         {
             let mut state = self.state.write().unwrap();
             state.root_frame = Some(root);
@@ -1258,13 +1258,13 @@ impl ContextualGraphics for Cairo {
     }
 }
 
-impl Graphics for Cairo {
+impl Canvas for Cairo {
     fn frame(&self) -> Box<dyn Frame> {
         CairoFrame::new()
     }
 }
 
-pub(crate) fn new() -> Box<dyn ContextualGraphics> {
+pub(crate) fn new() -> Box<dyn InteractiveCanvas> {
     let window = Cairo {
         state: Arc::new(RwLock::new(CairoState {
             //need to figure out how to select size, temp default
