@@ -1,4 +1,4 @@
-//! Vitruvia is a general-purpose hardware abstraction layer that aims to provide a
+//! vessels is a general-purpose hardware abstraction layer that aims to provide a
 //! consistent and ergonomic set of interfaces for common platform-specific APIs.
 
 #![warn(

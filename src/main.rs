@@ -1,4 +1,4 @@
-use vitruvia::graphics::{
+use vessels::graphics::{
     self,
     path::{Primitive, Shadow},
     LDRColor, Transform2,
