@@ -8,10 +8,16 @@ use crate::graphics::{
     },
     Image, ImageRepresentation, LDRColor, Rect, Texture2, Transform2, Vector2,
 };
-use crate::interaction::{Event, Source};
-use crate::interaction::{Input, Keyboard, Mouse, Window};
+use crate::input::{
+    keyboard::{self, Event as KeyboardEvent},
+    mouse::{self, Event as MouseEvent},
+    windowing::Event as WindowingEvent,
+    Event, Input, Provider,
+};
 use crate::targets::native;
 use crate::util::ObserverCell;
+use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
+use futures::{task::AtomicTask, Async, Poll, Stream};
 
 use std::{
     any::Any,
@@ -40,8 +46,6 @@ static SYSTEM_FONT: &str = "Segoe UI";
 static SYSTEM_FONT: &str = "San Francisco";
 #[cfg(target_os = "linux")]
 static SYSTEM_FONT: &str = "DejaVu Sans";
-
-impl Event for glutin::Event {}
 
 struct CairoSurface(ImageSurface);
 
@@ -949,45 +953,6 @@ impl Object for CairoObject {
     }
 }
 
-struct EventHandler {
-    state: Arc<RwLock<EventHandlerState>>,
-}
-
-struct EventHandlerState {
-    handlers: Vec<Box<dyn Fn(glutin::Event) + Send + Sync>>,
-}
-
-impl Source for EventHandler {
-    type Event = glutin::Event;
-
-    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Send + Sync>) {
-        self.state.write().unwrap().handlers.push(handler);
-    }
-}
-
-impl Clone for EventHandler {
-    fn clone(&self) -> EventHandler {
-        EventHandler {
-            state: self.state.clone(),
-        }
-    }
-}
-
-impl EventHandler {
-    fn new() -> EventHandler {
-        EventHandler {
-            state: Arc::new(RwLock::new(EventHandlerState { handlers: vec![] })),
-        }
-    }
-
-    fn call_handlers(&self, event: glutin::Event) {
-        let state = self.state.read().unwrap();
-        for handler in state.handlers.iter() {
-            handler(event.clone());
-        }
-    }
-}
-
 #[derive(Clone)]
 struct Cairo {
     state: Arc<RwLock<CairoState>>,
@@ -1005,9 +970,23 @@ fn new_shader(source: &str, kind: GLenum) -> GLuint {
 
 struct CairoState {
     root_frame: Option<Box<dyn Frame>>,
-    event_handler: EventHandler,
+    event_sender: Sender<Event>,
+    event_stream: Receiver<Event>,
+    event_task: Arc<AtomicTask>,
     tick_handlers: Vec<Box<dyn FnMut(f64) + Send + Sync>>,
     size: ObserverCell<Vector2>,
+}
+
+#[derive(Clone)]
+struct CairoInput {
+    event_stream: Receiver<Event>,
+    event_task: Arc<AtomicTask>,
+}
+
+impl Input for CairoInput {
+    fn box_clone(&self) -> Box<dyn Input> {
+        Box::new(self.clone())
+    }
 }
 
 impl Ticker for Cairo {
@@ -1028,17 +1007,31 @@ impl Rasterizer for Cairo {
     }
 }
 
-impl Input for Cairo {
-    fn mouse(&self) -> Box<dyn Mouse> {
-        native::interaction::Mouse::new(Box::new(self.state.read().unwrap().event_handler.clone()))
+impl Stream for CairoInput {
+    type Item = Event;
+    type Error = ();
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        match self.event_stream.try_recv() {
+            Ok(event) => Ok(Async::Ready(Some(event))),
+            Err(err) => match err {
+                TryRecvError::Disconnected => panic!("Input channel disconnected!"),
+                TryRecvError::Empty => {
+                    self.event_task.register();
+                    Ok(Async::NotReady)
+                }
+            },
+        }
     }
-    fn keyboard(&self) -> Box<dyn Keyboard> {
-        native::interaction::Keyboard::new(Box::new(
-            self.state.read().unwrap().event_handler.clone(),
-        ))
-    }
-    fn window(&self) -> Box<dyn Window> {
-        native::interaction::Window::new(Box::new(self.state.read().unwrap().event_handler.clone()))
+}
+
+impl Provider for Cairo {
+    fn input(&self) -> Box<dyn Input> {
+        let state = self.state.read().unwrap();
+        Box::new(CairoInput {
+            event_stream: state.event_stream.clone(),
+            event_task: state.event_task.clone(),
+        })
     }
 }
 
@@ -1054,7 +1047,7 @@ impl InactiveCanvas for Cairo {
     fn run(self: Box<Self>) {
         self.run_with(Box::new(|_| {}));
     }
-    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + 'static>) {
+    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + Send + 'static>) {
         let (mut el, frame, size, windowed_context) = {
             let state = self.state.read().unwrap();
             let size = state.size.get();
@@ -1176,24 +1169,80 @@ void main()
 
         let mut running = true;
         let mut last_time = SystemTime::now();
-        cb(self.clone());
+        let ctx = self.clone();
+        std::thread::spawn(move || cb(ctx));
         while running {
             el.poll_events(|event| {
                 let state = self.state.read().unwrap();
-                if let glutin::Event::WindowEvent { event, .. } = event.clone() {
+                let e = if let glutin::Event::WindowEvent { event, .. } = event.clone() {
                     match event {
-                        glutin::WindowEvent::CloseRequested => running = false,
+                        glutin::WindowEvent::CloseRequested => {
+                            running = false;
+                            None
+                        }
                         glutin::WindowEvent::Resized(logical_size) => {
                             let dpi_factor = windowed_context.get_hidpi_factor();
                             let true_size = logical_size.to_physical(dpi_factor);
                             windowed_context.resize(true_size);
-
                             state.size.set((true_size.width, true_size.height).into());
+                            Some(Event::Windowing(WindowingEvent::Resize))
                         }
-                        _ => (),
+                        glutin::WindowEvent::Moved(p) => {
+                            Some(Event::Windowing(WindowingEvent::Move((p.x, p.y).into())))
+                        }
+                        glutin::WindowEvent::CursorMoved { position, .. } => Some(Event::Mouse(
+                            MouseEvent::Move((position.x, position.y).into()),
+                        )),
+                        glutin::WindowEvent::MouseInput {
+                            state: element_state,
+                            button,
+                            ..
+                        } => Some(Event::Mouse(match element_state {
+                            glutin::ElementState::Pressed => MouseEvent::Down(match button {
+                                glutin::MouseButton::Left => mouse::Button::Left,
+                                glutin::MouseButton::Right => mouse::Button::Right,
+                                glutin::MouseButton::Middle => mouse::Button::Middle,
+                                glutin::MouseButton::Other(x) => mouse::Button::Auxiliary(x),
+                            }),
+                            glutin::ElementState::Released => MouseEvent::Up(match button {
+                                glutin::MouseButton::Left => mouse::Button::Left,
+                                glutin::MouseButton::Right => mouse::Button::Right,
+                                glutin::MouseButton::Middle => mouse::Button::Middle,
+                                glutin::MouseButton::Other(x) => mouse::Button::Auxiliary(x),
+                            }),
+                        })),
+                        glutin::WindowEvent::MouseWheel { delta, .. } => {
+                            let pixel_delta: Vector2 = match delta {
+                                glutin::MouseScrollDelta::LineDelta(_x, _y) => {
+                                    println!("LineDelta is not handled");
+                                    (0., 0.).into()
+                                }
+                                glutin::MouseScrollDelta::PixelDelta(p) => (p.x, p.y).into(),
+                            };
+                            Some(Event::Mouse(MouseEvent::Scroll(pixel_delta)))
+                        }
+                        glutin::WindowEvent::KeyboardInput { input, .. } => {
+                            let key = native::input::keyboard::parse_code(input.scancode);
+                            Some(Event::Keyboard(KeyboardEvent {
+                                action: match input.state {
+                                    glutin::ElementState::Pressed => keyboard::Action::Down(key),
+                                    glutin::ElementState::Released => keyboard::Action::Up(key),
+                                },
+                                // TODO
+                                printable: None,
+                            }))
+                        }
+                        _ => None,
                     }
-                }
-                state.event_handler.call_handlers(event);
+                } else {
+                    None
+                };
+                e.map(|e| {
+                    if Arc::strong_count(&state.event_task) != 1 {
+                        state.event_sender.send(e).unwrap();
+                        state.event_task.notify()
+                    }
+                });
             });
 
             {
@@ -1265,12 +1314,15 @@ impl Canvas for Cairo {
 }
 
 pub(crate) fn new() -> Box<dyn InteractiveCanvas> {
+    let (event_sender, event_stream) = unbounded();
     let window = Cairo {
         state: Arc::new(RwLock::new(CairoState {
             //need to figure out how to select size, temp default
             size: ObserverCell::new((700., 700.).into()),
-            event_handler: EventHandler::new(),
             root_frame: None,
+            event_task: Arc::new(AtomicTask::new()),
+            event_stream,
+            event_sender,
             tick_handlers: vec![],
         })),
     };

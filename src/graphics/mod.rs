@@ -74,23 +74,23 @@ pub struct LDRColor {
 }
 
 impl From<(u8, u8, u8)> for LDRColor {
-    fn from(interaction: (u8, u8, u8)) -> LDRColor {
+    fn from(input: (u8, u8, u8)) -> LDRColor {
         LDRColor {
-            r: interaction.0,
-            g: interaction.1,
-            b: interaction.2,
+            r: input.0,
+            g: input.1,
+            b: input.2,
             a: 255,
         }
     }
 }
 
 impl From<(u8, u8, u8, u8)> for LDRColor {
-    fn from(interaction: (u8, u8, u8, u8)) -> LDRColor {
+    fn from(input: (u8, u8, u8, u8)) -> LDRColor {
         LDRColor {
-            r: interaction.0,
-            g: interaction.1,
-            b: interaction.2,
-            a: interaction.3,
+            r: input.0,
+            g: input.1,
+            b: input.2,
+            a: input.3,
         }
     }
 }
@@ -185,20 +185,17 @@ pub struct Vector2 {
 }
 
 impl From<(f64, f64)> for Vector2 {
-    fn from(interaction: (f64, f64)) -> Vector2 {
+    fn from(input: (f64, f64)) -> Vector2 {
         Vector2 {
-            x: interaction.0,
-            y: interaction.1,
+            x: input.0,
+            y: input.1,
         }
     }
 }
 
 impl From<f64> for Vector2 {
-    fn from(interaction: f64) -> Vector2 {
-        Vector2 {
-            x: interaction,
-            y: interaction,
-        }
+    fn from(input: f64) -> Vector2 {
+        Vector2 { x: input, y: input }
     }
 }
 
@@ -430,13 +427,13 @@ impl Default for Transform2 {
 }
 
 impl From<Vector2> for Transform2 {
-    fn from(interaction: Vector2) -> Transform2 {
-        Transform2::default().with_position(interaction)
+    fn from(input: Vector2) -> Transform2 {
+        Transform2::default().with_position(input)
     }
 }
 
 impl From<(f64, f64)> for Transform2 {
-    fn from(interaction: (f64, f64)) -> Transform2 {
-        Vector2::from(interaction).into()
+    fn from(input: (f64, f64)) -> Transform2 {
+        Vector2::from(input).into()
     }
 }

@@ -7,6 +7,8 @@ version = "0.1.0"
 [dependencies]
 failure = "0.1.5"
 serde = { version = "1.0.98", features = ["derive"] }
+futures = "0.1.27"
+crossbeam-channel = "0.3.9"
 
 [target.wasm32-unknown-unknown.dependencies]
 stdweb = "0.4.13"
@@ -26,6 +28,7 @@ itertools = "0.8.0"
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
 glutin = "0.20.0"
 cairo-rs = "0.6.0"
+tokio = "0.1.21"
 gl = "0.11.0"
 glib = "0.7.1"
 lcms2 = "5.1.3"

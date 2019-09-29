@@ -1,11 +1,5 @@
 use crate::graphics::Vector2;
 
-/// An interaction event [Source](super::Source) that represents a mouse.
-pub trait Mouse: super::Source<Event = Event> {
-    /// Returns the current mouse position.
-    fn position(&self) -> Vector2;
-}
-
 /// A mouse button.
 #[derive(Clone, Copy, Debug)]
 pub enum Button {
@@ -42,26 +36,15 @@ impl From<u8> for Button {
     }
 }
 
-/// A mouse state-change action
+/// A mouse event.
 #[derive(Clone, Copy, Debug)]
-pub enum Action {
+pub enum Event {
     /// The return of a button from an activated state to an inactivated state.
     Up(Button),
     /// The transition of a button from an inactivated state to an activated state.
     Down(Button),
-    /// A mouse movement.
+    /// A mouse movement to the given position.
     Move(Vector2),
-    /// A mouse scroll interaction.
+    /// A mouse scroll input.
     Scroll(Vector2),
 }
-
-/// A mouse event.
-#[derive(Clone, Copy, Debug)]
-pub struct Event {
-    /// The associated action.
-    pub action: Action,
-    /// The mouse position at the time of the event.
-    pub position: Vector2,
-}
-
-impl super::Event for Event {}

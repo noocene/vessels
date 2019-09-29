@@ -29,9 +29,11 @@ extern crate gl;
 extern crate glutin;
 
 mod errors;
+/// Provides a cross-platform abstracted asynchronous executor.
+pub mod executor;
 /// Provides interfaces to 2D graphics APIs.
 pub mod graphics;
-/// Provides interfaces to user interaction/HID APIs.
-pub mod interaction;
+/// Provides interfaces to user input/HID APIs.
+pub mod input;
 mod targets;
 mod util;

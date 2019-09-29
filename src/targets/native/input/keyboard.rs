@@ -1,13 +1,8 @@
-use crate::interaction;
-use crate::interaction::keyboard;
-use crate::interaction::keyboard::{Action, Event, Key};
-
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use crate::input::keyboard::Key;
 
 #[cfg(target_os = "macos")]
 mod scancode_macos {
-    use crate::interaction::keyboard::{Alpha, Arrow, Function, Key, Location, Number, Numpad};
+    use crate::input::keyboard::{Alpha, Arrow, Function, Key, Location, Number, Numpad};
 
     pub(crate) static MAP: [Key; 127] = [
         Key::Alpha(Alpha::A),
@@ -142,7 +137,7 @@ mod scancode_macos {
 
 #[cfg(target_os = "windows")]
 mod scancode_windows {
-    use crate::interaction::keyboard::{Alpha, Arrow, Function, Key, Location, Number, Numpad};
+    use crate::input::keyboard::{Alpha, Arrow, Function, Key, Location, Number, Numpad};
 
     pub(crate) static MAP: [Key; 127] = [
         Key::Unknown,
@@ -277,7 +272,7 @@ mod scancode_windows {
 
 #[cfg(target_os = "linux")]
 mod scancode_linux {
-    use crate::interaction::keyboard::{Alpha, Arrow, Function, Key, Location, Number, Numpad};
+    use crate::input::keyboard::{Alpha, Arrow, Function, Key, Location, Number, Numpad};
 
     pub(crate) static MAP: [Key; 127] = [
         Key::Unknown,
@@ -419,90 +414,10 @@ mod scancode {
     pub(crate) use super::scancode_windows::MAP;
 }
 
-fn parse_code(code: u32) -> Key {
+pub(crate) fn parse_code(code: u32) -> Key {
     if (code as usize) < scancode::MAP.len() {
         scancode::MAP[code as usize]
     } else {
         Key::Unknown
-    }
-}
-
-pub(crate) struct KeyboardState {
-    handlers: Vec<Box<dyn Fn(Event) + Send + Sync>>,
-    keys: HashMap<Key, bool>,
-}
-
-#[derive(Clone)]
-pub(crate) struct Keyboard {
-    state: Arc<RwLock<KeyboardState>>,
-}
-
-impl interaction::Source for Keyboard {
-    type Event = Event;
-    fn bind(&self, handler: Box<dyn Fn(Self::Event) + 'static + Sync + Send>) {
-        self.state.write().unwrap().handlers.push(handler);
-    }
-}
-
-impl keyboard::Keyboard for Keyboard {
-    fn state(&self) -> Box<dyn keyboard::State> {
-        Box::new(self.clone())
-    }
-}
-
-impl keyboard::State for Keyboard {
-    fn box_clone(&self) -> Box<dyn keyboard::State> {
-        Box::new(self.clone())
-    }
-    fn poll(&mut self, key: Key) -> bool {
-        let mut state = self.state.write().unwrap();
-        let entry = state.keys.entry(key).or_insert(false);
-        *entry
-    }
-}
-
-impl Keyboard {
-    #[allow(clippy::new_ret_no_self)]
-    pub(crate) fn new(
-        event_handler: Box<dyn interaction::Source<Event = glutin::Event>>,
-    ) -> Box<dyn interaction::Keyboard> {
-        let keyboard = Keyboard {
-            state: Arc::new(RwLock::new(KeyboardState {
-                handlers: vec![],
-                keys: HashMap::new(),
-            })),
-        };
-        keyboard.initialize(event_handler);
-        Box::new(keyboard)
-    }
-    fn initialize(&self, event_handler: Box<dyn interaction::Source<Event = glutin::Event>>) {
-        let state = self.clone();
-        event_handler.bind(Box::new(move |event: glutin::Event| {
-            let c_state = state.clone();
-            let send_state = Box::new(state.clone());
-            let mut state = c_state.state.write().unwrap();
-            if let glutin::Event::WindowEvent { event, .. } = event {
-                if let glutin::WindowEvent::KeyboardInput { input, .. } = event {
-                    let key = parse_code(input.scancode);
-                    match input.state {
-                        glutin::ElementState::Pressed => state.keys.insert(key, true),
-                        glutin::ElementState::Released => state.keys.insert(key, false),
-                    };
-                    let send_event = Event {
-                        action: match input.state {
-                            glutin::ElementState::Pressed => Action::Down(key),
-                            glutin::ElementState::Released => Action::Up(key),
-                        },
-                        state: send_state,
-                        //temp none
-                        printable: None,
-                    };
-                    state
-                        .handlers
-                        .iter()
-                        .for_each(|handler| handler(send_event.clone()));
-                }
-            }
-        }));
     }
 }

@@ -145,8 +145,8 @@ impl Debug for Texture {
 }
 
 impl From<Box<dyn ImageRepresentation>> for Texture {
-    fn from(interaction: Box<dyn ImageRepresentation>) -> Self {
-        Texture::Image(interaction)
+    fn from(input: Box<dyn ImageRepresentation>) -> Self {
+        Texture::Image(input)
     }
 }
 
@@ -205,9 +205,9 @@ impl<T> From<T> for Fill
 where
     T: Into<Texture>,
 {
-    fn from(interaction: T) -> Self {
+    fn from(input: T) -> Self {
         Fill {
-            content: interaction.into(),
+            content: input.into(),
         }
     }
 }

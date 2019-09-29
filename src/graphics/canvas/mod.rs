@@ -4,7 +4,7 @@ use crate::{
         text::Text,
         ImageRepresentation, Rect, Transform2, Vector2,
     },
-    interaction::Input,
+    input::Provider,
     targets,
 };
 
@@ -47,7 +47,7 @@ pub trait Frame: Sync + Send {
     /// Returns an image that is a still rasterization of any rendered content.
     fn to_image(&self) -> Box<dyn ImageRepresentation>;
     /// Returns the measured dimensions of some provided content.
-    fn measure(&self, interaction: Rasterizable) -> Vector2;
+    fn measure(&self, input: Rasterizable) -> Vector2;
     #[doc(hidden)]
     fn box_clone(&self) -> Box<dyn Frame>;
     #[doc(hidden)]
@@ -92,9 +92,9 @@ impl Content {
 }
 
 impl From<Path> for Content {
-    fn from(interaction: Path) -> Content {
+    fn from(input: Path) -> Content {
         Content {
-            content: interaction.into(),
+            content: input.into(),
             depth: 0,
             transform: Transform2::default(),
         }
@@ -102,9 +102,9 @@ impl From<Path> for Content {
 }
 
 impl From<Text> for Content {
-    fn from(interaction: Text) -> Content {
+    fn from(input: Text) -> Content {
         Content {
-            content: interaction.into(),
+            content: input.into(),
             depth: 0,
             transform: Transform2::default(),
         }
@@ -112,9 +112,9 @@ impl From<Text> for Content {
 }
 
 impl From<Rasterizable> for Content {
-    fn from(interaction: Rasterizable) -> Content {
+    fn from(input: Rasterizable) -> Content {
         Content {
-            content: interaction,
+            content: input,
             depth: 0,
             transform: Transform2::default(),
         }
@@ -122,8 +122,8 @@ impl From<Rasterizable> for Content {
 }
 
 impl From<Content> for Rasterizable {
-    fn from(interaction: Content) -> Rasterizable {
-        interaction.content
+    fn from(input: Content) -> Rasterizable {
+        input.content
     }
 }
 
@@ -137,22 +137,22 @@ pub enum Rasterizable {
 }
 
 impl From<Path> for Rasterizable {
-    fn from(interaction: Path) -> Rasterizable {
-        Rasterizable::Path(Box::new(interaction))
+    fn from(input: Path) -> Rasterizable {
+        Rasterizable::Path(Box::new(input))
     }
 }
 
 impl From<Text> for Rasterizable {
-    fn from(interaction: Text) -> Rasterizable {
-        Rasterizable::Text(Box::new(interaction))
+    fn from(input: Text) -> Rasterizable {
+        Rasterizable::Text(Box::new(input))
     }
 }
 
 impl From<Box<dyn ImageRepresentation>> for Rasterizable {
-    fn from(interaction: Box<dyn ImageRepresentation>) -> Rasterizable {
+    fn from(input: Box<dyn ImageRepresentation>) -> Rasterizable {
         Rasterizable::Path(Box::new(
-            Primitive::rectangle(interaction.get_size())
-                .fill(interaction.into())
+            Primitive::rectangle(input.get_size())
+                .fill(input.into())
                 .finalize(),
         ))
     }
@@ -160,9 +160,8 @@ impl From<Box<dyn ImageRepresentation>> for Rasterizable {
 
 /// Provides an interface for the rasterization of content.
 pub trait Rasterizer: Sync + Send {
-    /// Returns a rasterization of the interaction.
-    fn rasterize(&self, interaction: Rasterizable, vector: Vector2)
-        -> Box<dyn ImageRepresentation>;
+    /// Returns a rasterization of the input.
+    fn rasterize(&self, input: Rasterizable, vector: Vector2) -> Box<dyn ImageRepresentation>;
 }
 
 /// Provides 2-dimensional euclidean rendering capabilities.
@@ -172,7 +171,7 @@ pub trait Canvas: Rasterizer {
 }
 
 /// An aggregated context with bound graphics.
-pub trait CanvasContext: Canvas + Input + Ticker {}
+pub trait CanvasContext: Canvas + Provider + Ticker + Send {}
 
 impl Clone for Box<dyn ActiveCanvas> {
     fn clone(&self) -> Box<dyn ActiveCanvas> {
@@ -189,7 +188,7 @@ pub trait ActiveCanvas: CanvasContext {
 /// An inactive canvas.
 pub trait InactiveCanvas: CanvasContext {
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate. Calls the provided callback once upon execution and moves an active context graphics into it.
-    fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + 'static>);
+    fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + Send + 'static>);
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
     fn run(self: Box<Self>);
 }
@@ -200,7 +199,7 @@ pub trait Ticker {
     fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>);
 }
 
-/// A graphics context that can provide interaction and windowing.
+/// A graphics context that can provide input and windowing.
 pub trait InteractiveCanvas: Canvas {
     /// Starts a windowed context using the provided [Frame] as the document root.
     fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveCanvas>;

@@ -7,8 +7,7 @@ use crate::graphics::{
     },
     Image, ImageRepresentation, LDRColor, Rect, Texture2, Transform2, Vector2,
 };
-use crate::interaction::Input;
-use crate::interaction::{Keyboard, Mouse, Window};
+use crate::input::{Input, Provider};
 use crate::targets::web;
 use crate::util::ObserverCell;
 
@@ -17,11 +16,11 @@ use itertools::Itertools;
 use stdweb::traits::{IChildNode, IElement, IEvent, IEventTarget, IHtmlElement, INode};
 use stdweb::unstable::TryInto;
 use stdweb::web::{
-    document, window, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap, LineJoin,
-    TextAlign, TextBaseline,
+    document,
+    event::{ContextMenuEvent, ResizeEvent},
+    window, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap, LineJoin, TextAlign,
+    TextBaseline,
 };
-
-use stdweb::web::event::{ContextMenuEvent, ResizeEvent};
 
 use stdweb::web::html_element::CanvasElement;
 
@@ -869,15 +868,9 @@ impl Rasterizer for Canvas {
     }
 }
 
-impl Input for Canvas {
-    fn mouse(&self) -> Box<dyn Mouse> {
-        web::interaction::Mouse::new()
-    }
-    fn keyboard(&self) -> Box<dyn Keyboard> {
-        web::interaction::Keyboard::new()
-    }
-    fn window(&self) -> Box<dyn Window> {
-        web::interaction::Window::new()
+impl Provider for Canvas {
+    fn input(&self) -> Box<dyn Input> {
+        web::input::Input::new()
     }
 }
 
@@ -899,7 +892,7 @@ impl InactiveCanvas for Canvas {
     fn run(self: Box<Self>) {
         self.run_with(Box::new(|_| {}));
     }
-    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + 'static>) {
+    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + Send + 'static>) {
         {
             let state = self.state.read().unwrap();
             state.root_frame.as_ref().unwrap().show();
