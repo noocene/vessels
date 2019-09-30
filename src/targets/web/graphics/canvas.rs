@@ -24,9 +24,9 @@ use stdweb::web::{
 
 use stdweb::web::html_element::CanvasElement;
 
-use std::sync::{Arc, RwLock};
-
+use std::cell::RefCell;
 use std::ops::Deref;
+use std::rc::Rc;
 
 use std::any::Any;
 
@@ -86,13 +86,13 @@ struct CanvasObjectState {
 
 #[derive(Clone)]
 struct CanvasObject {
-    state: Arc<RwLock<CanvasObjectState>>,
+    state: Rc<RefCell<CanvasObjectState>>,
 }
 
 impl CanvasObject {
     fn new(content: Rasterizable, orientation: Transform2, depth: u32) -> CanvasObject {
         CanvasObject {
-            state: Arc::new(RwLock::new(CanvasObjectState {
+            state: Rc::new(RefCell::new(CanvasObjectState {
                 orientation,
                 content,
                 depth,
@@ -103,22 +103,22 @@ impl CanvasObject {
 
 impl Object for CanvasObject {
     fn get_transform(&self) -> Transform2 {
-        self.state.read().unwrap().orientation
+        self.state.borrow().orientation
     }
     fn apply_transform(&mut self, transform: Transform2) {
-        self.state.write().unwrap().orientation.transform(transform);
+        self.state.borrow_mut().orientation.transform(transform);
     }
     fn set_transform(&mut self, transform: Transform2) {
-        self.state.write().unwrap().orientation = transform;
+        self.state.borrow_mut().orientation = transform;
     }
     fn set_depth(&mut self, depth: u32) {
-        self.state.write().unwrap().depth = depth;
+        self.state.borrow_mut().depth = depth;
     }
     fn get_depth(&self) -> u32 {
-        self.state.read().unwrap().depth
+        self.state.borrow().depth
     }
     fn update(&mut self, input: Rasterizable) {
-        self.state.write().unwrap().content = input;
+        self.state.borrow_mut().content = input;
     }
     fn box_clone(&self) -> Box<dyn Object> {
         Box::new(self.clone())
@@ -142,7 +142,7 @@ impl Drop for CanvasFrameState {
 }
 
 struct CanvasFrame {
-    state: Arc<RwLock<CanvasFrameState>>,
+    state: Rc<RefCell<CanvasFrameState>>,
 }
 
 impl CanvasFrame {
@@ -154,7 +154,7 @@ impl CanvasFrame {
             .unwrap();
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
         CanvasFrame {
-            state: Arc::new(RwLock::new(CanvasFrameState {
+            state: Rc::new(RefCell::new(CanvasFrameState {
                 canvas,
                 pixel_ratio,
                 context,
@@ -178,7 +178,7 @@ impl CanvasFrame {
                 .device_pixel_ratio(),
         ));
         Box::new(CanvasFrame {
-            state: Arc::new(RwLock::new(CanvasFrameState {
+            state: Rc::new(RefCell::new(CanvasFrameState {
                 canvas,
                 pixel_ratio: 0.,
                 context,
@@ -190,7 +190,7 @@ impl CanvasFrame {
         })
     }
     fn set_root(&self) {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         js! {
             let elem = document.querySelector(".root");
             if (elem !== null) {
@@ -200,7 +200,7 @@ impl CanvasFrame {
         state.canvas.class_list().add("root").unwrap();
     }
     fn draw_shadows(&self, matrix: [f64; 6], entity: &Path) {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         for shadow in &entity.shadows {
             state.context.restore();
             state.context.save();
@@ -269,7 +269,7 @@ impl CanvasFrame {
         state.context.set_shadow_color("rgba(255,255,255,0)");
     }
     fn draw_path_clipped(&self, matrix: [f64; 6], entity: &Path) {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         if !entity.clip_segments.is_empty() && state.clip_frame.is_some() {
             state.context.restore();
             state.context.save();
@@ -298,11 +298,11 @@ impl CanvasFrame {
         }
     }
     fn clear(&self) {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         state.context.clear_rect(-1000., -1000., 2000., 2000.);
     }
     fn composite_clip(&self, matrix: [f64; 6], entity: &Path) {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         state.context.restore();
         state.context.save();
         state.context.transform(
@@ -336,7 +336,7 @@ impl CanvasFrame {
         state.context.fill(FillRule::NonZero);
     }
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         state.context.restore();
         state.context.save();
         state.context.transform(
@@ -507,7 +507,7 @@ impl CanvasFrame {
         }
     }
     fn update_text_style(&self, input: &Text) {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         state.context.set_font((match input.font {
                 Font::SystemFont => {
                     format!(r#"{} {} {}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple LDRColor Emoji", "Segoe UI Emoji", "Segoe UI Symbol""#, if input.italic { "italic " } else { "" }, match input.weight {
@@ -541,7 +541,7 @@ impl CanvasFrame {
         if text == "" {
             return;
         }
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         let mut full_width = state.context.measure_text(&text).unwrap().get_width();
         let mut position = position;
         let mut text = text.to_owned();
@@ -572,7 +572,7 @@ impl CanvasFrame {
         if text == "" {
             return 0.;
         }
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         let mut full_width = state.context.measure_text(&text).unwrap().get_width();
         if spacing == 0. {
             return full_width;
@@ -600,7 +600,7 @@ impl CanvasFrame {
         spaced_width - spacing
     }
     fn draw_text(&self, matrix: [f64; 6], input: &Text) {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         state.context.restore();
         state.context.save();
         state.context.transform(
@@ -633,7 +633,7 @@ impl CanvasFrame {
         }
     }
     fn element(&self) -> CanvasElement {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         state.canvas.clone()
     }
     fn measure_text_height(&self, input: Text) -> f64 {
@@ -723,11 +723,11 @@ impl CanvasFrame {
 
 impl Frame for CanvasFrame {
     fn set_pixel_ratio(&self, ratio: f64) {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.borrow_mut();
         state.pixel_ratio = ratio;
     }
     fn draw(&self) {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         let viewport = state.viewport;
         let size = state.size;
         state.context.set_transform(
@@ -749,12 +749,12 @@ impl Frame for CanvasFrame {
             .contents
             .iter()
             .sorted_by(|a, b| {
-                let a = a.state.read().unwrap();
-                let b = b.state.read().unwrap();
+                let a = a.state.borrow();
+                let b = b.state.borrow();
                 a.depth.partial_cmp(&b.depth).unwrap()
             })
             .for_each(|object| {
-                let object = object.state.read().unwrap();
+                let object = object.state.borrow();
                 let matrix = object.orientation.to_matrix();
                 match &object.content {
                     Rasterizable::Path(path) => self.draw_path_clipped(matrix, &path),
@@ -763,7 +763,7 @@ impl Frame for CanvasFrame {
             });
     }
     fn show(&self) {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         state.canvas.add_event_listener(|event: ContextMenuEvent| {
             event.prevent_default();
             event.stop_propagation();
@@ -772,19 +772,19 @@ impl Frame for CanvasFrame {
     }
     fn add(&mut self, content: Content) -> Box<dyn Object> {
         let object = CanvasObject::new(content.content, content.transform, content.depth);
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.borrow_mut();
         state.contents.push(object.clone());
         Box::new(object)
     }
     fn set_viewport(&self, viewport: Rect) {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.borrow_mut();
         state.viewport = viewport;
         if let Some(frame) = &state.clip_frame {
             frame.set_viewport(viewport);
         }
     }
     fn resize(&self, size: Vector2) {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.borrow_mut();
         state.size = size;
         state.canvas.set_height((size.y * state.pixel_ratio) as u32);
         state.canvas.set_width((size.x * state.pixel_ratio) as u32);
@@ -793,11 +793,11 @@ impl Frame for CanvasFrame {
         }
     }
     fn get_size(&self) -> Vector2 {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         state.size
     }
     fn to_image(&self) -> Box<dyn ImageRepresentation> {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         self.draw();
         Box::new(state.canvas.clone())
     }
@@ -843,13 +843,14 @@ impl Frame for CanvasFrame {
 
 #[derive(Clone)]
 struct Canvas {
-    state: Arc<RwLock<CanvasState>>,
+    state: Rc<RefCell<CanvasState>>,
 }
 
 struct CanvasState {
     root_frame: Option<Box<dyn Frame>>,
     size: ObserverCell<Vector2>,
     input: web::input::Input,
+    cb: Option<Box<dyn FnMut(Box<dyn ActiveCanvas>) + 'static>>,
 }
 
 impl Rasterizer for Canvas {
@@ -877,7 +878,7 @@ impl Rasterizer for Canvas {
 
 impl Provider for Canvas {
     fn input(&self) -> Box<dyn Input> {
-        self.state.read().unwrap().input.box_clone()
+        self.state.borrow().input.box_clone()
     }
 }
 
@@ -893,9 +894,10 @@ impl InactiveCanvas for Canvas {
     fn run(self: Box<Self>) {
         self.run_with(Box::new(|_| {}));
     }
-    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + Send + 'static>) {
+    fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + 'static>) {
         {
-            let state = self.state.read().unwrap();
+            let mut state = self.state.borrow_mut();
+            state.cb = Some(cb);
             state.root_frame.as_ref().unwrap().show();
             let cloned = self.clone();
             web_sys::window()
@@ -903,20 +905,19 @@ impl InactiveCanvas for Canvas {
                 .request_animation_frame(
                     Closure::wrap(Box::new(move |start_time: f64| {
                         cloned.animate(start_time, start_time);
-                    }) as Box<dyn Fn(f64)>)
+                    }) as Box<dyn FnMut(f64)>)
                     .as_ref()
                     .unchecked_ref(),
                 )
                 .expect("Cannot register animation frame request");
         }
-        (cb)(self);
     }
 }
 
 impl InteractiveCanvas for Canvas {
     fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveCanvas> {
         {
-            let mut state = self.state.write().unwrap();
+            let mut state = self.state.borrow_mut();
             let size = state.size.get();
             let frame = root.as_any().downcast::<CanvasFrame>().unwrap();
             frame.set_root();
@@ -942,7 +943,7 @@ impl VesselsCanvas for Canvas {
 
 impl Canvas {
     fn animate(&self, start_time: f64, last_start_time: f64) {
-        let state = self.state.read().unwrap();
+        let mut state = self.state.borrow_mut();
         state.input.send(Event::Windowing(WindowingEvent::Redraw(
             start_time - last_start_time,
         )));
@@ -958,12 +959,13 @@ impl Canvas {
             None => {}
         }
         let cloned = self.clone();
+        state.cb.as_mut().map(|cb| (cb)(Box::new(self.clone())));
         web_sys::window()
             .unwrap()
             .request_animation_frame(
                 Closure::wrap(Box::new(move |new_start_time: f64| {
                     cloned.animate(new_start_time, start_time);
-                }) as Box<dyn Fn(f64)>)
+                }) as Box<dyn FnMut(f64)>)
                 .as_ref()
                 .unchecked_ref(),
             )
@@ -1014,12 +1016,13 @@ pub(crate) fn new() -> Box<dyn InteractiveCanvas> {
     let body = document.body().unwrap();
 
     let gfx = Canvas {
-        state: Arc::new(RwLock::new(CanvasState {
+        state: Rc::new(RefCell::new(CanvasState {
             size: ObserverCell::new(
                 (body.offset_width().into(), body.offset_height().into()).into(),
             ),
             root_frame: None,
             input: web::input::Input::new(),
+            cb: None,
         })),
     };
 
@@ -1027,7 +1030,7 @@ pub(crate) fn new() -> Box<dyn InteractiveCanvas> {
 
     window.set_onresize(Some(
         Closure::wrap(Box::new(move || {
-            let state = gfx_resize.state.read().unwrap();
+            let state = gfx_resize.state.borrow();
             state
                 .size
                 .set((body.offset_width().into(), body.offset_height().into()).into());

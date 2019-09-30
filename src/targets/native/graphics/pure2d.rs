@@ -21,9 +21,10 @@ use futures::{task::AtomicTask, Async, Poll, Stream};
 
 use std::{
     any::Any,
+    cell::RefCell,
     ffi::{c_void, CString},
     ops::Deref,
-    sync::{Arc, Mutex, RwLock},
+    rc::Rc,
     time::SystemTime,
 };
 
@@ -51,8 +52,6 @@ struct CairoSurface(ImageSurface);
 
 struct CairoContext(cairo::Context);
 
-unsafe impl Send for CairoSurface {}
-
 impl Deref for CairoSurface {
     type Target = ImageSurface;
 
@@ -60,8 +59,6 @@ impl Deref for CairoSurface {
         &self.0
     }
 }
-
-unsafe impl Send for CairoContext {}
 
 impl Deref for CairoContext {
     type Target = cairo::Context;
@@ -71,7 +68,7 @@ impl Deref for CairoContext {
     }
 }
 
-struct CairoImage(Arc<Mutex<CairoSurface>>);
+struct CairoImage(Rc<RefCell<CairoSurface>>);
 
 fn boxes_for_gauss(sigma: f64, n: u32) -> Vec<u32> {
     let nf = f64::from(n);
@@ -92,7 +89,7 @@ fn boxes_for_gauss(sigma: f64, n: u32) -> Vec<u32> {
 
 impl CairoImage {
     fn new(surface: CairoSurface) -> CairoImage {
-        CairoImage(Arc::new(Mutex::new(surface)))
+        CairoImage(Rc::new(RefCell::new(surface)))
     }
     fn box_blur(&self, data: &mut [[u8; 4]], width: u32, height: u32, radius: u32, channel: usize) {
         let mut target = vec![[0, 0, 0, 0]; data.len()];
@@ -200,7 +197,7 @@ impl CairoImage {
     }
     fn blur(&self, radius: f64) {
         let (width, height) = {
-            let surface = &self.0.lock().unwrap().0;
+            let surface = &self.0.borrow_mut().0;
             (surface.get_width() as u32, surface.get_height() as u32)
         };
         let data: &mut [[u8; 4]] = unsafe {
@@ -213,10 +210,10 @@ impl CairoImage {
         for b in 0..=2 {
             self.box_blur(data, width, height, (boxes[b] - 1) / 2, 3);
         }
-        unsafe { cairo_sys::cairo_surface_mark_dirty(self.0.lock().unwrap().0.to_raw_none()) };
+        unsafe { cairo_sys::cairo_surface_mark_dirty(self.0.borrow_mut().0.to_raw_none()) };
     }
     fn get_data_ptr(&self) -> *const c_void {
-        let surface = &self.0.lock().unwrap().0;
+        let surface = &self.0.borrow_mut().0;
         unsafe {
             cairo_sys::cairo_surface_flush(surface.to_raw_none());
             match Status::from(cairo_sys::cairo_surface_status(surface.to_raw_none())) {
@@ -248,8 +245,8 @@ fn pixels_to_pango_pixels(pixels: f64) -> i32 {
 impl ImageRepresentation for CairoImage {
     fn get_size(&self) -> Vector2 {
         (
-            f64::from(self.0.lock().unwrap().get_width()),
-            f64::from(self.0.lock().unwrap().get_height()),
+            f64::from(self.0.borrow_mut().get_width()),
+            f64::from(self.0.borrow_mut().get_height()),
         )
             .into()
     }
@@ -285,7 +282,7 @@ impl ImageRepresentation for CairoImage {
 }
 
 struct CairoFrameState {
-    context: Mutex<CairoContext>,
+    context: RefCell<CairoContext>,
     contents: Vec<CairoObject>,
     viewport: Rect,
     color_profile: Option<Profile>,
@@ -294,7 +291,7 @@ struct CairoFrameState {
 }
 
 struct CairoFrame {
-    state: Arc<RwLock<CairoFrameState>>,
+    state: Rc<RefCell<CairoFrameState>>,
 }
 
 fn composite_clip(context: &CairoContext, entity: &Path) {
@@ -387,7 +384,7 @@ fn draw_path(context: &CairoContext, entity: &Path, pixel_ratio: f64) {
                 }
                 Texture::Image(image) => {
                     let pattern = image.as_any().downcast::<CairoImage>().unwrap();
-                    let surface = &pattern.0.lock().unwrap().0;
+                    let surface = &pattern.0.borrow_mut().0;
                     //TODO: coordinates here probd shouldn't be 0, 0
                     context.set_source_surface(surface, 0.0, 0.0);
                 }
@@ -408,7 +405,7 @@ fn draw_path(context: &CairoContext, entity: &Path, pixel_ratio: f64) {
                             f64::from(stop.color.b) / 255.,
                             f64::from(stop.color.a) / 255.,
                         );
-                    });;
+                    });
                     context.set_source(&Pattern::RadialGradient(canvas_gradient));
                 }
             }
@@ -437,7 +434,7 @@ fn draw_path(context: &CairoContext, entity: &Path, pixel_ratio: f64) {
                 }
                 Texture::Image(image) => {
                     let pattern = image.as_any().downcast::<CairoImage>().unwrap();
-                    let surface = &pattern.0.lock().unwrap().0;
+                    let surface = &pattern.0.borrow_mut().0;
                     //TODO: coordinates here probd shouldn't be 0, 0
                     context.set_source_surface(surface, 0.0, 0.0);
                 }
@@ -494,8 +491,8 @@ impl CairoFrame {
         let size = Vector2::default();
         let surface = ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
         Box::new(CairoFrame {
-            state: Arc::new(RwLock::new(CairoFrameState {
-                context: Mutex::new(CairoContext(cairo::Context::new(&surface))),
+            state: Rc::new(RefCell::new(CairoFrameState {
+                context: RefCell::new(CairoContext(cairo::Context::new(&surface))),
                 contents: vec![],
                 size,
                 color_profile: None,
@@ -510,25 +507,16 @@ impl CairoFrame {
     fn surface(&self) -> Box<CairoImage> {
         self.draw();
         Box::new(CairoImage::new(CairoSurface(
-            ImageSurface::from(
-                self.state
-                    .read()
-                    .unwrap()
-                    .context
-                    .lock()
-                    .unwrap()
-                    .get_target(),
-            )
-            .unwrap(),
+            ImageSurface::from(self.state.borrow().context.borrow().get_target()).unwrap(),
         )))
     }
     fn set_color_profile(&self, profile: Profile) {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.borrow_mut();
         state.color_profile = Some(profile);
     }
     fn layout_text(&self, entity: &Text) -> Layout {
-        let state = self.state.read().unwrap();
-        let context = state.context.lock().unwrap();
+        let state = self.state.borrow();
+        let context = state.context.borrow_mut();
         let layout = pangocairo::functions::create_layout(&context).unwrap();
         layout.set_text(&entity.content);
         let mut font_options = FontOptions::new();
@@ -581,8 +569,8 @@ impl CairoFrame {
     }
     fn draw_text(&self, matrix: [f64; 6], entity: &Text) {
         {
-            let state = self.state.read().unwrap();
-            let context = state.context.lock().unwrap();
+            let state = self.state.borrow();
+            let context = state.context.borrow_mut();
             context.restore();
             context.save();
             context.transform(Matrix {
@@ -595,8 +583,8 @@ impl CairoFrame {
             });
         }
         let layout = self.layout_text(&entity);
-        let state = self.state.read().unwrap();
-        let context = state.context.lock().unwrap();
+        let state = self.state.borrow();
+        let context = state.context.borrow_mut();
         match entity.origin {
             Origin::Baseline => {
                 let baseline = layout.get_baseline();
@@ -612,9 +600,9 @@ impl CairoFrame {
     }
 
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         {
-            let context = state.context.lock().unwrap();
+            let context = state.context.borrow_mut();
             context.restore();
             context.save();
             context.transform(Matrix {
@@ -626,7 +614,7 @@ impl CairoFrame {
                 y0: matrix[5],
             });
         }
-        let context = state.context.lock().unwrap();
+        let context = state.context.borrow_mut();
         if entity.shadows.is_empty() && entity.clip_segments.is_empty() {
             draw_path(&context, entity, state.pixel_ratio);
         }
@@ -643,7 +631,7 @@ impl Clone for CairoFrame {
 
 impl Frame for CairoFrame {
     fn set_pixel_ratio(&self, ratio: f64) {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.borrow_mut();
         state.pixel_ratio = ratio;
     }
 
@@ -656,27 +644,27 @@ impl Frame for CairoFrame {
             content.content,
             content.transform,
             content.depth,
-            self.state.read().unwrap().color_profile.clone(),
+            self.state.borrow().color_profile.clone(),
         );
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.borrow_mut();
         state.contents.push(object.clone());
         Box::new(object)
     }
 
     fn set_viewport(&self, viewport: Rect) {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.borrow_mut();
         state.viewport = viewport;
     }
 
     fn resize(&self, size: Vector2) {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.borrow_mut();
         state.size = size;
         let surface = ImageSurface::create(Format::ARgb32, size.x as i32, size.y as i32).unwrap();
-        state.context = Mutex::new(CairoContext(cairo::Context::new(&surface)));
+        state.context = RefCell::new(CairoContext(cairo::Context::new(&surface)));
     }
 
     fn get_size(&self) -> Vector2 {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         state.size / state.pixel_ratio
     }
 
@@ -706,9 +694,9 @@ impl Frame for CairoFrame {
     fn show(&self) {}
 
     fn draw(&self) {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         {
-            let context = state.context.lock().unwrap();
+            let context = state.context.borrow_mut();
             context.set_source_rgb(1., 1., 1.);
             let viewport = state.viewport;
             let size = state.size;
@@ -730,13 +718,13 @@ impl Frame for CairoFrame {
             context.save();
         }
         state.contents.iter().for_each(|object| {
-            let object_state = object.state.read().unwrap();
+            let object_state = object.state.borrow();
             let matrix = object_state.orientation.to_matrix();
             object.redraw(state.pixel_ratio);
-            (*object.cache_surface.lock().unwrap())
+            (*object.cache_surface.borrow_mut())
                 .iter()
                 .for_each(|surface| {
-                    let context = state.context.lock().unwrap();
+                    let context = state.context.borrow_mut();
                     context.restore();
                     context.save();
                     context.transform(Matrix {
@@ -763,14 +751,14 @@ struct CairoObjectState {
     orientation: Transform2,
     content: Rasterizable,
     depth: u32,
-    redraw: Mutex<bool>,
+    redraw: RefCell<bool>,
 }
 
 #[derive(Clone)]
 struct CairoObject {
-    state: Arc<RwLock<CairoObjectState>>,
+    state: Rc<RefCell<CairoObjectState>>,
     color_profile: Option<Profile>,
-    cache_surface: Arc<Mutex<Option<(CairoContext, Vector2)>>>,
+    cache_surface: Rc<RefCell<Option<(CairoContext, Vector2)>>>,
 }
 
 impl CairoObject {
@@ -781,22 +769,22 @@ impl CairoObject {
         color_profile: Option<Profile>,
     ) -> CairoObject {
         CairoObject {
-            state: Arc::new(RwLock::new(CairoObjectState {
+            state: Rc::new(RefCell::new(CairoObjectState {
                 orientation,
                 content: match color_profile.clone() {
                     Some(color_profile) => color_profile.transform_content(content),
                     None => content,
                 },
                 depth,
-                redraw: Mutex::new(true),
+                redraw: RefCell::new(true),
             })),
             color_profile,
-            cache_surface: Arc::new(Mutex::new(None)),
+            cache_surface: Rc::new(RefCell::new(None)),
         }
     }
     fn redraw(&self, pixel_ratio: f64) {
-        let state = self.state.read().unwrap();
-        let mut redraw = state.redraw.lock().unwrap();
+        let state = self.state.borrow();
+        let mut redraw = state.redraw.borrow_mut();
         if !*redraw {
             return;
         }
@@ -890,7 +878,7 @@ impl CairoObject {
                         image.blur(shadow.blur);
                     }
                     base_context.set_source_surface(
-                        &image.0.lock().unwrap().0,
+                        &image.0.borrow_mut().0,
                         (scale_offset.x + shadow.offset.x - (shadow.blur * 2.) - corners.0.x
                             + bounds.position.x)
                             * pixel_ratio,
@@ -904,7 +892,7 @@ impl CairoObject {
                 let path = path.clone().with_offset(-corners.0);
                 draw_path(&base_context, &path, pixel_ratio);
                 composite_clip(&base_context, &path);
-                *self.cache_surface.lock().unwrap() = Some((
+                *self.cache_surface.borrow_mut() = Some((
                     base_context,
                     Vector2::from((corners.0.x.min(0.), corners.0.y.min(0.))) * pixel_ratio,
                 ));
@@ -915,18 +903,18 @@ impl CairoObject {
 
 impl Object for CairoObject {
     fn get_transform(&self) -> Transform2 {
-        self.state.read().unwrap().orientation
+        self.state.borrow().orientation
     }
     fn apply_transform(&mut self, transform: Transform2) {
-        self.state.write().unwrap().orientation.transform(transform);
+        self.state.borrow_mut().orientation.transform(transform);
     }
     fn set_transform(&mut self, transform: Transform2) {
-        self.state.write().unwrap().orientation = transform;
+        self.state.borrow_mut().orientation = transform;
     }
     fn update(&mut self, input: Rasterizable) {
-        let mut state = self.state.write().unwrap();
-        *state.redraw.lock().unwrap() = if let Rasterizable::Path(path) = &input {
-            if let Rasterizable::Path(current_path) = &self.state.read().unwrap().content {
+        let mut state = self.state.borrow_mut();
+        *state.redraw.borrow_mut() = if let Rasterizable::Path(path) = &input {
+            if let Rasterizable::Path(current_path) = &self.state.borrow().content {
                 current_path.shadows != path.shadows
                     || current_path.segments != path.segments
                     || !(current_path.clip_segments.is_empty()
@@ -943,10 +931,10 @@ impl Object for CairoObject {
         };
     }
     fn get_depth(&self) -> u32 {
-        self.state.read().unwrap().depth
+        self.state.borrow().depth
     }
     fn set_depth(&mut self, depth: u32) {
-        self.state.write().unwrap().depth = depth;
+        self.state.borrow_mut().depth = depth;
     }
     fn box_clone(&self) -> Box<dyn Object> {
         Box::new(self.clone())
@@ -955,7 +943,7 @@ impl Object for CairoObject {
 
 #[derive(Clone)]
 struct Cairo {
-    state: Arc<RwLock<CairoState>>,
+    state: Rc<RefCell<CairoState>>,
 }
 
 fn new_shader(source: &str, kind: GLenum) -> GLuint {
@@ -972,14 +960,14 @@ struct CairoState {
     root_frame: Option<Box<dyn Frame>>,
     event_sender: Sender<Event>,
     event_stream: Receiver<Event>,
-    event_task: Arc<AtomicTask>,
+    event_task: Rc<AtomicTask>,
     size: ObserverCell<Vector2>,
 }
 
 #[derive(Clone)]
 struct CairoInput {
     event_stream: Receiver<Event>,
-    event_task: Arc<AtomicTask>,
+    event_task: Rc<AtomicTask>,
 }
 
 impl Input for CairoInput {
@@ -1020,7 +1008,7 @@ impl Stream for CairoInput {
 
 impl Provider for Cairo {
     fn input(&self) -> Box<dyn Input> {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         Box::new(CairoInput {
             event_stream: state.event_stream.clone(),
             event_task: state.event_task.clone(),
@@ -1040,9 +1028,9 @@ impl InactiveCanvas for Cairo {
     fn run(self: Box<Self>) {
         self.run_with(Box::new(|_| {}));
     }
-    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + Send + 'static>) {
+    fn run_with(self: Box<Self>, mut cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + 'static>) {
         let (mut el, frame, size, windowed_context) = {
-            let state = self.state.read().unwrap();
+            let state = self.state.borrow();
             let size = state.size.get();
             let size = LogicalSize::new(size.x, size.y);
             let el = glutin::EventsLoop::new();
@@ -1162,15 +1150,13 @@ void main()
 
         let mut running = true;
         let mut last_time = SystemTime::now();
-        let ctx = self.clone();
-        std::thread::spawn(move || cb(ctx));
         let send_events = {
-            let state = self.state.read().unwrap();
-            Arc::strong_count(&state.event_task) != 1
+            let state = self.state.borrow();
+            Rc::strong_count(&state.event_task) != 1
         };
         while running {
             el.poll_events(|event| {
-                let state = self.state.read().unwrap();
+                let state = self.state.borrow();
                 let e = if let glutin::Event::WindowEvent { event, .. } = event.clone() {
                     match event {
                         glutin::WindowEvent::CloseRequested => {
@@ -1242,7 +1228,7 @@ void main()
                 });
             });
 
-            let state = self.state.read().unwrap();
+            let state = self.state.borrow();
 
             let now = SystemTime::now();
             if send_events {
@@ -1294,6 +1280,7 @@ void main()
                 gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4);
             }
             windowed_context.swap_buffers().unwrap();
+            cb(self.clone());
         }
     }
 }
@@ -1301,7 +1288,7 @@ void main()
 impl InteractiveCanvas for Cairo {
     fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveCanvas> {
         {
-            let mut state = self.state.write().unwrap();
+            let mut state = self.state.borrow_mut();
             state.root_frame = Some(root);
         }
         self
@@ -1317,11 +1304,11 @@ impl Canvas for Cairo {
 pub(crate) fn new() -> Box<dyn InteractiveCanvas> {
     let (event_sender, event_stream) = unbounded();
     let window = Cairo {
-        state: Arc::new(RwLock::new(CairoState {
+        state: Rc::new(RefCell::new(CairoState {
             //need to figure out how to select size, temp default
             size: ObserverCell::new((700., 700.).into()),
             root_frame: None,
-            event_task: Arc::new(AtomicTask::new()),
+            event_task: Rc::new(AtomicTask::new()),
             event_stream,
             event_sender,
         })),

@@ -25,7 +25,7 @@ pub trait Provider {
 }
 
 /// An input event stream.
-pub trait Input: Stream<Item = Event, Error = ()> + Send + Sync {
+pub trait Input: Stream<Item = Event, Error = ()> {
     #[doc(hidden)]
     fn box_clone(&self) -> Box<dyn Input>;
 }

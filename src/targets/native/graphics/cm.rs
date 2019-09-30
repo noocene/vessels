@@ -76,9 +76,6 @@ mod cm_backing {
     }
 }
 
-unsafe impl Sync for Profile {}
-unsafe impl Send for Profile {}
-
 struct ProfileState {
     display_profile: lcms2::Profile,
     srgb_profile: lcms2::Profile,
