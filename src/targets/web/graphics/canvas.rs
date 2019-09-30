@@ -10,10 +10,12 @@ use crate::graphics::{
 use crate::input::{windowing::Event as WindowingEvent, Event, Input, Provider};
 use crate::targets::web;
 use crate::util::ObserverCell;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 
 use itertools::Itertools;
 
-use stdweb::traits::{IChildNode, IElement, IEvent, IEventTarget, IHtmlElement, INode};
+use stdweb::traits::{IChildNode, IElement, IEvent, IEventTarget, INode};
 use stdweb::unstable::TryInto;
 use stdweb::web::{
     document,
@@ -34,7 +36,9 @@ type CanvasImage = CanvasElement;
 
 impl ImageRepresentation for CanvasImage {
     fn get_size(&self) -> Vector2 {
-        let dpr = window().device_pixel_ratio();
+        let dpr = web_sys::window()
+            .expect("Cannot access window")
+            .device_pixel_ratio();
         (
             f64::from(self.width()) / dpr,
             f64::from(self.height()) / dpr,
@@ -170,7 +174,11 @@ impl CanvasFrame {
             .try_into()
             .unwrap();
         let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
-        let clip_frame = Some(CanvasFrame::new_raw(window().device_pixel_ratio()));
+        let clip_frame = Some(CanvasFrame::new_raw(
+            web_sys::window()
+                .expect("Cannot access window")
+                .device_pixel_ratio(),
+        ));
         Box::new(CanvasFrame {
             state: Arc::new(RwLock::new(CanvasFrameState {
                 canvas,
@@ -918,7 +926,11 @@ impl InteractiveCanvas for Canvas {
 impl VesselsCanvas for Canvas {
     fn frame(&self) -> Box<dyn Frame> {
         let frame = CanvasFrame::new();
-        frame.set_pixel_ratio(window().device_pixel_ratio());
+        frame.set_pixel_ratio(
+            web_sys::window()
+                .expect("Cannot access window")
+                .device_pixel_ratio(),
+        );
         frame
     }
 }
@@ -948,39 +960,46 @@ impl Canvas {
 }
 
 pub(crate) fn new() -> Box<dyn InteractiveCanvas> {
-    js! {
-        let elem = document.querySelector(".root");
-        if (elem !== null) {
-            @{|| {panic!("A graphics context has already been started")}}();
-        }
-    };
-    document()
-        .head()
-        .unwrap()
-        .append_html(
-            r#"
-<title></title>
-<style>
-body, html, canvas.root {
-    height: 100%;
-}
-body {
-    margin: 0;
-    overflow: hidden;
-}
-canvas {
-    display: none;
-}
-canvas.root {
-    width: 100%;
-    display: initial;
-}
-</style>
-            "#,
-        )
-        .unwrap();
+    let window = web_sys::window().unwrap();
+    let document = window.document().unwrap();
+    if document
+        .query_selector(".root")
+        .expect("Could not select for root class")
+        .is_some()
+    {
+        panic!("A graphics context has already been started");
+    }
+    let head = document.head().unwrap();
+    head.append_child(
+        &document
+            .create_element("title")
+            .expect("Could not create title"),
+    )
+    .expect("Could not append title");
+    let style = document
+        .create_element("style")
+        .expect("Could not create style");
+    style.set_inner_html(
+        r#"
+    body, html, canvas.root {
+        height: 100%;
+    }
+    body {
+        margin: 0;
+        overflow: hidden;
+    }
+    canvas {
+        display: none;
+    }
+    canvas.root {
+        width: 100%;
+        display: initial;
+    }
+                "#,
+    );
+    head.append_child(&style).expect("Could not append style");
 
-    let body = document().body().unwrap();
+    let body = document.body().unwrap();
 
     let gfx = Canvas {
         state: Arc::new(RwLock::new(CanvasState {
@@ -994,13 +1013,19 @@ canvas.root {
 
     let gfx_resize = gfx.clone();
 
-    window().add_event_listener(move |_: ResizeEvent| {
-        let state = gfx_resize.state.read().unwrap();
-        let body = document().body().unwrap();
-        state
-            .size
-            .set((body.offset_width().into(), body.offset_height().into()).into());
-    });
+    window
+        .add_event_listener_with_callback(
+            "resize",
+            Closure::wrap(Box::new(move || {
+                let state = gfx_resize.state.read().unwrap();
+                state
+                    .size
+                    .set((body.offset_width().into(), body.offset_height().into()).into());
+            }) as Box<dyn Fn()>)
+            .as_ref()
+            .unchecked_ref(),
+        )
+        .expect("Cannot register resize event listener");
 
     Box::new(gfx)
 }
