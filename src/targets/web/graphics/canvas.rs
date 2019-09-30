@@ -18,10 +18,8 @@ use itertools::Itertools;
 use stdweb::traits::{IChildNode, IElement, IEvent, IEventTarget, INode};
 use stdweb::unstable::TryInto;
 use stdweb::web::{
-    document,
-    event::{ContextMenuEvent, ResizeEvent},
-    window, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap, LineJoin, TextAlign,
-    TextBaseline,
+    document, event::ContextMenuEvent, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap,
+    LineJoin, TextAlign, TextBaseline,
 };
 
 use stdweb::web::html_element::CanvasElement;
@@ -900,9 +898,16 @@ impl InactiveCanvas for Canvas {
             let state = self.state.read().unwrap();
             state.root_frame.as_ref().unwrap().show();
             let cloned = self.clone();
-            window().request_animation_frame(move |start_time| {
-                cloned.animate(start_time, start_time);
-            });
+            web_sys::window()
+                .unwrap()
+                .request_animation_frame(
+                    Closure::wrap(Box::new(move |start_time: f64| {
+                        cloned.animate(start_time, start_time);
+                    }) as Box<dyn Fn(f64)>)
+                    .as_ref()
+                    .unchecked_ref(),
+                )
+                .expect("Cannot register animation frame request");
         }
         (cb)(self);
     }
@@ -953,9 +958,16 @@ impl Canvas {
             None => {}
         }
         let cloned = self.clone();
-        window().request_animation_frame(move |new_start_time| {
-            cloned.animate(new_start_time, start_time);
-        });
+        web_sys::window()
+            .unwrap()
+            .request_animation_frame(
+                Closure::wrap(Box::new(move |new_start_time: f64| {
+                    cloned.animate(new_start_time, start_time);
+                }) as Box<dyn Fn(f64)>)
+                .as_ref()
+                .unchecked_ref(),
+            )
+            .expect("Cannot register animation frame request");
     }
 }
 
