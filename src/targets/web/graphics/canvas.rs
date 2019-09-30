@@ -3,11 +3,11 @@ use crate::graphics::text::{Align, Font, Origin, Text, Weight, Wrap};
 use crate::graphics::{
     canvas::{
         ActiveCanvas, Canvas as VesselsCanvas, CanvasContext, Content, Frame, InactiveCanvas,
-        InteractiveCanvas, Object, Rasterizable, Rasterizer, Ticker,
+        InteractiveCanvas, Object, Rasterizable, Rasterizer,
     },
     Image, ImageRepresentation, LDRColor, Rect, Texture2, Transform2, Vector2,
 };
-use crate::input::{Input, Provider};
+use crate::input::{windowing::Event as WindowingEvent, Event, Input, Provider};
 use crate::targets::web;
 use crate::util::ObserverCell;
 
@@ -835,6 +835,7 @@ impl Frame for CanvasFrame {
     }
 }
 
+#[derive(Clone)]
 struct Canvas {
     state: Arc<RwLock<CanvasState>>,
 }
@@ -842,7 +843,7 @@ struct Canvas {
 struct CanvasState {
     root_frame: Option<Box<dyn Frame>>,
     size: ObserverCell<Vector2>,
-    tick_handlers: Vec<Box<dyn FnMut(f64) + Send + Sync>>,
+    input: web::input::Input,
 }
 
 impl Rasterizer for Canvas {
@@ -870,13 +871,7 @@ impl Rasterizer for Canvas {
 
 impl Provider for Canvas {
     fn input(&self) -> Box<dyn Input> {
-        web::input::Input::new()
-    }
-}
-
-impl Ticker for Canvas {
-    fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>) {
-        self.state.write().unwrap().tick_handlers.push(handler);
+        self.state.read().unwrap().input.box_clone()
     }
 }
 
@@ -905,14 +900,6 @@ impl InactiveCanvas for Canvas {
     }
 }
 
-impl Clone for Canvas {
-    fn clone(&self) -> Canvas {
-        Canvas {
-            state: self.state.clone(),
-        }
-    }
-}
-
 impl InteractiveCanvas for Canvas {
     fn start(self: Box<Self>, root: Box<dyn Frame>) -> Box<dyn InactiveCanvas> {
         {
@@ -938,11 +925,10 @@ impl VesselsCanvas for Canvas {
 
 impl Canvas {
     fn animate(&self, start_time: f64, last_start_time: f64) {
-        let mut state = self.state.write().unwrap();
-        state
-            .tick_handlers
-            .iter_mut()
-            .for_each(|handler| (handler)(start_time - last_start_time));
+        let state = self.state.read().unwrap();
+        state.input.send(Event::Windowing(WindowingEvent::Redraw(
+            start_time - last_start_time,
+        )));
         match &state.root_frame {
             Some(frame) => {
                 if state.size.is_dirty() {
@@ -1002,7 +988,7 @@ canvas.root {
                 (body.offset_width().into(), body.offset_height().into()).into(),
             ),
             root_frame: None,
-            tick_handlers: vec![],
+            input: web::input::Input::new(),
         })),
     };
 

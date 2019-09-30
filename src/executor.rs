@@ -1,4 +1,6 @@
+#[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
 use crate::targets;
+
 use futures::Future;
 
 /// Runs the provided future using an appropriate platform-specific executor.

@@ -8,7 +8,7 @@ pub mod mouse;
 pub mod windowing;
 
 /// Encapsulates a variety of possible input events.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum Event {
     /// A keyboard event.
     Keyboard(keyboard::Event),
@@ -25,7 +25,7 @@ pub trait Provider {
 }
 
 /// An input event stream.
-pub trait Input: Stream<Item = Event, Error = ()> + Send {
+pub trait Input: Stream<Item = Event, Error = ()> + Send + Sync {
     #[doc(hidden)]
     fn box_clone(&self) -> Box<dyn Input>;
 }

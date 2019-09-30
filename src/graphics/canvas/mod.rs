@@ -171,7 +171,7 @@ pub trait Canvas: Rasterizer {
 }
 
 /// An aggregated context with bound graphics.
-pub trait CanvasContext: Canvas + Provider + Ticker + Send {}
+pub trait CanvasContext: Canvas + Provider + Send {}
 
 impl Clone for Box<dyn ActiveCanvas> {
     fn clone(&self) -> Box<dyn ActiveCanvas> {
@@ -191,12 +191,6 @@ pub trait InactiveCanvas: CanvasContext {
     fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + Send + 'static>);
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
     fn run(self: Box<Self>);
-}
-
-/// A type that permits the binding of tick handlers.
-pub trait Ticker {
-    /// Binds a handler to receive ticks.
-    fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>);
 }
 
 /// A graphics context that can provide input and windowing.

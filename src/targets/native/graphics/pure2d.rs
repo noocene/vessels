@@ -4,7 +4,7 @@ use crate::graphics::text::{Origin, Text, Weight, Wrap};
 use crate::graphics::{
     canvas::{
         ActiveCanvas, Canvas, CanvasContext, Content, Frame, InactiveCanvas, InteractiveCanvas,
-        Object, Rasterizable, Rasterizer, Ticker,
+        Object, Rasterizable, Rasterizer,
     },
     Image, ImageRepresentation, LDRColor, Rect, Texture2, Transform2, Vector2,
 };
@@ -973,7 +973,6 @@ struct CairoState {
     event_sender: Sender<Event>,
     event_stream: Receiver<Event>,
     event_task: Arc<AtomicTask>,
-    tick_handlers: Vec<Box<dyn FnMut(f64) + Send + Sync>>,
     size: ObserverCell<Vector2>,
 }
 
@@ -986,12 +985,6 @@ struct CairoInput {
 impl Input for CairoInput {
     fn box_clone(&self) -> Box<dyn Input> {
         Box::new(self.clone())
-    }
-}
-
-impl Ticker for Cairo {
-    fn bind(&mut self, handler: Box<dyn FnMut(f64) + 'static + Send + Sync>) {
-        self.state.write().unwrap().tick_handlers.push(handler);
     }
 }
 
@@ -1171,6 +1164,10 @@ void main()
         let mut last_time = SystemTime::now();
         let ctx = self.clone();
         std::thread::spawn(move || cb(ctx));
+        let send_events = {
+            let state = self.state.read().unwrap();
+            Arc::strong_count(&state.event_task) != 1
+        };
         while running {
             el.poll_events(|event| {
                 let state = self.state.read().unwrap();
@@ -1238,23 +1235,27 @@ void main()
                     None
                 };
                 e.map(|e| {
-                    if Arc::strong_count(&state.event_task) != 1 {
+                    if send_events {
                         state.event_sender.send(e).unwrap();
                         state.event_task.notify()
                     }
                 });
             });
 
-            {
-                let mut state = self.state.write().unwrap();
-                let now = SystemTime::now();
-                state.tick_handlers.iter_mut().for_each(|handler| {
-                    (handler)(now.duration_since(last_time).unwrap().as_nanos() as f64 / 1_000_000.)
-                });
-                last_time = now;
-            }
-
             let state = self.state.read().unwrap();
+
+            let now = SystemTime::now();
+            if send_events {
+                state
+                    .event_sender
+                    .send(Event::Windowing(WindowingEvent::Redraw(
+                        now.duration_since(last_time).unwrap().as_nanos() as f64 / 1_000_000.,
+                    )))
+                    .unwrap();
+                state.event_task.notify();
+            }
+            last_time = now;
+
             if state.size.is_dirty() {
                 let size = state.size.get();
                 frame.set_viewport(Rect::new((0., 0.), size));
@@ -1323,7 +1324,6 @@ pub(crate) fn new() -> Box<dyn InteractiveCanvas> {
             event_task: Arc::new(AtomicTask::new()),
             event_stream,
             event_sender,
-            tick_handlers: vec![],
         })),
     };
 

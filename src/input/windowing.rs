@@ -7,4 +7,6 @@ pub enum Event {
     Resize,
     /// A window move event.
     Move(Vector2),
+    /// A redraw event. Provides the delta since the last redraw.
+    Redraw(f64),
 }

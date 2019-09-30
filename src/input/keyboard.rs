@@ -272,7 +272,7 @@ pub enum Action {
 }
 
 /// A keyboard event.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Event {
     /// The associated action.
     pub action: Action,
