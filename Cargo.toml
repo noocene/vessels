@@ -14,7 +14,7 @@ crossbeam-channel = "0.3.9"
 wasm-bindgen = "0.2.51"
 itertools = "0.8.0"
 stdweb = "0.4.13"
-web-sys = { version = "0.3.28", features = ["Document", "Window", "HtmlHeadElement", "Element", "HtmlElement", "Node", "EventTarget"] }
+web-sys = { version = "0.3.28", features = ["Document", "Window", "HtmlHeadElement", "Element", "HtmlElement", "Node", "EventTarget", "MouseEvent", "Event", "WheelEvent", "KeyboardEvent"] }
 stdweb-derive = "0.5.1"
 js-sys = "0.3.28"
 

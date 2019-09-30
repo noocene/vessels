@@ -1025,19 +1025,16 @@ pub(crate) fn new() -> Box<dyn InteractiveCanvas> {
 
     let gfx_resize = gfx.clone();
 
-    window
-        .add_event_listener_with_callback(
-            "resize",
-            Closure::wrap(Box::new(move || {
-                let state = gfx_resize.state.read().unwrap();
-                state
-                    .size
-                    .set((body.offset_width().into(), body.offset_height().into()).into());
-            }) as Box<dyn Fn()>)
-            .as_ref()
-            .unchecked_ref(),
-        )
-        .expect("Cannot register resize event listener");
+    window.set_onresize(Some(
+        Closure::wrap(Box::new(move || {
+            let state = gfx_resize.state.read().unwrap();
+            state
+                .size
+                .set((body.offset_width().into(), body.offset_height().into()).into());
+        }) as Box<dyn Fn()>)
+        .as_ref()
+        .unchecked_ref(),
+    ));
 
     Box::new(gfx)
 }
