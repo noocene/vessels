@@ -47,25 +47,21 @@ pub enum NegotiationItem {
 
 /// An active peer-to-peer session negotiation.
 pub trait Negotiation:
-    Sink<SinkItem = NegotiationItem, SinkError = Error>
-    + Stream<Item = NegotiationItem, Error = Error>
-    + Send
+    Sink<SinkItem = NegotiationItem, SinkError = Error> + Stream<Item = NegotiationItem, Error = Error>
 {
 }
 
 /// A peer-to-peer network coordinator connected to a single remote peer.
-pub trait Peer: Stream<Item = Channel, Error = Error> + Send {
+pub trait Peer: Stream<Item = Channel, Error = Error> {
     /// Creates a new data channel.
-    fn data_channel(
-        &mut self,
-    ) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error> + Send>;
+    fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error>>;
 }
 
 impl dyn Peer {
     /// Creates a new peer and negotiation pair.
     pub fn new(
     ) -> impl Future<Item = (Box<dyn Peer + 'static>, Box<dyn Negotiation + 'static>), Error = Error>
-                 + Send {
+    {
         #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
         return targets::web::network::mesh::new();
         #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]

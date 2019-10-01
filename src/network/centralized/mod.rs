@@ -6,4 +6,4 @@ use futures::Stream;
 pub mod socket;
 
 /// A server that provides a stream of connections.
-pub type Server = Box<dyn Stream<Item = Box<dyn DataChannel>, Error = Error> + Send>;
+pub type Server = Box<dyn Stream<Item = Box<dyn DataChannel>, Error = Error>>;
