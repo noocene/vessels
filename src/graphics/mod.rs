@@ -18,7 +18,7 @@ pub trait ToHexLDRColor {
 }
 
 /// A representation type of some target-specific image format.
-pub trait ImageRepresentation: Any + Sync + Send {
+pub trait ImageRepresentation {
     #[doc(hidden)]
     fn box_clone(&self) -> Box<dyn ImageRepresentation>;
     #[doc(hidden)]

@@ -4,7 +4,7 @@ use futures::Async;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::result::Result as StdResult;
-use stdweb::Once;
+use wasm_bindgen::{prelude::*, JsValue};
 
 unsafe fn clone_raw<T>(ptr: *const T) -> Rc<T> {
     let result = Rc::from_raw(ptr);
@@ -44,11 +44,10 @@ impl SpawnedTask {
 
     fn notify(spawned: Rc<SpawnedTask>) {
         if !spawned.is_queued.replace(true) {
-            js! {@(no_return)
-                Promise.resolve().then(function () {
-                    @{Once(move || spawned.poll())}();
-                });
-            }
+            js_sys::Promise::resolve(&JsValue::NULL)
+                .then(&Closure::wrap(
+                    Box::new(move |_| spawned.poll()) as Box<dyn FnMut(JsValue)>
+                ));
         }
     }
 }

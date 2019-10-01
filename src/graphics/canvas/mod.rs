@@ -11,7 +11,7 @@ use crate::{
 use std::any::Any;
 
 /// Represents content optimized and cached for rendering.
-pub trait Object: Sync + Send {
+pub trait Object {
     /// Composes a transformation with the existing transformation of the [Object].
     fn apply_transform(&mut self, transform: Transform2);
     /// Gets the current trasnformation of the [Object].
@@ -35,7 +35,7 @@ impl Clone for Box<dyn Object> {
 }
 
 /// An isolated rendering context.
-pub trait Frame: Sync + Send {
+pub trait Frame {
     /// Adds content to the [Frame].
     fn add(&mut self, content: Content) -> Box<dyn Object>;
     /// Resizes the [Frame]. This does not resize the viewport.
@@ -159,7 +159,7 @@ impl From<Box<dyn ImageRepresentation>> for Rasterizable {
 }
 
 /// Provides an interface for the rasterization of content.
-pub trait Rasterizer: Sync + Send {
+pub trait Rasterizer {
     /// Returns a rasterization of the input.
     fn rasterize(&self, input: Rasterizable, vector: Vector2) -> Box<dyn ImageRepresentation>;
 }
@@ -171,7 +171,7 @@ pub trait Canvas: Rasterizer {
 }
 
 /// An aggregated context with bound graphics.
-pub trait CanvasContext: Canvas + Provider + Send {}
+pub trait CanvasContext: Canvas + Provider {}
 
 impl Clone for Box<dyn ActiveCanvas> {
     fn clone(&self) -> Box<dyn ActiveCanvas> {
@@ -187,8 +187,8 @@ pub trait ActiveCanvas: CanvasContext {
 
 /// An inactive canvas.
 pub trait InactiveCanvas: CanvasContext {
-    /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate. Calls the provided callback once upon execution and moves an active context graphics into it.
-    fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + Send + 'static>);
+    /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate. Calls the provided callback every frame during execution and provides an active context graphics to it.
+    fn run_with(self: Box<Self>, cb: Box<dyn FnMut(Box<dyn ActiveCanvas>) + 'static>);
     /// Begins execution of the runloop. Consumes the context and blocks forever where appropriate.
     fn run(self: Box<Self>);
 }
