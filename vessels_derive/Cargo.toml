@@ -1,13 +1,13 @@
 [package]
 authors = ["Izzy Swart", "Tyler Poon"]
 edition = "2018"
-name = "vitruvia_derive"
+name = "vessels_derive"
 version = "0.1.0"
 
 [lib]
 proc-macro = true
 
 [dependencies]
-syn = "0.15.34"
+syn = { version = "0.15.34", features = ["full"] }
 quote = "0.6.12"
 proc-macro2 = "0.4.30"

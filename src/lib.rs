@@ -1,4 +1,4 @@
-//! Vitruvia is a general-purpose hardware abstraction layer that aims to provide a
+//! vessels is a general-purpose hardware abstraction layer that aims to provide a
 //! consistent and ergonomic set of interfaces for common platform-specific APIs.
 
 #![warn(
@@ -20,19 +20,15 @@
 extern crate stdweb;
 
 mod errors;
-/// Provides interfaces to 2D graphics APIs.
-pub mod executor;
 /// Provides a cross-platform abstracted asynchronous executor.
-pub mod graphics_2d;
-/// Provides interfaces to user interaction/HID APIs.
-pub mod interaction;
+pub mod executor;
+/// Provides interfaces to graphics APIs.
+pub mod graphics;
+/// Provides interfaces to user input/HID APIs.
+pub mod input;
 /// Provides interfaces to abstracted networking APIs.
 pub mod network;
-/// Provides helper types that allow ergonomic construction and styling of 2D vector graphics.
-pub mod path;
 /// Provides functionality for generating APIs and other RPC protocols.
 pub mod protocol;
 mod targets;
-/// Provides types to help represent and construct styled text.
-pub mod text;
 mod util;
