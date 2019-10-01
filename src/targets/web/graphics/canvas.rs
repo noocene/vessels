@@ -15,22 +15,12 @@ use wasm_bindgen::JsCast;
 
 use itertools::Itertools;
 
-use stdweb::traits::{IChildNode, IElement, IEvent, IEventTarget, INode};
-use stdweb::unstable::TryInto;
-use stdweb::web::{
-    document, event::ContextMenuEvent, CanvasPattern, CanvasRenderingContext2d, FillRule, LineCap,
-    LineJoin, TextAlign, TextBaseline,
-};
-
-use stdweb::web::html_element::CanvasElement;
-
 use std::cell::RefCell;
-use std::ops::Deref;
 use std::rc::Rc;
 
 use std::any::Any;
 
-type CanvasImage = CanvasElement;
+type CanvasImage = web_sys::HtmlCanvasElement;
 
 impl ImageRepresentation for CanvasImage {
     fn get_size(&self) -> Vector2 {
@@ -59,21 +49,30 @@ impl ImageRepresentation for CanvasImage {
         }
     }
     fn from_texture(texture: Image<LDRColor, Texture2>) -> CanvasImage {
-        let canvas: CanvasElement = document()
-            .create_element("canvas")
+        let canvas: web_sys::HtmlCanvasElement = web_sys::window()
             .unwrap()
-            .try_into()
+            .document()
+            .unwrap()
+            .create_element("canvas")
+            .expect("Could not create canvas")
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .map_err(|_| ())
+            .unwrap();
+        let context: web_sys::CanvasRenderingContext2d = canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<web_sys::CanvasRenderingContext2d>()
             .unwrap();
         canvas.set_width(texture.format.width);
         canvas.set_height(texture.format.height);
-        let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
         let image = context
-            .create_image_data(
+            .create_image_data_with_sw_and_sh(
                 f64::from(texture.format.width),
                 f64::from(texture.format.height),
             )
             .unwrap();
-        context.put_image_data(image, 0., 0.).unwrap();
+        context.put_image_data(&image, 0., 0.).unwrap();
         canvas
     }
 }
@@ -126,8 +125,8 @@ impl Object for CanvasObject {
 }
 
 struct CanvasFrameState {
-    context: CanvasRenderingContext2d,
-    canvas: CanvasElement,
+    context: web_sys::CanvasRenderingContext2d,
+    canvas: web_sys::HtmlCanvasElement,
     contents: Vec<CanvasObject>,
     pixel_ratio: f64,
     viewport: Rect,
@@ -147,12 +146,21 @@ struct CanvasFrame {
 
 impl CanvasFrame {
     fn new_raw(pixel_ratio: f64) -> CanvasFrame {
-        let canvas: CanvasElement = document()
-            .create_element("canvas")
+        let canvas: web_sys::HtmlCanvasElement = web_sys::window()
             .unwrap()
-            .try_into()
+            .document()
+            .unwrap()
+            .create_element("canvas")
+            .expect("Could not create canvas")
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .map_err(|_| ())
             .unwrap();
-        let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
+        let context: web_sys::CanvasRenderingContext2d = canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<web_sys::CanvasRenderingContext2d>()
+            .unwrap();
         CanvasFrame {
             state: Rc::new(RefCell::new(CanvasFrameState {
                 canvas,
@@ -166,17 +174,22 @@ impl CanvasFrame {
         }
     }
     fn new() -> Box<CanvasFrame> {
-        let canvas: CanvasElement = document()
-            .create_element("canvas")
+        let window = web_sys::window().unwrap();
+        let canvas: web_sys::HtmlCanvasElement = window
+            .document()
             .unwrap()
-            .try_into()
+            .create_element("canvas")
+            .expect("Could not create canvas")
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .map_err(|_| ())
             .unwrap();
-        let context: CanvasRenderingContext2d = canvas.get_context().unwrap();
-        let clip_frame = Some(CanvasFrame::new_raw(
-            web_sys::window()
-                .expect("Cannot access window")
-                .device_pixel_ratio(),
-        ));
+        let context: web_sys::CanvasRenderingContext2d = canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<web_sys::CanvasRenderingContext2d>()
+            .unwrap();
+        let clip_frame = Some(CanvasFrame::new_raw(window.device_pixel_ratio()));
         Box::new(CanvasFrame {
             state: Rc::new(RefCell::new(CanvasFrameState {
                 canvas,
@@ -191,22 +204,29 @@ impl CanvasFrame {
     }
     fn set_root(&self) {
         let state = self.state.borrow();
-        js! {
-            let elem = document.querySelector(".root");
-            if (elem !== null) {
-                @{|| {panic!("A graphics context has already been started")}}();
-            }
-        };
-        state.canvas.class_list().add("root").unwrap();
+        if web_sys::window()
+            .unwrap()
+            .document()
+            .unwrap()
+            .query_selector(".root")
+            .expect("Could not select for root class")
+            .is_some()
+        {
+            panic!("A graphics context has already been started");
+        }
+        state.canvas.class_list().add_1("root").unwrap();
     }
     fn draw_shadows(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.borrow();
         for shadow in &entity.shadows {
             state.context.restore();
             state.context.save();
-            state.context.transform(
-                matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
-            );
+            state
+                .context
+                .transform(
+                    matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+                )
+                .unwrap();
             let spread = shadow.spread * 2.;
             let size = entity.bounds().size;
             let scale = (size + spread) / size;
@@ -219,12 +239,16 @@ impl CanvasFrame {
                 .into();
             let new_size = size + spread;
             let scale_offset = (size - new_size) / 2.;
-            state.context.translate(scale_offset.x, scale_offset.y);
-            state.context.scale(scale.x, scale.y);
+            state
+                .context
+                .translate(scale_offset.x, scale_offset.y)
+                .unwrap();
+            state.context.scale(scale.x, scale.y).unwrap();
             state.context.move_to(-offset.x, -offset.y);
             state
                 .context
-                .translate(-offset.x / scale.x, -offset.y / scale.y);
+                .translate(-offset.x / scale.x, -offset.y / scale.y)
+                .unwrap();
             segments.for_each(|segment| match segment {
                 Segment::LineTo(point) => {
                     state.context.line_to(point.x, point.y);
@@ -258,14 +282,19 @@ impl CanvasFrame {
             state
                 .context
                 .set_shadow_offset_y((shadow.offset.y + offset.y) * state.pixel_ratio);
-            state.context.set_fill_style_color("rgba(255,255,255,1)");
-            state.context.fill(FillRule::NonZero);
+            state
+                .context
+                .set_fill_style(&"rgba(255,255,255,1)".to_owned().into());
+            state.context.fill();
         }
         state.context.restore();
         state.context.save();
-        state.context.transform(
-            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
-        );
+        state
+            .context
+            .transform(
+                matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+            )
+            .unwrap();
         state.context.set_shadow_color("rgba(255,255,255,0)");
     }
     fn draw_path_clipped(&self, matrix: [f64; 6], entity: &Path) {
@@ -273,12 +302,16 @@ impl CanvasFrame {
         if !entity.clip_segments.is_empty() && state.clip_frame.is_some() {
             state.context.restore();
             state.context.save();
-            state.context.transform(
-                matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
-            );
             state
                 .context
-                .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
+                .transform(
+                    matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+                )
+                .unwrap();
+            state
+                .context
+                .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio)
+                .unwrap();
             let frame = state.clip_frame.as_ref().unwrap();
             let mut matrix = matrix;
             matrix[4] *= state.pixel_ratio;
@@ -288,10 +321,11 @@ impl CanvasFrame {
             frame.draw_path(matrix, entity);
             frame.composite_clip(matrix, entity);
             let el = frame.element();
-            js! {
-                @{&state.context}.imageSmoothingEnabled = false;
-                @{&state.context}.drawImage(@{&el}, @{-matrix[4]}, @{-matrix[5]});
-            }
+            state.context.set_image_smoothing_enabled(false);
+            state
+                .context
+                .draw_image_with_html_canvas_element(&el, -matrix[4], -matrix[5])
+                .unwrap();
             frame.clear();
         } else {
             self.draw_path(matrix, entity);
@@ -305,9 +339,12 @@ impl CanvasFrame {
         let state = self.state.borrow();
         state.context.restore();
         state.context.save();
-        state.context.transform(
-            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
-        );
+        state
+            .context
+            .transform(
+                matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+            )
+            .unwrap();
         state.context.begin_path();
         entity
             .clip_segments
@@ -330,18 +367,22 @@ impl CanvasFrame {
                         .quadratic_curve_to(handle.x, handle.y, point.x, point.y);
                 }
             });
-        js! {
-            @{&state.context}.globalCompositeOperation = "destination-in";
-        };
-        state.context.fill(FillRule::NonZero);
+        state
+            .context
+            .set_global_composite_operation("destination-in")
+            .unwrap();
+        state.context.fill();
     }
     fn draw_path(&self, matrix: [f64; 6], entity: &Path) {
         let state = self.state.borrow();
         state.context.restore();
         state.context.save();
-        state.context.transform(
-            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
-        );
+        state
+            .context
+            .transform(
+                matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+            )
+            .unwrap();
         self.draw_shadows(matrix, &entity);
         state.context.begin_path();
         let segments = entity.segments.iter();
@@ -370,17 +411,19 @@ impl CanvasFrame {
         match &entity.stroke {
             Some(stroke) => {
                 state.context.set_line_cap(match &stroke.cap {
-                    StrokeCapType::Butt => LineCap::Butt,
-                    StrokeCapType::Round => LineCap::Round,
+                    StrokeCapType::Butt => "butt",
+                    StrokeCapType::Round => "round",
                 });
                 state.context.set_line_join(match &stroke.join {
-                    StrokeJoinType::Miter => LineJoin::Miter,
-                    StrokeJoinType::Round => LineJoin::Round,
-                    StrokeJoinType::Bevel => LineJoin::Bevel,
+                    StrokeJoinType::Miter => "miter",
+                    StrokeJoinType::Round => "round",
+                    StrokeJoinType::Bevel => "bevel",
                 });
                 match &stroke.content {
                     Texture::Solid(color) => {
-                        state.context.set_stroke_style_color(&color.to_rgba_color());
+                        state
+                            .context
+                            .set_stroke_style(&color.to_rgba_color().to_string().into());
                     }
                     Texture::LinearGradient(gradient) => {
                         let canvas_gradient = state.context.create_linear_gradient(
@@ -391,27 +434,40 @@ impl CanvasFrame {
                         );
                         gradient.stops.iter().for_each(|stop| {
                             canvas_gradient
-                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
+                                .add_color_stop(stop.offset as f32, &stop.color.to_rgba_color())
                                 .unwrap();
                         });
-                        state.context.set_stroke_style_gradient(&canvas_gradient);
+                        state.context.set_stroke_style(&canvas_gradient);
                     }
                     Texture::Image(image) => {
-                        let pattern: CanvasPattern = match image.as_any().downcast::<CanvasImage>() {
-                            Ok(as_image) => js! {
-                                return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
-                            }.try_into().unwrap(),
-                            Err(_) => {
-                                let as_image = CanvasImage::from_texture(image.box_clone().as_texture());
-                                return js! {
-                                    return @{&state.context}.createPattern(@{as_image}, "no-repeat");
-                                }.try_into().unwrap();
-                            }
-                        };
+                        let pattern: web_sys::CanvasPattern =
+                            match image.as_any().downcast::<CanvasImage>() {
+                                Ok(as_image) => state
+                                    .context
+                                    .create_pattern_with_html_canvas_element(
+                                        as_image.as_ref(),
+                                        "no-repeat",
+                                    )
+                                    .expect("Could not create canvas pattern")
+                                    .unwrap(),
+                                Err(_) => {
+                                    let as_image =
+                                        CanvasImage::from_texture(image.box_clone().as_texture());
+                                    state
+                                        .context
+                                        .create_pattern_with_html_canvas_element(
+                                            as_image.as_ref(),
+                                            "no-repeat",
+                                        )
+                                        .expect("Could not create canvas pattern")
+                                        .unwrap()
+                                }
+                            };
                         state
                             .context
-                            .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
-                        state.context.set_stroke_style_pattern(&pattern);
+                            .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio)
+                            .unwrap();
+                        state.context.set_stroke_style(&pattern);
                     }
                     Texture::RadialGradient(gradient) => {
                         let canvas_gradient = state
@@ -427,16 +483,19 @@ impl CanvasFrame {
                             .unwrap();
                         gradient.stops.iter().for_each(|stop| {
                             canvas_gradient
-                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
+                                .add_color_stop(stop.offset as f32, &stop.color.to_rgba_color())
                                 .unwrap();
                         });
-                        state.context.set_stroke_style_gradient(&canvas_gradient);
+                        state.context.set_stroke_style(&canvas_gradient);
                     }
                 }
                 state.context.set_line_width(f64::from(stroke.width));
                 state.context.stroke();
                 if let Texture::Image(_image) = &stroke.content {
-                    state.context.scale(state.pixel_ratio, state.pixel_ratio);
+                    state
+                        .context
+                        .scale(state.pixel_ratio, state.pixel_ratio)
+                        .unwrap();
                 }
             }
             None => {}
@@ -445,24 +504,39 @@ impl CanvasFrame {
             Some(fill) => {
                 match &fill.content {
                     Texture::Solid(color) => {
-                        state.context.set_fill_style_color(&color.to_rgba_color());
-                    }
-                    Texture::Image(image) => {
-                        let pattern: CanvasPattern = match image.as_any().downcast::<CanvasImage>() {
-                            Ok(as_image) => js! {
-                                return @{&state.context}.createPattern(@{as_image.deref()}, "no-repeat");
-                            }.try_into().unwrap(),
-                            Err(_) => {
-                                let as_image = CanvasImage::from_texture(image.box_clone().as_texture());
-                                return js! {
-                                    return @{&state.context}.createPattern(@{as_image}, "no-repeat");
-                                }.try_into().unwrap();
-                            }
-                        };
                         state
                             .context
-                            .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio);
-                        state.context.set_fill_style_pattern(&pattern);
+                            .set_fill_style(&color.to_rgba_color().to_string().into());
+                    }
+                    Texture::Image(image) => {
+                        let pattern: web_sys::CanvasPattern =
+                            match image.as_any().downcast::<CanvasImage>() {
+                                Ok(as_image) => state
+                                    .context
+                                    .create_pattern_with_html_canvas_element(
+                                        as_image.as_ref(),
+                                        "no-repeat",
+                                    )
+                                    .expect("Could not create canvas pattern")
+                                    .unwrap(),
+                                Err(_) => {
+                                    let as_image =
+                                        CanvasImage::from_texture(image.box_clone().as_texture());
+                                    state
+                                        .context
+                                        .create_pattern_with_html_canvas_element(
+                                            as_image.as_ref(),
+                                            "no-repeat",
+                                        )
+                                        .expect("Could not create canvas pattern")
+                                        .unwrap()
+                                }
+                            };
+                        state
+                            .context
+                            .scale(1. / state.pixel_ratio, 1. / state.pixel_ratio)
+                            .unwrap();
+                        state.context.set_fill_style(&pattern);
                     }
                     Texture::LinearGradient(gradient) => {
                         let canvas_gradient = state.context.create_linear_gradient(
@@ -473,10 +547,10 @@ impl CanvasFrame {
                         );
                         gradient.stops.iter().for_each(|stop| {
                             canvas_gradient
-                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
+                                .add_color_stop(stop.offset as f32, &stop.color.to_rgba_color())
                                 .unwrap();
                         });
-                        state.context.set_fill_style_gradient(&canvas_gradient);
+                        state.context.set_fill_style(&canvas_gradient);
                     }
                     Texture::RadialGradient(gradient) => {
                         let canvas_gradient = state
@@ -492,15 +566,18 @@ impl CanvasFrame {
                             .unwrap();
                         gradient.stops.iter().for_each(|stop| {
                             canvas_gradient
-                                .add_color_stop(stop.offset, &stop.color.to_rgba_color())
+                                .add_color_stop(stop.offset as f32, &stop.color.to_rgba_color())
                                 .unwrap();
                         });
-                        state.context.set_fill_style_gradient(&canvas_gradient);
+                        state.context.set_fill_style(&canvas_gradient);
                     }
                 }
-                state.context.fill(FillRule::NonZero);
+                state.context.fill();
                 if let Texture::Image(_image) = &fill.content {
-                    state.context.scale(state.pixel_ratio, state.pixel_ratio);
+                    state
+                        .context
+                        .scale(state.pixel_ratio, state.pixel_ratio)
+                        .unwrap();
                 }
             }
             None => {}
@@ -524,25 +601,25 @@ impl CanvasFrame {
                 }
             }).as_str());
         state.context.set_text_align(match input.align {
-            Align::Center => TextAlign::Center,
-            Align::End => TextAlign::End,
-            Align::Start => TextAlign::Start,
+            Align::Center => "center",
+            Align::End => "end",
+            Align::Start => "start",
         });
         state.context.set_text_baseline(match input.origin {
-            Origin::Top => TextBaseline::Top,
-            Origin::Baseline => TextBaseline::Alphabetic,
-            Origin::Middle => TextBaseline::Middle,
+            Origin::Top => "top",
+            Origin::Baseline => "alphabetic",
+            Origin::Middle => "middle",
         });
         state
             .context
-            .set_fill_style_color(&input.color.to_rgba_color());
+            .set_fill_style(&input.color.to_rgba_color().to_string().into());
     }
     fn fill_text_with_spacing(&self, text: &'_ str, position: Vector2, spacing: f64) {
         if text == "" {
             return;
         }
         let state = self.state.borrow();
-        let mut full_width = state.context.measure_text(&text).unwrap().get_width();
+        let mut full_width = state.context.measure_text(&text).unwrap().width();
         let mut position = position;
         let mut text = text.to_owned();
         let mut text_iter = text.chars();
@@ -555,12 +632,13 @@ impl CanvasFrame {
             text_iter = text.chars();
             state
                 .context
-                .fill_text(&head.to_string(), position.x, position.y, None);
+                .fill_text(&head.to_string(), position.x, position.y)
+                .expect("Failed to fill text");
 
             let shorter_width = if text == "" {
                 0.
             } else {
-                state.context.measure_text(&text).unwrap().get_width()
+                state.context.measure_text(&text).unwrap().width()
             };
             let character_width = full_width - shorter_width;
             position.x += character_width + spacing;
@@ -573,7 +651,7 @@ impl CanvasFrame {
             return 0.;
         }
         let state = self.state.borrow();
-        let mut full_width = state.context.measure_text(&text).unwrap().get_width();
+        let mut full_width = state.context.measure_text(&text).unwrap().width();
         if spacing == 0. {
             return full_width;
         }
@@ -590,7 +668,7 @@ impl CanvasFrame {
             let shorter_width = if text == "" {
                 0.
             } else {
-                state.context.measure_text(&text).unwrap().get_width()
+                state.context.measure_text(&text).unwrap().width()
             };
             let character_width = full_width - shorter_width;
             spaced_width += character_width + spacing;
@@ -603,9 +681,12 @@ impl CanvasFrame {
         let state = self.state.borrow();
         state.context.restore();
         state.context.save();
-        state.context.transform(
-            matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
-        );
+        state
+            .context
+            .transform(
+                matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5],
+            )
+            .unwrap();
         let mut lines: Vec<String> = input
             .content
             .split('\n')
@@ -623,16 +704,14 @@ impl CanvasFrame {
                     input.letter_spacing,
                 );
             } else {
-                state.context.fill_text(
-                    line,
-                    0.,
-                    input.line_height * f64::from(index as u32),
-                    None,
-                );
+                state
+                    .context
+                    .fill_text(line, 0., input.line_height * f64::from(index as u32))
+                    .expect("Could not fill text");
             }
         }
     }
-    fn element(&self) -> CanvasElement {
+    fn element(&self) -> web_sys::HtmlCanvasElement {
         let state = self.state.borrow();
         state.canvas.clone()
     }
@@ -652,20 +731,20 @@ impl CanvasFrame {
                 }, input.size)
             }
         };
-        (js! {
-            let el = document.createElement("span");
-            el.style.position = "fixed";
-            el.style.left = "-5000px";
-            el.style.top = "-5000px";
-            el.textContent = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            el.style.font = @{font};
-            document.body.appendChild(el);
-            let offsetHeight = el.offsetHeight;
-            el.remove();
-            return offsetHeight;
-        })
-        .try_into()
-        .unwrap()
+        let document = web_sys::window().unwrap().document().unwrap();
+        let el = document
+            .create_element("span")
+            .unwrap()
+            .dyn_into::<web_sys::HtmlElement>()
+            .unwrap();
+        let style = el.style();
+        style.set_property("position", "fixed").unwrap();
+        style.set_property("left", "-5000px").unwrap();
+        style.set_property("top", "-5000px").unwrap();
+        el.set_text_content(Some("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"));
+        style.set_property("font", &font).unwrap();
+        document.body().unwrap().append_child(&el).unwrap();
+        el.offset_height() as f64
     }
     fn wrap_text(&self, input: &Text) -> Vec<String> {
         let mut lines: Vec<String> = input
@@ -730,14 +809,17 @@ impl Frame for CanvasFrame {
         let state = self.state.borrow();
         let viewport = state.viewport;
         let size = state.size;
-        state.context.set_transform(
-            (size.x / viewport.size.x) * state.pixel_ratio,
-            0.,
-            0.,
-            (size.y / viewport.size.y) * state.pixel_ratio,
-            -viewport.position.x * state.pixel_ratio,
-            -viewport.position.y * state.pixel_ratio,
-        );
+        state
+            .context
+            .set_transform(
+                (size.x / viewport.size.x) * state.pixel_ratio,
+                0.,
+                0.,
+                (size.y / viewport.size.y) * state.pixel_ratio,
+                -viewport.position.x * state.pixel_ratio,
+                -viewport.position.y * state.pixel_ratio,
+            )
+            .unwrap();
         state.context.clear_rect(
             viewport.position.x,
             viewport.position.y,
@@ -764,11 +846,22 @@ impl Frame for CanvasFrame {
     }
     fn show(&self) {
         let state = self.state.borrow();
-        state.canvas.add_event_listener(|event: ContextMenuEvent| {
-            event.prevent_default();
-            event.stop_propagation();
-        });
-        document().body().unwrap().append_child(&state.canvas);
+        state.canvas.set_oncontextmenu(Some(
+            Closure::wrap(Box::new(|event: web_sys::Event| {
+                event.prevent_default();
+                event.stop_propagation();
+            }) as Box<dyn FnMut(_)>)
+            .as_ref()
+            .unchecked_ref(),
+        ));
+        web_sys::window()
+            .unwrap()
+            .document()
+            .unwrap()
+            .body()
+            .unwrap()
+            .append_child(&state.canvas)
+            .unwrap();
     }
     fn add(&mut self, content: Content) -> Box<dyn Object> {
         let object = CanvasObject::new(content.content, content.transform, content.depth);
