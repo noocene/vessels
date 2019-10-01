@@ -846,14 +846,14 @@ impl Frame for CanvasFrame {
     }
     fn show(&self) {
         let state = self.state.borrow();
-        state.canvas.set_oncontextmenu(Some(
-            Closure::wrap(Box::new(|event: web_sys::Event| {
-                event.prevent_default();
-                event.stop_propagation();
-            }) as Box<dyn FnMut(_)>)
-            .as_ref()
-            .unchecked_ref(),
-        ));
+        let context_menu_closure = Closure::wrap(Box::new(|event: web_sys::Event| {
+            event.prevent_default();
+            event.stop_propagation();
+        }) as Box<dyn FnMut(_)>);
+        state
+            .canvas
+            .set_oncontextmenu(Some(context_menu_closure.as_ref().unchecked_ref()));
+        context_menu_closure.forget();
         web_sys::window()
             .unwrap()
             .document()
@@ -993,16 +993,14 @@ impl InactiveCanvas for Canvas {
             state.cb = Some(cb);
             state.root_frame.as_ref().unwrap().show();
             let cloned = self.clone();
+            let animation_frame_closure = Closure::wrap(Box::new(move |start_time: f64| {
+                cloned.animate(start_time, start_time);
+            }) as Box<dyn FnMut(f64)>);
             web_sys::window()
                 .unwrap()
-                .request_animation_frame(
-                    Closure::wrap(Box::new(move |start_time: f64| {
-                        cloned.animate(start_time, start_time);
-                    }) as Box<dyn FnMut(f64)>)
-                    .as_ref()
-                    .unchecked_ref(),
-                )
+                .request_animation_frame(animation_frame_closure.as_ref().unchecked_ref())
                 .expect("Cannot register animation frame request");
+            animation_frame_closure.forget();
         }
     }
 }
@@ -1053,16 +1051,14 @@ impl Canvas {
         }
         let cloned = self.clone();
         state.cb.as_mut().map(|cb| (cb)(Box::new(self.clone())));
+        let animation_frame_closure = Closure::wrap(Box::new(move |new_start_time: f64| {
+            cloned.animate(new_start_time, start_time);
+        }) as Box<dyn FnMut(f64)>);
         web_sys::window()
             .unwrap()
-            .request_animation_frame(
-                Closure::wrap(Box::new(move |new_start_time: f64| {
-                    cloned.animate(new_start_time, start_time);
-                }) as Box<dyn FnMut(f64)>)
-                .as_ref()
-                .unchecked_ref(),
-            )
+            .request_animation_frame(animation_frame_closure.as_ref().unchecked_ref())
             .expect("Cannot register animation frame request");
+        animation_frame_closure.forget();
     }
 }
 
@@ -1121,16 +1117,16 @@ pub(crate) fn new() -> Box<dyn InteractiveCanvas> {
 
     let gfx_resize = gfx.clone();
 
-    window.set_onresize(Some(
-        Closure::wrap(Box::new(move || {
-            let state = gfx_resize.state.borrow();
-            state
-                .size
-                .set((body.offset_width().into(), body.offset_height().into()).into());
-        }) as Box<dyn Fn()>)
-        .as_ref()
-        .unchecked_ref(),
-    ));
+    let resize_closure = Closure::wrap(Box::new(move || {
+        let state = gfx_resize.state.borrow();
+        state
+            .size
+            .set((body.offset_width().into(), body.offset_height().into()).into());
+    }) as Box<dyn Fn()>);
+
+    window.set_onresize(Some(resize_closure.as_ref().unchecked_ref()));
+
+    resize_closure.forget();
 
     Box::new(gfx)
 }
