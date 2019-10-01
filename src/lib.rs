@@ -16,7 +16,6 @@
 )]
 #![recursion_limit = "128"]
 
-mod errors;
 /// Provides a cross-platform abstracted asynchronous executor.
 pub mod executor;
 /// Provides interfaces to graphics APIs.

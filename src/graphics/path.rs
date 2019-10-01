@@ -1,7 +1,4 @@
-use crate::{
-    errors,
-    graphics::{ImageRepresentation, LDRColor, Rect, Vector2},
-};
+use crate::graphics::{ImageRepresentation, LDRColor, Rect, Vector2};
 
 use failure::Error;
 
@@ -37,7 +34,10 @@ impl GradientStop {
     /// Creates a new gradient stop with the provided offset and color data.
     pub fn new(offset: f64, color: LDRColor) -> Result<Self, Error> {
         if offset > 1.0 || offset < 0.0 {
-            Err(errors::Error::color_stop())?;
+            Err(failure::format_err!(
+                "Invalid gradient stop, value {} not between 0. and 1.",
+                offset
+            ))?
         }
 
         Ok(GradientStop { offset, color })
