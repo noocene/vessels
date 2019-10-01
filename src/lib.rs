@@ -15,9 +15,6 @@
     unused_qualifications
 )]
 #![recursion_limit = "128"]
-#[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
-#[macro_use]
-extern crate stdweb;
 
 #[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
 extern crate cairo;
