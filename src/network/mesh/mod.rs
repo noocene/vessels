@@ -1,4 +1,6 @@
-use crate::{errors::Error, targets};
+use crate::targets;
+
+use failure::Error;
 
 use super::DataChannel;
 

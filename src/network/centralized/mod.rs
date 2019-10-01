@@ -1,6 +1,6 @@
 use super::DataChannel;
-use crate::errors::Error;
 use futures::Stream;
+use failure::Error;
 
 /// Provides an abstracted client-server model binary line-codec socket.
 pub mod socket;

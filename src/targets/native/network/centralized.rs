@@ -10,7 +10,7 @@ use futures::{lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, Star
 
 use ws::{CloseCode, Factory, Handler, Handshake, Message, WebSocket};
 
-use crate::errors::Error;
+use failure::Error;
 
 use crate::network::{
     centralized::socket::{self, ConnectConfig, ListenConfig},

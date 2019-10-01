@@ -1,5 +1,5 @@
-use crate::errors::Error;
 use futures::{Sink, Stream};
+use failure::Error;
 
 /// Provides peer-to-peer mesh networking functionality.
 pub mod mesh;

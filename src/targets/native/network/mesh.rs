@@ -1,5 +1,4 @@
 use crate::{
-    errors::Error,
     network::{
         mesh::{Channel, Negotiation, NegotiationItem, Peer, SessionDescriptionType},
         DataChannel,
@@ -12,6 +11,8 @@ use gstreamer::{
     message::MessageView, Element, ElementExt, ElementExtManual, ElementFactory,
     GObjectExtManualGst, GstBinExt, Pipeline, Promise, Registry, State, Structure,
 };
+
+use failure::Error;
 
 use gstreamer_sdp::SDPMessage;
 use gstreamer_webrtc::{WebRTCSDPType, WebRTCSessionDescription};

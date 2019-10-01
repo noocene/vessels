@@ -1,6 +1,9 @@
-use crate::graphics::{ImageRepresentation, LDRColor, Rect, Vector2};
+use crate::{
+    errors,
+    graphics::{ImageRepresentation, LDRColor, Rect, Vector2},
+};
 
-use crate::errors::Error;
+use failure::Error;
 
 use std::fmt;
 use std::fmt::{Debug, Formatter};
@@ -34,7 +37,7 @@ impl GradientStop {
     /// Creates a new gradient stop with the provided offset and color data.
     pub fn new(offset: f64, color: LDRColor) -> Result<Self, Error> {
         if offset > 1.0 || offset < 0.0 {
-            return Err(Error::color_stop());
+            Err(errors::Error::color_stop())?;
         }
 
         Ok(GradientStop { offset, color })
