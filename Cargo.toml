@@ -4,28 +4,23 @@ edition = "2018"
 name = "vessels"
 version = "0.1.0"
 
+[workspace]
+members = [".", "vessels_derive"]
+
+[dependencies.vessels_derive]
+version = "0.1.0"
+path = "./vessels_derive"
+
 [dependencies]
 failure = "0.1.5"
 serde = { version = "1.0.98", features = ["derive"] }
 futures = "0.1.27"
 crossbeam-channel = "0.3.9"
+itertools = "0.8.0"
 
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen = "0.2.51"
-itertools = "0.8.0"
-web-sys = { version = "0.3.28", features = ["Document", "Window", "HtmlHeadElement", "Element", "HtmlElement", "Node", "EventTarget", "MouseEvent", "Event", "WheelEvent", "KeyboardEvent", "HtmlCanvasElement", "CanvasRenderingContext2d", "TextMetrics", "ImageData", "DomTokenList", "CanvasGradient", "CanvasPattern", "CssStyleDeclaration", "console"] }
-js-sys = "0.3.28"
-
-[target.asmjs-unknown-emscripten.dependencies]
-wasm-bindgen = "0.2.51"
-itertools = "0.8.0"
-web-sys = { version = "0.3.28", features = ["Document", "Window", "HtmlHeadElement", "Element", "HtmlElement", "Node", "EventTarget", "MouseEvent", "Event", "WheelEvent", "KeyboardEvent", "HtmlCanvasElement", "CanvasRenderingContext2d", "TextMetrics", "ImageData", "DomTokenList", "CanvasGradient", "CanvasPattern", "CssStyleDeclaration", "console"] }
-js-sys = "0.3.28"
-
-[target.wasm32-unknown-emscripten.dependencies]
-wasm-bindgen = "0.2.51"
-itertools = "0.8.0"
-web-sys = { version = "0.3.28", features = ["Document", "Window", "HtmlHeadElement", "Element", "HtmlElement", "Node", "EventTarget", "MouseEvent", "Event", "WheelEvent", "KeyboardEvent", "HtmlCanvasElement", "CanvasRenderingContext2d", "TextMetrics", "ImageData", "DomTokenList", "CanvasGradient", "CanvasPattern", "CssStyleDeclaration", "console"] }
+web-sys = { version = "0.3.28", features = ["Document", "Window", "HtmlHeadElement", "Element", "HtmlElement", "Node", "EventTarget", "MouseEvent", "Event", "WheelEvent", "KeyboardEvent", "HtmlCanvasElement", "CanvasRenderingContext2d", "TextMetrics", "ImageData", "DomTokenList", "CanvasGradient", "CanvasPattern", "CssStyleDeclaration", "console", "WebSocket", "BinaryType", "MessageEvent", "RtcPeerConnection", "RtcDataChannel", "RtcSessionDescriptionInit", "RtcSessionDescription", "RtcSdpType", "RtcIceCandidateInit", "RtcIceCandidate"] }
 js-sys = "0.3.28"
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
@@ -39,7 +34,10 @@ libc = "0.2.54"
 pangocairo = "0.7.0"
 cairo-sys-rs = "0.8.0"
 pango = "0.6.0"
-itertools = "0.8.0"
+ws = "0.8.1"
+gstreamer-webrtc = "0.13.0"
+gstreamer-sdp = "0.13.0"
+gstreamer = "0.13.0"
 lazy_static = "1.3.0"
 
 [profile.release]

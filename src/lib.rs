@@ -16,21 +16,15 @@
 )]
 #![recursion_limit = "128"]
 
-#[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
-extern crate cairo;
-#[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
-extern crate cairo_sys;
-#[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
-extern crate gl;
-#[cfg(any(target_arch = "linux", target_arch = "macos", target_arch = "linux"))]
-extern crate glutin;
-
-mod errors;
 /// Provides a cross-platform abstracted asynchronous executor.
 pub mod executor;
-/// Provides interfaces to 2D graphics APIs.
+/// Provides interfaces to graphics APIs.
 pub mod graphics;
 /// Provides interfaces to user input/HID APIs.
 pub mod input;
+/// Provides interfaces to abstracted networking APIs.
+pub mod network;
+/// Provides functionality for generating APIs and other RPC protocols.
+pub mod protocol;
 mod targets;
 mod util;
