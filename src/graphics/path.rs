@@ -1,6 +1,6 @@
 use crate::graphics::{ImageRepresentation, LDRColor, Rect, Vector2};
 
-use crate::errors::Error;
+use failure::Error;
 
 use std::fmt;
 use std::fmt::{Debug, Formatter};
@@ -34,7 +34,10 @@ impl GradientStop {
     /// Creates a new gradient stop with the provided offset and color data.
     pub fn new(offset: f64, color: LDRColor) -> Result<Self, Error> {
         if offset > 1.0 || offset < 0.0 {
-            return Err(Error::color_stop());
+            Err(failure::format_err!(
+                "Invalid gradient stop, value {} not between 0. and 1.",
+                offset
+            ))?
         }
 
         Ok(GradientStop { offset, color })
@@ -543,7 +546,7 @@ impl Into<Vec<Segment>> for Path {
 }
 
 impl StyleHelper {
-    /// Creates a new [StyleHelper].
+    /// Creates a new style helper.
     pub fn new(geometry: Vec<Segment>) -> Self {
         StyleHelper {
             closed: false,
@@ -582,7 +585,7 @@ impl StyleHelper {
         self.shadows.push(shadow);
         self
     }
-    /// Finalizes the styling and returns a styled [Path].
+    /// Finalizes the styling and returns a styled path.
     pub fn finalize(self) -> Path {
         Path {
             closed: self.closed,
@@ -602,7 +605,7 @@ pub struct StrokeBuilder {
 }
 
 impl StrokeBuilder {
-    /// Creates a new [StrokeBuilder] with the provided stroke contents and stroke width.
+    /// Creates a new stroke builder with the provided stroke contents and stroke width.
     pub fn new(content: Texture, width: f32) -> Self {
         let mut builder = StrokeBuilder {
             stroke: Stroke::default(),
@@ -626,7 +629,7 @@ impl StrokeBuilder {
         self.stroke.join = StrokeJoinType::Round;
         self
     }
-    /// Finalizes the style and returns a completed [Stroke].
+    /// Finalizes the style and returns a completed stroke.
     pub fn finalize(self) -> Stroke {
         self.stroke
     }

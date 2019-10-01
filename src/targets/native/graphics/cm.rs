@@ -4,10 +4,14 @@ use crate::graphics::{
     LDRColor,
 };
 use lcms2::{Intent, PixelFormat, Transform};
-use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, RwLock};
 
 use glutin::Window;
+
+use std::{
+    cell::RefCell,
+    collections::{HashMap, VecDeque},
+    rc::Rc,
+};
 
 use libc::c_void;
 
@@ -85,7 +89,7 @@ struct ProfileState {
 
 #[derive(Clone)]
 pub(crate) struct Profile {
-    state: Arc<RwLock<ProfileState>>,
+    state: Rc<RefCell<ProfileState>>,
 }
 
 impl Profile {
@@ -97,7 +101,7 @@ impl Profile {
             lcms2::Profile::new_icc(cm_backing::get_profile_data(os_window as *const c_void)?)
                 .map_err(|_| ())?;
         Ok(Profile {
-            state: Arc::new(RwLock::new(ProfileState {
+            state: Rc::new(RefCell::new(ProfileState {
                 display_profile,
                 srgb_profile: lcms2::Profile::new_srgb(),
                 color_cache: HashMap::with_capacity(10),
@@ -112,7 +116,7 @@ impl Profile {
         let display_profile =
             lcms2::Profile::new_icc(&cm_backing::get_profile_data(os_window)?).map_err(|_| ())?;
         Ok(Profile {
-            state: Arc::new(RwLock::new(ProfileState {
+            state: Rc::new(RefCell::new(ProfileState {
                 display_profile,
                 srgb_profile: lcms2::Profile::new_srgb(),
                 color_cache: HashMap::with_capacity(10),
@@ -129,9 +133,9 @@ impl Profile {
         Err(())
     }
     pub(crate) fn transform(&self, color: LDRColor) -> LDRColor {
-        let state = self.state.read().unwrap();
+        let state = self.state.borrow();
         if let Some(transformed_color) = state.color_cache.get(&color) {
-            return transformed_color.clone();
+            return *transformed_color;
         }
         let t = Transform::new(
             &state.srgb_profile,
@@ -150,7 +154,7 @@ impl Profile {
             source_pixels[0][3],
         );
         drop(state);
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.borrow_mut();
         if state.color_cache_queue.len() >= state.color_cache_queue.capacity() {
             let rm_color = state.color_cache_queue.pop_front().unwrap();
             state.color_cache.remove(&rm_color).unwrap();
