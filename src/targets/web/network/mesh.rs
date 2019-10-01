@@ -37,7 +37,7 @@ impl Future for RTCDataChannelOpening {
 
 #[derive(Clone)]
 struct RTCDataChannel {
-    channel: Reference,
+    channel: web_sys::RtcDataChannel,
     data: Receiver<Vec<u8>>,
     task: Arc<AtomicTask>,
 }
@@ -80,7 +80,7 @@ impl Sink for RTCDataChannel {
 }
 
 impl RTCDataChannel {
-    fn make_channel(channel: Reference) -> RTCDataChannel {
+    fn make_channel(channel: web_sys::RtcDataChannel) -> RTCDataChannel {
         let (sender, data) = unbounded();
         let task = Arc::new(AtomicTask::new());
         let task_cloned = task.clone();
@@ -100,7 +100,7 @@ impl RTCDataChannel {
             task,
         }
     }
-    fn new(channel: Reference, sender: Sender<Channel>, add_task: Arc<AtomicTask>) {
+    fn new(channel: web_sys::RtcDataChannel, sender: Sender<Channel>, add_task: Arc<AtomicTask>) {
         let data_channel = RTCDataChannel::make_channel(channel.clone());
         let on_open = move || {
             sender
@@ -114,7 +114,7 @@ impl RTCDataChannel {
             };
         };
     }
-    fn new_local(channel: Reference) -> RTCDataChannelOpening {
+    fn new_local(channel: web_sys::RtcDataChannel) -> RTCDataChannelOpening {
         let open_task = Arc::new(AtomicTask::new());
         let open = Arc::new(AtomicBool::new(false));
         let task = open_task.clone();
@@ -137,19 +137,16 @@ impl RTCDataChannel {
 }
 
 struct RTCPeer {
-    connection: Reference,
+    connection: web_sys::RtcPeerConnection,
     channels: Receiver<Channel>,
     task: Arc<AtomicTask>,
 }
 
 impl Peer for RTCPeer {
     fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error>> {
-        let channel = js! {
-            return @{&self.connection}.createDataChannel("test");
-        }
-        .into_reference()
-        .unwrap();
-        Box::new(RTCDataChannel::new_local(channel))
+        Box::new(RTCDataChannel::new_local(
+            self.connection.create_data_channel("test"),
+        ))
     }
 }
 
@@ -174,11 +171,11 @@ impl Stream for RTCPeer {
 }
 
 impl RTCPeer {
-    fn new(connection: Reference) -> RTCPeer {
+    fn new(connection: web_sys::RtcPeerConnection) -> RTCPeer {
         let (sender, receiver) = unbounded();
         let task = Arc::new(AtomicTask::new());
         let add_task = task.clone();
-        let add_data_channel = move |channel: Reference| {
+        let add_data_channel = move |channel: web_sys::RtcDataChannel| {
             RTCDataChannel::new(channel, sender.clone(), add_task.clone());
         };
         js! {
@@ -198,7 +195,7 @@ struct RTCNegotiation {
     outgoing: Receiver<NegotiationItem>,
     outgoing_sender: Sender<NegotiationItem>,
     outgoing_task: Arc<AtomicTask>,
-    connection: Reference,
+    connection: web_sys::RtcPeerConnection,
 }
 
 impl Negotiation for RTCNegotiation {}
@@ -237,7 +234,7 @@ impl Sink for RTCNegotiation {
 }
 
 impl RTCNegotiation {
-    fn new(connection: Reference) -> RTCNegotiation {
+    fn new(connection: web_sys::RtcPeerConnection) -> RTCNegotiation {
         let (outgoing_sender, outgoing_receiver) = unbounded();
         let outgoing_task = Arc::new(AtomicTask::new());
         let outgoing_task_cloned = outgoing_task.clone();
@@ -378,12 +375,8 @@ impl RTCNegotiation {
 pub(crate) fn new(
 ) -> impl Future<Item = (Box<dyn Peer + 'static>, Box<dyn Negotiation + 'static>), Error = Error> {
     lazy(move || {
-        let connection: Reference = js! {
-            let connection = new RTCPeerConnection();
-            return connection;
-        }
-        .into_reference()
-        .unwrap();
+        let connection =
+            web_sys::RtcPeerConnection::new().expect("Could not instantiate peer connection");
         let peer: Box<dyn Peer> = Box::new(RTCPeer::new(connection.clone()));
         let negotiation: Box<dyn Negotiation> = Box::new(RTCNegotiation::new(connection));
         Ok((peer, negotiation))

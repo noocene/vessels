@@ -20,7 +20,7 @@ itertools = "0.8.0"
 
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen = "0.2.51"
-web-sys = { version = "0.3.28", features = ["Document", "Window", "HtmlHeadElement", "Element", "HtmlElement", "Node", "EventTarget", "MouseEvent", "Event", "WheelEvent", "KeyboardEvent", "HtmlCanvasElement", "CanvasRenderingContext2d", "TextMetrics", "ImageData", "DomTokenList", "CanvasGradient", "CanvasPattern", "CssStyleDeclaration", "console", "WebSocket", "BinaryType", "MessageEvent"] }
+web-sys = { version = "0.3.28", features = ["Document", "Window", "HtmlHeadElement", "Element", "HtmlElement", "Node", "EventTarget", "MouseEvent", "Event", "WheelEvent", "KeyboardEvent", "HtmlCanvasElement", "CanvasRenderingContext2d", "TextMetrics", "ImageData", "DomTokenList", "CanvasGradient", "CanvasPattern", "CssStyleDeclaration", "console", "WebSocket", "BinaryType", "MessageEvent", "RtcPeerConnection", "RtcDataChannel"] }
 js-sys = "0.3.28"
 stdweb = "0.4.13"
 stdweb-derive = "0.5.1"
