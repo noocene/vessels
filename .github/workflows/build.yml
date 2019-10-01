@@ -17,11 +17,10 @@ jobs:
         sudo apt-get install -y libcairo2-dev libpango1.0-dev libpangocairo-1.0-0 libgstreamer1.0-dev libgstreamer-plugins-bad1.0-dev libgstreamer-plugins-base1.0-dev
         rustup default stable
         rustup target add wasm32-unknown-unknown
-        cargo install cargo-web
     - name: Build for native
-      run: cargo build --verbose
+      run: cargo build --verbose --release
     - name: Build for web
-      run: cargo web build --verbose
+      run: cargo build --verbose --release --target wasm32-unknown-unknown
     - name: Build documentation
       run: |
         cargo rustdoc
