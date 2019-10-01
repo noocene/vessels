@@ -4,14 +4,13 @@ use crate::network::{
     DataChannel,
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
-use futures::{
-    future::err, lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream,
-};
+use futures::{lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use stdweb::{web::ArrayBuffer, Reference};
+
+use wasm_bindgen::{prelude::*, JsCast};
 
 struct RTCDataChannelOpening {
     channel: Option<RTCDataChannel>,
@@ -68,10 +67,13 @@ impl Sink for RTCDataChannel {
     type SinkItem = Vec<u8>;
     type SinkError = Error;
 
-    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        js! {
-            @{&self.channel}.send(new Uint8Array(@{item}));
-        };
+    fn start_send(
+        &mut self,
+        mut item: Self::SinkItem,
+    ) -> StartSend<Self::SinkItem, Self::SinkError> {
+        self.channel
+            .send_with_u8_array(&mut item)
+            .expect("Failed to send on channel");
         Ok(AsyncSink::Ready)
     }
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
@@ -84,16 +86,15 @@ impl RTCDataChannel {
         let (sender, data) = unbounded();
         let task = Arc::new(AtomicTask::new());
         let task_cloned = task.clone();
-        let handle_message = move |data: ArrayBuffer| {
-            let data = Vec::<u8>::from(data);
+        let on_message_closure = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
+            let buffer = js_sys::Uint8Array::new(&e.data());
+            let mut data = vec![0u8; buffer.length() as usize];
+            buffer.copy_to(&mut data);
             sender.send(data).unwrap();
             task_cloned.notify();
-        };
-        js! {
-            @{&channel}.onmessage = (message) => {
-                @{handle_message}(message.data);
-            };
-        }
+        }) as Box<dyn FnMut(_)>);
+        channel.set_onmessage(Some(on_message_closure.as_ref().unchecked_ref()));
+        on_message_closure.forget();
         RTCDataChannel {
             channel,
             data,
@@ -102,32 +103,26 @@ impl RTCDataChannel {
     }
     fn new(channel: web_sys::RtcDataChannel, sender: Sender<Channel>, add_task: Arc<AtomicTask>) {
         let data_channel = RTCDataChannel::make_channel(channel.clone());
-        let on_open = move || {
+        let on_open_closure = Closure::wrap(Box::new(move || {
             sender
                 .send(Channel::DataChannel(Box::new(data_channel.clone())))
                 .unwrap();
             add_task.notify();
-        };
-        js! {
-            @{&channel}.onopen = () => {
-                @{on_open}();
-            };
-        };
+        }) as Box<dyn FnMut()>);
+        channel.set_onopen(Some(on_open_closure.as_ref().unchecked_ref()));
+        on_open_closure.forget();
     }
     fn new_local(channel: web_sys::RtcDataChannel) -> RTCDataChannelOpening {
         let open_task = Arc::new(AtomicTask::new());
         let open = Arc::new(AtomicBool::new(false));
         let task = open_task.clone();
         let open_cloned = open.clone();
-        let channel_ready = move || {
+        let on_open_closure = Closure::wrap(Box::new(move || {
             open_cloned.store(true, Ordering::SeqCst);
             task.notify();
-        };
-        js! {
-            @{&channel}.onopen = () => {
-                @{channel_ready}();
-            };
-        };
+        }) as Box<dyn FnMut()>);
+        channel.set_onopen(Some(on_open_closure.as_ref().unchecked_ref()));
+        on_open_closure.forget();
         RTCDataChannelOpening {
             channel: Some(RTCDataChannel::make_channel(channel)),
             open,
@@ -175,14 +170,13 @@ impl RTCPeer {
         let (sender, receiver) = unbounded();
         let task = Arc::new(AtomicTask::new());
         let add_task = task.clone();
-        let add_data_channel = move |channel: web_sys::RtcDataChannel| {
-            RTCDataChannel::new(channel, sender.clone(), add_task.clone());
-        };
-        js! {
-            @{&connection}.ondatachannel = (e) => {
-                @{add_data_channel}(e.channel);
-            };
-        };
+        connection.set_ondatachannel(Some(
+            Closure::wrap(Box::new(move |channel: web_sys::RtcDataChannel| {
+                RTCDataChannel::new(channel, sender.clone(), add_task.clone());
+            }) as Box<dyn FnMut(_)>)
+            .as_ref()
+            .unchecked_ref(),
+        ));
         RTCPeer {
             connection,
             channels: receiver,
@@ -240,61 +234,63 @@ impl RTCNegotiation {
         let outgoing_task_cloned = outgoing_task.clone();
         let outgoing_sender_cloned = outgoing_sender.clone();
         let n_connection = connection.clone();
-        let negotiate = move || {
-            let outgoing_task_cloned = outgoing_task_cloned.clone();
-            let outgoing_sender_cloned = outgoing_sender_cloned.clone();
-            let send_offer = move |sdp: String| {
-                outgoing_sender_cloned
-                    .send(NegotiationItem::SessionDescription(
-                        SessionDescriptionType::Offer,
-                        sdp,
-                    ))
-                    .expect("could not send offer");
-                outgoing_task_cloned.notify();
-            };
-            js! {
-                let connection = @{n_connection.clone()};
-                connection.createOffer().catch((error) => {
-                    console.log(error);
-                }).then((offer) => {
-                    connection.setLocalDescription(offer).catch((error) => {
-                        console.log(error);
-                    }).then(() => {
-                        @{send_offer}(offer.sdp);
-                    });
-                });
-            };
-        };
         let ice_sender = outgoing_sender.clone();
         let ice_task = outgoing_task.clone();
-        let send_candidate = move |candidate: String, _ufrag: String| {
-            ice_sender
-                .send(NegotiationItem::ConnectivityEstablishmentCandidate(Some(
-                    candidate,
-                )))
-                .expect("could not send candidate");
-            ice_task.notify();
-        };
         let ice_termination_sender = outgoing_sender.clone();
         let ice_termination_task = outgoing_task.clone();
-        let send_candidate_termination = move || {
-            ice_termination_sender
-                .send(NegotiationItem::ConnectivityEstablishmentCandidate(None))
-                .unwrap();
-            ice_termination_task.notify();
-        };
-        js! {
-            @{&connection}.onicecandidate = (e) => {
-                if (!e.candidate) {
-                    @{send_candidate_termination}();
-                    return;
-                };
-                @{send_candidate}(e.candidate.candidate, e.candidate.usernameFragment);
-            };
-            @{&connection}.onnegotiationneeded = () => {
-                @{negotiate}();
-            };
-        }
+        connection.set_onnegotiationneeded(Some(
+            Closure::wrap(Box::new(move || {
+                let outgoing_task_cloned = outgoing_task_cloned.clone();
+                let outgoing_sender_cloned = outgoing_sender_cloned.clone();
+                let m_connection = n_connection.clone();
+                n_connection
+                    .create_offer()
+                    .then(&Closure::wrap(Box::new(move |sdp: JsValue| {
+                        let sdp = sdp
+                            .dyn_ref::<web_sys::RtcSessionDescription>()
+                            .unwrap()
+                            .clone();
+                        let outgoing_task_cloned = outgoing_task_cloned.clone();
+                        let outgoing_sender_cloned = outgoing_sender_cloned.clone();
+                        m_connection
+                            .set_local_description(
+                                &web_sys::RtcSessionDescriptionInit::new(sdp.type_())
+                                    .sdp(&sdp.sdp()),
+                            )
+                            .then(&Closure::wrap(Box::new(move |_| {
+                                outgoing_sender_cloned
+                                    .send(NegotiationItem::SessionDescription(
+                                        SessionDescriptionType::Offer,
+                                        sdp.sdp(),
+                                    ))
+                                    .expect("could not send offer");
+                                outgoing_task_cloned.notify();
+                            })
+                                as Box<dyn FnMut(_)>));
+                    }) as Box<dyn FnMut(_)>));
+            }) as Box<dyn Fn()>)
+            .as_ref()
+            .unchecked_ref(),
+        ));
+        connection.set_onicecandidate(Some(
+            Closure::wrap(Box::new(move |c: web_sys::RtcIceCandidate| {
+                if c.candidate().is_empty() {
+                    ice_termination_sender
+                        .send(NegotiationItem::ConnectivityEstablishmentCandidate(None))
+                        .unwrap();
+                    ice_termination_task.notify();
+                } else {
+                    ice_sender
+                        .send(NegotiationItem::ConnectivityEstablishmentCandidate(Some(
+                            c.candidate(),
+                        )))
+                        .expect("could not send candidate");
+                    ice_task.notify();
+                }
+            }) as Box<dyn FnMut(_)>)
+            .as_ref()
+            .unchecked_ref(),
+        ));
         RTCNegotiation {
             outgoing: outgoing_receiver,
             outgoing_sender,
@@ -302,7 +298,7 @@ impl RTCNegotiation {
             connection,
         }
     }
-    fn create_offer(&mut self) {}
+    //fn create_offer(&mut self) {}
     fn handle_incoming(&mut self, incoming: NegotiationItem) {
         match incoming {
             NegotiationItem::SessionDescription(ty, sdp) => {
@@ -315,60 +311,66 @@ impl RTCNegotiation {
     }
     fn handle_connectivity_establishment_candidate(&mut self, candidate: Option<String>) {
         match &candidate {
-            Some(candidate) => js! {
-                @{&self.connection}.addIceCandidate({
-                    candidate: @{&candidate},
-                    sdpMid: "0",
-                    sdpMLineIndex: 0,
-                    usernameFragment: "",
-                });
-            },
-            None => js! {
-                //@{&self.connection}.addIceCandidate(null);
-            },
+            Some(candidate) => {
+                self.connection
+                    .add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(
+                        &web_sys::RtcIceCandidateInit::new(candidate),
+                    ));
+            }
+            None =>
+                /*js! {
+                @{&self.connection}.addIceCandidate(null);
+            }*/
+                {}
         };
     }
     fn handle_session_description(&mut self, ty: SessionDescriptionType, sdp: String) {
         let outgoing_task = self.outgoing_task.clone();
         let outgoing_sender = self.outgoing_sender.clone();
         let connection = self.connection.clone();
-        let finish_handle = move || match ty {
-            SessionDescriptionType::Offer => {
-                let outgoing_sender = outgoing_sender.clone();
-                let outgoing_task = outgoing_task.clone();
-                let connection = connection.clone();
-                let send_answer = move |sdp: String| {
-                    outgoing_sender
-                        .send(NegotiationItem::SessionDescription(
-                            SessionDescriptionType::Answer,
-                            sdp,
-                        ))
-                        .expect("could not send offer");
-                    outgoing_task.notify();
+        self.connection
+            .set_remote_description(&web_sys::RtcSessionDescriptionInit::new(match ty {
+                SessionDescriptionType::Answer => web_sys::RtcSdpType::Answer,
+                SessionDescriptionType::Offer => web_sys::RtcSdpType::Offer,
+                SessionDescriptionType::Rollback => web_sys::RtcSdpType::Rollback,
+            }))
+            .then(&Closure::wrap(Box::new(move |_| {
+                match ty {
+                    SessionDescriptionType::Offer => {
+                        let outgoing_sender = outgoing_sender.clone();
+                        let outgoing_task = outgoing_task.clone();
+                        let connection = connection.clone();
+                        connection.create_answer().then(&Closure::wrap(Box::new(
+                            move |sdp: JsValue| {
+                                let sdp = sdp
+                                    .dyn_ref::<web_sys::RtcSessionDescription>()
+                                    .unwrap()
+                                    .clone();
+                                let outgoing_sender = outgoing_sender.clone();
+                                let outgoing_task = outgoing_task.clone();
+                                connection
+                                    .set_local_description(
+                                        &web_sys::RtcSessionDescriptionInit::new(sdp.type_())
+                                            .sdp(&sdp.sdp()),
+                                    )
+                                    .then(&Closure::wrap(Box::new(move |_| {
+                                        outgoing_sender
+                                            .send(NegotiationItem::SessionDescription(
+                                                SessionDescriptionType::Answer,
+                                                sdp.sdp(),
+                                            ))
+                                            .expect("could not send offer");
+                                        outgoing_task.notify();
+                                    })
+                                        as Box<dyn FnMut(_)>));
+                            },
+                        )
+                            as Box<dyn FnMut(_)>));
+                    }
+                    SessionDescriptionType::Answer => {}
+                    SessionDescriptionType::Rollback => {}
                 };
-                js! {
-                    let connection = @{connection};
-                    connection.createAnswer().catch((error) => console.log(error)).then((answer) => {
-                        connection.setLocalDescription(answer).catch((error) => {
-                            console.log(error);
-                        }).then(() => @{send_answer}(answer.sdp));
-                    });
-                }
-            }
-            SessionDescriptionType::Answer => {}
-            SessionDescriptionType::Rollback => {}
-        };
-        js! {
-            @{&self.connection}.setRemoteDescription(new RTCSessionDescription({sdp: @{sdp}, type: @{match ty {
-                SessionDescriptionType::Answer => "answer",
-                SessionDescriptionType::Offer => "offer",
-                SessionDescriptionType::Rollback => "rollback"
-            }}})).catch((error) => {
-                console.log(error);
-            }).then(() => {
-                @{finish_handle}();
-            });
-        };
+            }) as Box<dyn FnMut(_)>));
     }
 }
 
