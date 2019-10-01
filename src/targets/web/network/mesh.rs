@@ -329,11 +329,14 @@ impl RTCNegotiation {
         let outgoing_sender = self.outgoing_sender.clone();
         let connection = self.connection.clone();
         self.connection
-            .set_remote_description(&web_sys::RtcSessionDescriptionInit::new(match ty {
-                SessionDescriptionType::Answer => web_sys::RtcSdpType::Answer,
-                SessionDescriptionType::Offer => web_sys::RtcSdpType::Offer,
-                SessionDescriptionType::Rollback => web_sys::RtcSdpType::Rollback,
-            }))
+            .set_remote_description(
+                &web_sys::RtcSessionDescriptionInit::new(match ty {
+                    SessionDescriptionType::Answer => web_sys::RtcSdpType::Answer,
+                    SessionDescriptionType::Offer => web_sys::RtcSdpType::Offer,
+                    SessionDescriptionType::Rollback => web_sys::RtcSdpType::Rollback,
+                })
+                .sdp(&sdp),
+            )
             .then(&Closure::wrap(Box::new(move |_| {
                 match ty {
                     SessionDescriptionType::Offer => {
