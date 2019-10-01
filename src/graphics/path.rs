@@ -1,4 +1,4 @@
-use crate::graphics_2d::{Color, ImageRepresentation, Rect, Vector};
+use crate::graphics::{ImageRepresentation, LDRColor, Rect, Vector2};
 
 use crate::errors::Error;
 
@@ -8,16 +8,16 @@ use std::fmt::{Debug, Formatter};
 const CUBIC_BEZIER_CIRCLE_APPROXIMATION_RATIO: f64 = 0.552_228_474;
 
 /// A path segment.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Segment {
     /// A line to the given point.
-    LineTo(Vector),
+    LineTo(Vector2),
     /// A movement of the pen to the given point.
-    MoveTo(Vector),
+    MoveTo(Vector2),
     /// A quadratic bezier curve to the given point with the given handle.
-    QuadraticTo(Vector, Vector),
+    QuadraticTo(Vector2, Vector2),
     /// A cubic bezier curve to the given point with the given handles.
-    CubicTo(Vector, Vector, Vector),
+    CubicTo(Vector2, Vector2, Vector2),
 }
 
 /// A gradient color stop.
@@ -27,12 +27,12 @@ pub struct GradientStop {
     /// Zero represents the start of the gradient; one represents the end.
     pub offset: f64,
     /// The color of the stop.
-    pub color: Color,
+    pub color: LDRColor,
 }
 
 impl GradientStop {
     /// Creates a new gradient stop with the provided offset and color data.
-    pub fn new(offset: f64, color: Color) -> Result<Self, Error> {
+    pub fn new(offset: f64, color: LDRColor) -> Result<Self, Error> {
         if offset > 1.0 || offset < 0.0 {
             return Err(Error::color_stop());
         }
@@ -47,18 +47,18 @@ pub struct LinearGradient {
     /// Associated color stops.
     pub stops: Vec<GradientStop>,
     /// The start point.
-    pub start: Vector,
+    pub start: Vector2,
     /// The end point.
-    pub end: Vector,
+    pub end: Vector2,
 }
 
 /// A drop shadow.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Shadow {
     /// The color of the shadow.
-    pub color: Color,
+    pub color: LDRColor,
     /// The offset of the shadow.
-    pub offset: Vector,
+    pub offset: Vector2,
     /// The blur radius, in fractional pixels, of the shadow.
     pub blur: f64,
     /// The spread radius, in fractional pixels, of the shadow.
@@ -67,10 +67,10 @@ pub struct Shadow {
 
 impl Shadow {
     /// Creates a new shadow.
-    pub fn new(color: Color) -> Self {
+    pub fn new(color: LDRColor) -> Self {
         Shadow {
             color,
-            offset: Vector::default(),
+            offset: Vector2::default(),
             blur: 0.,
             spread: 0.,
         }
@@ -88,7 +88,7 @@ impl Shadow {
     /// Sets the offset.
     pub fn offset<T>(mut self, distance: T) -> Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.offset = distance.into();
         self
@@ -101,11 +101,11 @@ pub struct RadialGradient {
     /// Associated color stops.
     pub stops: Vec<GradientStop>,
     /// The start point.
-    pub start: Vector,
+    pub start: Vector2,
     /// The radius at the start.
     pub start_radius: f64,
     /// The end point.
-    pub end: Vector,
+    pub end: Vector2,
     /// The radius at the end.
     pub end_radius: f64,
 }
@@ -114,13 +114,19 @@ pub struct RadialGradient {
 #[derive(Clone)]
 pub enum Texture {
     /// A solid color texture.
-    Solid(Color),
+    Solid(LDRColor),
     /// A linear gradient texture.
     LinearGradient(LinearGradient),
     /// A radial gradient texture.
     RadialGradient(RadialGradient),
     /// An image texture.
     Image(Box<dyn ImageRepresentation>),
+}
+
+impl From<LDRColor> for Texture {
+    fn from(color: LDRColor) -> Texture {
+        Texture::Solid(color)
+    }
 }
 
 impl Debug for Texture {
@@ -139,8 +145,8 @@ impl Debug for Texture {
 }
 
 impl From<Box<dyn ImageRepresentation>> for Texture {
-    fn from(interaction: Box<dyn ImageRepresentation>) -> Self {
-        Texture::Image(interaction)
+    fn from(input: Box<dyn ImageRepresentation>) -> Self {
+        Texture::Image(input)
     }
 }
 
@@ -160,7 +166,7 @@ pub struct Stroke {
 impl Default for Stroke {
     fn default() -> Self {
         Stroke {
-            content: Color::black().into(),
+            content: LDRColor::black().into(),
             cap: StrokeCapType::Butt,
             join: StrokeJoinType::Miter,
             width: 1.,
@@ -199,9 +205,9 @@ impl<T> From<T> for Fill
 where
     T: Into<Texture>,
 {
-    fn from(interaction: T) -> Self {
+    fn from(input: T) -> Self {
         Fill {
-            content: interaction.into(),
+            content: input.into(),
         }
     }
 }
@@ -211,6 +217,10 @@ where
 pub struct Path {
     /// The segments comprising the path.
     pub segments: Vec<Segment>,
+    /// The segments comprising the path's clipping mask.
+    ///
+    /// If this is empty the path is rendered in full.
+    pub clip_segments: Vec<Segment>,
     /// The exterior stroke styling.
     pub stroke: Option<Stroke>,
     /// The internal fill.
@@ -223,9 +233,9 @@ pub struct Path {
 
 impl Path {
     /// Adjusts the origin of the path.
-    pub fn with_origin<U>(mut self, offset: U) -> Self
+    pub fn with_offset<U>(mut self, offset: U) -> Self
     where
-        U: Into<Vector>,
+        U: Into<Vector2>,
     {
         let offset = offset.into();
         self.segments = self
@@ -233,22 +243,36 @@ impl Path {
             .iter()
             .map(|segment| match segment {
                 Segment::CubicTo(point, handle_1, handle_2) => {
-                    Segment::CubicTo(*point - offset, *handle_1 - offset, *handle_2 - offset)
+                    Segment::CubicTo(*point + offset, *handle_1 + offset, *handle_2 + offset)
                 }
                 Segment::QuadraticTo(point, handle) => {
-                    Segment::QuadraticTo(*point - offset, *handle - offset)
+                    Segment::QuadraticTo(*point + offset, *handle + offset)
                 }
-                Segment::MoveTo(point) => Segment::MoveTo(*point - offset),
-                Segment::LineTo(point) => Segment::LineTo(*point - offset),
+                Segment::MoveTo(point) => Segment::MoveTo(*point + offset),
+                Segment::LineTo(point) => Segment::LineTo(*point + offset),
+            })
+            .collect();
+        self.clip_segments = self
+            .clip_segments
+            .iter()
+            .map(|segment| match segment {
+                Segment::CubicTo(point, handle_1, handle_2) => {
+                    Segment::CubicTo(*point + offset, *handle_1 + offset, *handle_2 + offset)
+                }
+                Segment::QuadraticTo(point, handle) => {
+                    Segment::QuadraticTo(*point + offset, *handle + offset)
+                }
+                Segment::MoveTo(point) => Segment::MoveTo(*point + offset),
+                Segment::LineTo(point) => Segment::LineTo(*point + offset),
             })
             .collect();
         self
     }
     /// Computes an axis-aligned local coordinates bounding box of the path.
     pub fn bounds(&self) -> Rect {
-        let mut top_left = Vector::default();
-        let mut bottom_right = Vector::default();
-        let mut update = |point: &Vector| {
+        let mut top_left: Vector2 = (std::f64::INFINITY, std::f64::INFINITY).into();
+        let mut bottom_right = Vector2::default();
+        let mut update = |point: &Vector2| {
             if point.x < top_left.x {
                 top_left.x = point.x;
             }
@@ -302,7 +326,7 @@ impl Builder {
     /// Draws a line to the specified point.
     pub fn line_to<T>(mut self, to: T) -> Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.segments.push(Segment::LineTo(to.into()));
         self
@@ -310,7 +334,7 @@ impl Builder {
     /// Moves the pen to the specified point.
     pub fn move_to<T>(mut self, to: T) -> Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.segments.push(Segment::MoveTo(to.into()));
         self
@@ -318,7 +342,7 @@ impl Builder {
     /// Draws a quadratic bezier curve to the specified point with the given handle.
     pub fn quadratic_to<T>(mut self, to: T, handle: T) -> Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.segments
             .push(Segment::QuadraticTo(to.into(), handle.into()));
@@ -327,7 +351,7 @@ impl Builder {
     /// Draws a cubic bezier curve to the specified point with the given handles.
     pub fn cubic_to<T>(mut self, to: T, handle_1: T, handle_2: T) -> Self
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         self.segments.push(Segment::CubicTo(
             to.into(),
@@ -350,9 +374,9 @@ impl Primitive {
     /// Creates a rectangle.
     pub fn rectangle<T>(size: T) -> StyleHelper
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
-        let size: Vector = size.into();
+        let size: Vector2 = size.into();
         Builder::new()
             .move_to((0., 0.))
             .line_to((size.x, 0.))
@@ -364,7 +388,7 @@ impl Primitive {
     /// Creates a rounded rectangle.
     pub fn rounded_rectangle<T>(size: T, radius: f64) -> StyleHelper
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         let size = size.into();
         Builder::new()
@@ -462,7 +486,7 @@ impl Primitive {
     /// Creates cubic-bezier approximation of a superellipse with the provided radii and k-factor.
     pub fn continuous_curvature_rectangle<T>(radii: T, k_factor: f64) -> StyleHelper
     where
-        T: Into<Vector>,
+        T: Into<Vector2>,
     {
         let radii = radii.into();
         Builder::new()
@@ -500,9 +524,22 @@ impl Primitive {
 pub struct StyleHelper {
     closed: bool,
     geometry: Vec<Segment>,
+    clip_geometry: Vec<Segment>,
     fill: Option<Fill>,
     stroke: Option<Stroke>,
     shadows: Vec<Shadow>,
+}
+
+impl Into<Vec<Segment>> for StyleHelper {
+    fn into(self) -> Vec<Segment> {
+        self.geometry
+    }
+}
+
+impl Into<Vec<Segment>> for Path {
+    fn into(self) -> Vec<Segment> {
+        self.segments
+    }
 }
 
 impl StyleHelper {
@@ -511,6 +548,7 @@ impl StyleHelper {
         StyleHelper {
             closed: false,
             geometry,
+            clip_geometry: vec![],
             fill: None,
             shadows: vec![],
             stroke: None,
@@ -519,6 +557,14 @@ impl StyleHelper {
     /// Marks the path as closed.
     pub fn close(mut self) -> Self {
         self.closed = true;
+        self
+    }
+    /// Applies the provided clipping mask.
+    ///
+    /// This clipping mask applies to shadows in addition to content, to draw shadows outside a clipped entity a separate path is necessary.
+    pub fn clip<T: Into<Vec<Segment>>>(mut self, clip_path: T) -> Self {
+        let clip_path = clip_path.into();
+        self.clip_geometry = clip_path;
         self
     }
     /// Fills the path with the provided texture.
@@ -544,6 +590,7 @@ impl StyleHelper {
             fill: self.fill,
             shadows: self.shadows,
             stroke: self.stroke,
+            clip_segments: self.clip_geometry,
         }
     }
 }
@@ -587,11 +634,11 @@ impl StrokeBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::{Color, GradientStop};
+    use super::{GradientStop, LDRColor};
 
     #[test]
     fn gradient_stop_fail() {
-        assert!(GradientStop::new(5.0, Color::white()).is_err());
-        assert!(GradientStop::new(-5.0, Color::white()).is_err());
+        assert!(GradientStop::new(5.0, LDRColor::white()).is_err());
+        assert!(GradientStop::new(-5.0, LDRColor::white()).is_err());
     }
 }

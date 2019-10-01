@@ -13,7 +13,7 @@ impl Error {
     }
 
     pub(crate) fn color_stop() -> Error {
-        Error::from(ErrorKind::ColorStopOffsetError)
+        Error::from(ErrorKind::LDRColorStopOffsetError)
     }
 
     pub(crate) fn address_in_use() -> Error {
@@ -64,8 +64,8 @@ pub enum SocketError {
 pub enum ErrorKind {
     SocketError(SocketError),
     PeerError(PeerError),
-    ColorStopOffsetError,
     UnavailableFeatureError,
+    LDRColorStopOffsetError,
 
     #[doc(hidden)]
     __Nonexhaustive,
@@ -74,12 +74,12 @@ pub enum ErrorKind {
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            ErrorKind::ColorStopOffsetError => write!(f, "Colorstop offset out of bounds"),
             ErrorKind::SocketError(error) => write!(f, "Socket error: {:?}", error),
             ErrorKind::PeerError(error) => write!(f, "Peer error: {:?}", error),
             ErrorKind::UnavailableFeatureError => {
                 write!(f, "The requested feature is not available on this platform")
             }
+            ErrorKind::LDRColorStopOffsetError => write!(f, "LDRColorstop offset out of bounds"),
             ErrorKind::__Nonexhaustive => panic!("Invalid Error!"),
         }
     }

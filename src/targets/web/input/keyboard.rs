@@ -1,18 +1,6 @@
-use crate::interaction;
-use crate::interaction::keyboard;
-use crate::interaction::keyboard::{
-    Action, Alpha, Arrow, Event, Function, Key, Location, Number, Numpad,
-};
+use crate::input::keyboard::{Alpha, Arrow, Function, Key, Location, Number, Numpad};
 
-use stdweb::traits::IKeyboardEvent;
-use stdweb::web::event::{IEvent, KeyDownEvent, KeyUpEvent};
-use stdweb::web::{document, IEventTarget};
-
-use std::sync::{Arc, RwLock};
-
-use std::collections::HashMap;
-
-fn parse_code(code: &str) -> Key {
+pub(crate) fn parse_code(code: &str) -> Key {
     match code {
         "Escape" => Key::Escape,
         "Digit0" => Key::Number(Number::Zero),
@@ -127,103 +115,8 @@ fn parse_code(code: &str) -> Key {
         "ArrowRight" => Key::Arrow(Arrow::Right),
         "End" => Key::End,
         "Delete" => Key::Delete,
-        "ContextMenu" => Key::ContextMenu,
+        "ContextMenu" => Key::Menu,
         "Backslash" => Key::Backslash,
         _ => Key::Unknown,
-    }
-}
-
-pub(crate) struct KeyboardState {
-    handlers: Vec<Box<dyn Fn(Event) + Send + Sync>>,
-    keys: HashMap<Key, bool>,
-}
-
-#[derive(Clone)]
-pub(crate) struct Keyboard {
-    state: Arc<RwLock<KeyboardState>>,
-}
-
-impl interaction::Source for Keyboard {
-    type Event = Event;
-    fn bind(&self, handler: Box<dyn Fn(Event) + 'static + Send + Sync>) {
-        self.state.write().unwrap().handlers.push(handler);
-    }
-}
-
-impl keyboard::Keyboard for Keyboard {
-    fn state(&self) -> Box<dyn keyboard::State> {
-        Box::new(self.clone())
-    }
-}
-
-impl keyboard::State for Keyboard {
-    fn poll(&mut self, key: Key) -> bool {
-        let mut state = self.state.write().unwrap();
-        let entry = state.keys.entry(key).or_insert(false);
-        *entry
-    }
-    fn box_clone(&self) -> Box<dyn keyboard::State> {
-        Box::new(self.clone())
-    }
-}
-
-impl Keyboard {
-    #[allow(clippy::new_ret_no_self)]
-    pub(crate) fn new() -> Box<dyn interaction::Keyboard> {
-        let keyboard = Keyboard {
-            state: Arc::new(RwLock::new(KeyboardState {
-                handlers: vec![],
-                keys: HashMap::new(),
-            })),
-        };
-        keyboard.initialize();
-        Box::new(keyboard)
-    }
-    fn initialize(&self) {
-        let state = self.clone();
-        let u_state = state.clone();
-        let body = document().body().unwrap();
-        body.add_event_listener(move |e: KeyDownEvent| {
-            let send_state = Box::new(state.clone());
-            let mut state = state.state.write().unwrap();
-            e.prevent_default();
-            let key = e.key();
-            let k = parse_code(e.code().as_str());
-            let entry = state.keys.entry(k).or_insert(true);
-            *entry = true;
-            let event = Event {
-                action: Action::Down(k),
-                state: send_state,
-                printable: if key.len() == 1 {
-                    Some(key.chars().take(1).collect::<Vec<char>>()[0])
-                } else {
-                    None
-                },
-            };
-            state.handlers.iter().for_each(|handler| {
-                handler(event.clone());
-            });
-        });
-        body.add_event_listener(move |e: KeyUpEvent| {
-            let send_state = Box::new(u_state.clone());
-            let mut state = u_state.state.write().unwrap();
-            e.prevent_default();
-            let key = e.key();
-            let k = parse_code(e.code().as_str());
-            let entry = state.keys.entry(k).or_insert(false);
-            *entry = false;
-            let event = Event {
-                action: Action::Up(k),
-                state: send_state,
-                printable: if key.len() == 1 {
-                    Some(key.chars().take(1).collect::<Vec<char>>()[0])
-                } else {
-                    None
-                },
-            };
-            state.handlers.iter().for_each(|handler| {
-                handler(event.clone());
-            });
-        });
     }
 }

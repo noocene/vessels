@@ -7,4 +7,4 @@ pub trait Remote: Stream<Item = <Self as Remote>::Item, Error = ()> {
     type Item: Serialize + DeserializeOwned;
 }
 
-pub use vitruvia_derive::protocol;
+pub use vessels_derive::protocol;
