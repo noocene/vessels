@@ -143,9 +143,7 @@ struct RTCPeer {
 }
 
 impl Peer for RTCPeer {
-    fn data_channel(
-        &mut self,
-    ) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error> + Send> {
+    fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error>> {
         let channel = js! {
             return @{&self.connection}.createDataChannel("test");
         }
