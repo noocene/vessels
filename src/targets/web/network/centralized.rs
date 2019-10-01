@@ -6,19 +6,23 @@ use std::sync::Arc;
 
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 
-use crate::errors::Error;
-use crate::network::{
-    centralized::{
-        socket::{ConnectConfig, ListenConfig},
-        Server,
+use crate::{
+    errors,
+    network::{
+        centralized::{
+            socket::{ConnectConfig, ListenConfig},
+            Server,
+        },
+        DataChannel,
     },
-    DataChannel,
 };
+
+use failure::Error;
 
 use wasm_bindgen::{prelude::*, JsCast};
 
 pub(crate) fn listen(_: ListenConfig) -> impl Future<Item = Server, Error = Error> {
-    err(Error::feature_unavailable())
+    err(errors::Error::feature_unavailable().into())
 }
 
 struct Channel {
@@ -145,7 +149,7 @@ impl Future for Connection {
             }
             2 => Ok(Async::NotReady),
             1 => Ok(Async::Ready(Channel::create(self.socket.clone()))),
-            3 => Err(Error::connection_failed()),
+            3 => Err(errors::Error::connection_failed().into()),
             _ => panic!("Invalid socket state"),
         }
     }

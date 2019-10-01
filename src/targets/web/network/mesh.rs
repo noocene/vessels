@@ -1,4 +1,3 @@
-use crate::errors::Error;
 use crate::network::{
     mesh::{Channel, Negotiation, NegotiationItem, Peer, SessionDescriptionType},
     DataChannel,
@@ -9,6 +8,8 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+
+use failure::Error;
 
 use wasm_bindgen::{prelude::*, JsCast};
 
