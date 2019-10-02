@@ -10,7 +10,7 @@ use futures::{lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, Star
 
 use ws::{CloseCode, Factory, Handler, Handshake, Message, WebSocket};
 
-use crate::errors::Error;
+use failure::Error;
 
 use crate::network::{
     centralized::socket::{self, ConnectConfig, ListenConfig},
@@ -194,7 +194,7 @@ impl Server {
             let server = Server { receiver, task };
             let socket = socket
                 .bind(config.address)
-                .map_err(|_| Error::address_in_use())?;
+                .map_err(|_| failure::err_msg("Address in use"))?;
             spawn(move || socket.run());
             let server: socket::Server = Box::new(server);
             Ok(server)

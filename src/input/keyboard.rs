@@ -1,26 +1,6 @@
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
-/// An interaction event source that represents a keyboard.
-pub trait Keyboard: super::Source<Event = Event> + State {
-    /// Returns a keyboard state that provides polling support.
-    fn state(&self) -> Box<dyn State>;
-}
-
-/// A context that permits active polling of key states.
-pub trait State: Sync + Send {
-    /// Returns a boolean value representing whether the provided key is pressed.
-    fn poll(&mut self, key: Key) -> bool;
-    #[doc(hidden)]
-    fn box_clone(&self) -> Box<dyn State>;
-}
-
-impl Clone for Box<dyn State> {
-    fn clone(&self) -> Self {
-        self.box_clone()
-    }
-}
-
 /// A number pad key.
 #[derive(Clone, Eq, PartialEq, Hash, Copy, Debug)]
 pub enum Numpad {
@@ -265,7 +245,7 @@ pub enum Key {
     /// The Scroll Lock key.
     ScrollLock,
     /// The Context Menu key.
-    ContextMenu,
+    Menu,
     /// The Print Screen key.
     PrintScreen,
     /// An alphabetic key.
@@ -292,14 +272,12 @@ pub enum Action {
 }
 
 /// A keyboard event.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Event {
     /// The associated action.
     pub action: Action,
     /// The associated layout-dependant printable character of the relevant key if applicable.
     pub printable: Option<char>,
-    /// A state to permit polling of the associated keyboard.
-    pub state: Box<dyn State>,
 }
 
 impl Debug for Event {
@@ -311,5 +289,3 @@ impl Debug for Event {
         )
     }
 }
-
-impl super::Event for Event {}
