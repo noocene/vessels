@@ -20,7 +20,7 @@ pub trait Nonce: AsRef<[u8; 12]> {
 /// A provider for single-use cryptographic nonces.
 ///
 /// Intended for use as AEAD IVs.
-pub trait NonceProvider: Send {
+pub trait NonceProvider {
     /// The nonce type produced by this provider.
     type Nonce: Nonce + 'static;
 
@@ -99,13 +99,13 @@ pub mod nonce_providers {
 /// Symmetric encryption backed by AES-128 in GCM on all platforms, interoperable.
 ///
 /// AES-256 is not used as the probability of success for a brute-force attack on AES-128 is already far more slim than necessary and the AES-256 key schedule is less well designed.
-pub trait SymmetricKey<T>: Send {
+pub trait SymmetricKey<T> {
     /// Encrypts and signs the provided data.
-    fn encrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
+    fn encrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error>>;
     /// Decrypts and authenticates the provided data.
-    fn decrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
+    fn decrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error>>;
     /// Exports a key as a raw 128-bit byte array.
-    fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error> + Send>;
+    fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error>>;
 }
 
 impl<T: NonceProvider + 'static> dyn SymmetricKey<T> {
@@ -163,23 +163,23 @@ impl<'de, T: NonceProvider + 'static> Deserialize<'de> for Box<dyn SymmetricKey<
 /// Private key for cryptographic signing.
 ///
 /// Be careful with this. Having it compromised/disseminated in plaintext is generally a pretty bad idea in almost any conceivable cryptosystem.
-pub trait SigningKey: Send {
+pub trait SigningKey {
     /// Signs the provided data guaranteeing authenticity and integrity.
-    fn sign(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
+    fn sign(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error>>;
     /// Exports the underlying key-pair in PKCS#11 compatible form.
-    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
+    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error>>;
 }
 
 /// Public key for cryptographic signature verification.
-pub trait VerifyingKey: Send {
+pub trait VerifyingKey {
     /// Verifies the provided data for integrity and authenticity using the provided signature.
     fn verify(
         &self,
         data: &'_ [u8],
         signature: &'_ [u8],
-    ) -> Box<dyn Future<Item = bool, Error = Error> + Send>;
+    ) -> Box<dyn Future<Item = bool, Error = Error>>;
     /// Exports the raw public key.
-    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>;
+    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error>>;
 }
 
 /// Asymmetric cryptographic signatures backed by ECDSA using NIST P-256 curve and SHA-256 for hashing.
