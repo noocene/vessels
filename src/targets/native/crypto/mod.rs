@@ -1,5 +1,6 @@
 use failure::Error;
 use futures::{lazy, Future};
+use lazy_static::lazy_static;
 use ring::rand::{SecureRandom, SystemRandom};
 use std::sync::RwLock;
 

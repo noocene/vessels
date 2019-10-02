@@ -1,7 +1,7 @@
-use crate::graphics_2d::ContextualGraphics;
+use crate::graphics::canvas::InteractiveCanvas;
 
 mod canvas;
 
-pub(crate) fn new() -> Box<dyn ContextualGraphics> {
+pub(crate) fn new() -> Box<dyn InteractiveCanvas> {
     canvas::new()
 }

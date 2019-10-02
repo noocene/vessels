@@ -2,19 +2,10 @@ use futures::{
     future::err, lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream,
 };
 
-use stdweb::{
-    unstable::TryInto,
-    web::{
-        event::{SocketCloseEvent, SocketMessageEvent, SocketOpenEvent},
-        ArrayBuffer, SocketBinaryType, SocketReadyState, WebSocket,
-    },
-};
-
 use std::sync::Arc;
 
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 
-use crate::errors::Error;
 use crate::network::{
     centralized::{
         socket::{ConnectConfig, ListenConfig},
@@ -23,18 +14,22 @@ use crate::network::{
     DataChannel,
 };
 
+use failure::Error;
+
+use wasm_bindgen::{prelude::*, JsCast};
+
 pub(crate) fn listen(_: ListenConfig) -> impl Future<Item = Server, Error = Error> {
-    err(Error::feature_unavailable())
+    err(failure::err_msg("Socket server functionality is unavailable on the web target"))
 }
 
 struct Channel {
-    socket: WebSocket,
+    socket: web_sys::WebSocket,
     task: Arc<AtomicTask>,
     receiver: Receiver<Vec<u8>>,
 }
 
 impl Channel {
-    fn create(socket: WebSocket) -> Box<dyn DataChannel> {
+    fn create(socket: web_sys::WebSocket) -> Box<dyn DataChannel> {
         let (sender, receiver) = unbounded();
         let task = Arc::new(AtomicTask::new());
         let mut channel = Channel {
@@ -46,19 +41,20 @@ impl Channel {
         Box::new(channel)
     }
     fn initialize(&mut self, sender: Sender<Vec<u8>>) {
-        self.socket.set_binary_type(SocketBinaryType::ArrayBuffer);
+        self.socket
+            .set_binary_type(web_sys::BinaryType::Arraybuffer);
         let task = self.task.clone();
         let sender = sender;
-        let on_message = move |e: SocketMessageEvent| {
-            let buffer: ArrayBuffer = js! { return @{&e}.data; }
-                .try_into()
-                .expect("Buffer conversion failed");
-            sender.send(Vec::<u8>::from(buffer)).unwrap();
+        let on_message_closure = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
+            let buffer = js_sys::Uint8Array::new(&e.data());
+            let mut data = vec![0u8; buffer.length() as usize];
+            buffer.copy_to(&mut data);
+            sender.send(data).unwrap();
             task.clone().notify();
-        };
-        js! {
-            @{&self.socket}.onmessage = @{on_message};
-        }
+        }) as Box<dyn FnMut(_)>);
+        self.socket
+            .set_onmessage(Some(on_message_closure.as_ref().unchecked_ref()));
+        on_message_closure.forget();
     }
 }
 
@@ -68,8 +64,11 @@ impl Sink for Channel {
     type SinkItem = Vec<u8>;
     type SinkError = Error;
 
-    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        self.socket.send_bytes(item.as_slice()).unwrap();
+    fn start_send(
+        &mut self,
+        mut item: Self::SinkItem,
+    ) -> StartSend<Self::SinkItem, Self::SinkError> {
+        self.socket.send_with_u8_array(&mut item).unwrap();
         Ok(AsyncSink::Ready)
     }
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
@@ -96,7 +95,7 @@ impl Stream for Channel {
 }
 
 struct Connection {
-    socket: WebSocket,
+    socket: web_sys::WebSocket,
     task: Arc<AtomicTask>,
 }
 
@@ -105,7 +104,7 @@ impl Connection {
         config: ConnectConfig,
     ) -> impl Future<Item = Box<dyn DataChannel + 'static>, Error = Error> {
         lazy(move || {
-            let socket = WebSocket::new(&format!(
+            let socket = web_sys::WebSocket::new(&format!(
                 "ws://{}:{}",
                 config.address.ip(),
                 config.address.port()
@@ -122,16 +121,16 @@ impl Connection {
     fn initialize(&mut self) {
         let c_task = self.task.clone();
         let o_task = self.task.clone();
-        let on_close = move |_: SocketCloseEvent| {
-            c_task.notify();
-        };
-        let on_open = move |_: SocketOpenEvent| {
-            o_task.notify();
-        };
-        js! {
-            @{&self.socket}.onclose = @{on_close};
-            @{&self.socket}.onopen = @{on_open};
-        }
+        let on_close_closure = Closure::wrap(Box::new(move || c_task.notify()) as Box<dyn Fn()>);
+        let on_open_closure = Closure::wrap(Box::new(move || o_task.notify()) as Box<dyn Fn()>);
+
+        self.socket
+            .set_onclose(Some(on_close_closure.as_ref().unchecked_ref()));
+        self.socket
+            .set_onopen(Some(on_open_closure.as_ref().unchecked_ref()));
+
+        on_close_closure.forget();
+        on_open_closure.forget();
     }
 }
 
@@ -141,13 +140,14 @@ impl Future for Connection {
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         match self.socket.ready_state() {
-            SocketReadyState::Connecting => {
+            0 => {
                 self.task.register();
                 Ok(Async::NotReady)
             }
-            SocketReadyState::Closing => Ok(Async::NotReady),
-            SocketReadyState::Open => Ok(Async::Ready(Channel::create(self.socket.clone()))),
-            SocketReadyState::Closed => Err(Error::connection_failed()),
+            2 => Ok(Async::NotReady),
+            1 => Ok(Async::Ready(Channel::create(self.socket.clone()))),
+            3 => Err(failure::err_msg("Connection failed")),
+            _ => panic!("Invalid socket state"),
         }
     }
 }

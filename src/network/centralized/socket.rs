@@ -1,7 +1,7 @@
 use crate::network::DataChannel;
 
-use crate::errors::Error;
 use crate::targets;
+use failure::Error;
 
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 

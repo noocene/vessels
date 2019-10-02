@@ -1,11 +1,17 @@
-use crate::graphics_2d::{Color, Rasterizable};
-use crate::path::{Fill, GradientStop, Path, Texture};
+use crate::graphics::{
+    canvas::Rasterizable,
+    path::{Fill, GradientStop, Path, Texture},
+    LDRColor,
+};
+use lcms2::{Intent, PixelFormat, Transform};
 
 use glutin::Window;
-use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, RwLock};
 
-use lcms2::{Intent, PixelFormat, Transform};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, VecDeque},
+    rc::Rc,
+};
 
 #[cfg(target_os = "macos")]
 mod cm_backing {
@@ -72,19 +78,16 @@ mod cm_backing {
     }
 }
 
-unsafe impl Sync for Profile {}
-unsafe impl Send for Profile {}
-
 struct ProfileState {
     display_profile: lcms2::Profile,
     srgb_profile: lcms2::Profile,
-    color_cache: HashMap<Color, Color>,
-    color_cache_queue: VecDeque<Color>,
+    color_cache: HashMap<LDRColor, LDRColor>,
+    color_cache_queue: VecDeque<LDRColor>,
 }
 
 #[derive(Clone)]
 pub(crate) struct Profile {
-    state: Arc<RwLock<ProfileState>>,
+    state: Rc<RefCell<ProfileState>>,
 }
 
 impl Profile {
@@ -97,7 +100,7 @@ impl Profile {
             lcms2::Profile::new_icc(cm_backing::get_profile_data(os_window as *const c_void)?)
                 .map_err(|_| ())?;
         Ok(Profile {
-            state: Arc::new(RwLock::new(ProfileState {
+            state: Rc::new(RefCell::new(ProfileState {
                 display_profile,
                 srgb_profile: lcms2::Profile::new_srgb(),
                 color_cache: HashMap::with_capacity(10),
@@ -112,8 +115,12 @@ impl Profile {
         let display_profile =
             lcms2::Profile::new_icc(&cm_backing::get_profile_data(os_window)?).map_err(|_| ())?;
         Ok(Profile {
-            display_profile,
-            srgb_profile: lcms2::Profile::new_srgb(),
+            state: Rc::new(RefCell::new(ProfileState {
+                display_profile,
+                srgb_profile: lcms2::Profile::new_srgb(),
+                color_cache: HashMap::with_capacity(10),
+                color_cache_queue: VecDeque::with_capacity(10),
+            })),
         })
     }
     pub(crate) fn from_window(window: &Window) -> Result<Profile, ()> {
@@ -124,8 +131,8 @@ impl Profile {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         Err(())
     }
-    pub(crate) fn transform(&self, color: Color) -> Color {
-        let state = self.state.read().unwrap();
+    pub(crate) fn transform(&self, color: LDRColor) -> LDRColor {
+        let state = self.state.borrow();
         if let Some(transformed_color) = state.color_cache.get(&color) {
             return *transformed_color;
         }
@@ -139,14 +146,14 @@ impl Profile {
         .unwrap();
         let source_pixels: &mut [[u8; 4]] = &mut [[color.r, color.g, color.b, color.a]];
         t.transform_in_place(source_pixels);
-        let transformed_color = Color::rgba(
+        let transformed_color = LDRColor::rgba(
             source_pixels[0][0],
             source_pixels[0][1],
             source_pixels[0][2],
             source_pixels[0][3],
         );
         drop(state);
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.borrow_mut();
         if state.color_cache_queue.len() >= state.color_cache_queue.capacity() {
             let rm_color = state.color_cache_queue.pop_front().unwrap();
             state.color_cache.remove(&rm_color).unwrap();
@@ -191,6 +198,7 @@ impl Profile {
             }),
             Rasterizable::Path(path) => Rasterizable::Path(Box::new(Path {
                 segments: path.segments,
+                clip_segments: path.clip_segments,
                 stroke: path.stroke.map(|mut stroke| {
                     stroke.content = self.transform_texture(stroke.content);
                     stroke
@@ -202,7 +210,7 @@ impl Profile {
                     .shadows
                     .iter()
                     .map(|shadow| {
-                        let mut corrected_shadow = *shadow;
+                        let mut corrected_shadow = shadow.clone();
                         corrected_shadow.color = self.transform(shadow.color);
                         corrected_shadow
                     })

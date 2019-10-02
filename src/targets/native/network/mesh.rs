@@ -1,9 +1,6 @@
-use crate::{
-    errors::Error,
-    network::{
-        mesh::{Channel, Negotiation, NegotiationItem, Peer, SessionDescriptionType},
-        DataChannel,
-    },
+use crate::network::{
+    mesh::{Channel, Negotiation, NegotiationItem, Peer, SessionDescriptionType},
+    DataChannel,
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use futures::{lazy, task::AtomicTask, Async, AsyncSink, Future, Poll, Sink, StartSend, Stream};
@@ -12,6 +9,8 @@ use gstreamer::{
     message::MessageView, Element, ElementExt, ElementExtManual, ElementFactory,
     GObjectExtManualGst, GstBinExt, Pipeline, Promise, Registry, State, Structure,
 };
+
+use failure::Error;
 
 use gstreamer_sdp::SDPMessage;
 use gstreamer_webrtc::{WebRTCSDPType, WebRTCSessionDescription};
@@ -269,13 +268,11 @@ impl RTCDataChannel {
             open_task: task,
         }
     }
-    fn create(channel: Object, sender: Sender<Channel>, task: Arc<AtomicTask>) {
+    fn create(channel: Object, sender: Sender<RTCDataChannel>, task: Arc<AtomicTask>) {
         let data_channel = RTCDataChannel::make_channel(channel.clone());
         channel
             .connect("on-open", false, move |_| {
-                sender
-                    .send(Channel::DataChannel(Box::new(data_channel.clone())))
-                    .unwrap();
+                sender.send(data_channel.clone()).unwrap();
                 task.notify();
                 None
             })
@@ -323,7 +320,7 @@ impl Stream for RTCDataChannel {
 struct RTCPeer {
     webrtc: Element,
     negotiation: RTCNegotiation,
-    receiver: Receiver<Channel>,
+    receiver: Receiver<RTCDataChannel>,
     task: Arc<AtomicTask>,
 }
 
@@ -349,9 +346,7 @@ impl RTCPeer {
 }
 
 impl Peer for RTCPeer {
-    fn data_channel(
-        &mut self,
-    ) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error> + Send> {
+    fn data_channel(&mut self) -> Box<dyn Future<Item = Box<dyn DataChannel>, Error = Error>> {
         let webrtc = self.webrtc.clone();
         let mut negotiation = self.negotiation.clone();
         Box::new(lazy(move || {
@@ -375,7 +370,7 @@ impl Stream for RTCPeer {
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         match self.receiver.try_recv() {
-            Ok(channel) => Ok(Async::Ready(Some(channel))),
+            Ok(channel) => Ok(Async::Ready(Some(Channel::DataChannel(Box::new(channel))))),
             Err(err) => match err {
                 TryRecvError::Disconnected => {
                     panic!("channel disconnected in data channel stream");
