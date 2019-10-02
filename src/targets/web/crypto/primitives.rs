@@ -13,12 +13,12 @@ use stdweb::{
 type CryptoKey = stdweb::Value;
 
 pub(crate) struct AESKey<T: NonceProvider> {
-    key: CryptoKey,
+    key: web_sys::CryptoKey,
     nonce_provider: Mutex<T>,
 }
 
 impl<T: NonceProvider> SymmetricKey<T> for AESKey<T> {
-    fn encrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>
+    fn encrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error>>
     where
         Self: Sized,
     {
@@ -48,7 +48,7 @@ impl<T: NonceProvider> SymmetricKey<T> for AESKey<T> {
                 .map_err(|_| failure::err_msg("temp err")),
         )
     }
-    fn decrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send>
+    fn decrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error>>
     where
         Self: Sized,
     {
@@ -81,7 +81,7 @@ impl<T: NonceProvider> SymmetricKey<T> for AESKey<T> {
                 .map_err(|_| failure::err_msg("temp err")),
         )
     }
-    fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error> + Send> {
+    fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error>> {
         let (sender, receiver) = channel(0);
         js! {
             window.crypto.subtle.exportKey("raw", @{&self.key}).then((key) => {
@@ -111,7 +111,7 @@ impl<T: NonceProvider + 'static> AESKey<T> {
             window.crypto.subtle.generateKey({
                 name: "AES-GCM",
                 length: 128
-            }, true, ["encrypt", "decrypt"]).then(@{move |key: CryptoKey| {
+            }, true, ["encrypt", "decrypt"]).then(@{move |key: web_sys::CryptoKey| {
                 executor::spawn(sender.clone().send(key).then(|_| Ok(())));
             }}).catch((err) => {
                 console.log(err);
@@ -135,7 +135,7 @@ impl<T: NonceProvider + 'static> AESKey<T> {
         let (sender, receiver) = channel(0);
         let data: TypedArray<u8> = data.as_ref().into();
         js! {
-            window.crypto.subtle.importKey("raw", @{data}, "AES-GCM", true, ["encrypt", "decrypt"]).then(@{move |key: CryptoKey| {
+            window.crypto.subtle.importKey("raw", @{data}, "AES-GCM", true, ["encrypt", "decrypt"]).then(@{move |key: web_sys::CryptoKey| {
                 executor::spawn(sender.clone().send(key).then(|_| Ok(())));
             }}).catch((err) => {
                 console.log(err);
@@ -158,7 +158,7 @@ impl<T: NonceProvider + 'static> AESKey<T> {
 pub(crate) struct ECDSAKeyPair;
 
 pub(crate) struct ECDSAPrivateKey {
-    key: CryptoKey,
+    key: web_sys::CryptoKey,
 }
 
 impl VerifyingKey for ECDSAPublicKey {
@@ -166,7 +166,7 @@ impl VerifyingKey for ECDSAPublicKey {
         &self,
         data: &'_ [u8],
         signature: &'_ [u8],
-    ) -> Box<dyn Future<Item = bool, Error = Error> + Send> {
+    ) -> Box<dyn Future<Item = bool, Error = Error>> {
         let (sender, receiver) = channel(0);
         let data: TypedArray<u8> = data.into();
         let signature: TypedArray<u8> = signature.into();
@@ -185,7 +185,7 @@ impl VerifyingKey for ECDSAPublicKey {
                 .map_err(|_| failure::err_msg("temp err")),
         )
     }
-    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
         let (sender, receiver) = channel(0);
         js! {
             window.crypto.subtle.exportKey("raw", @{&self.key}).then((key) => {
@@ -205,7 +205,7 @@ impl VerifyingKey for ECDSAPublicKey {
 }
 
 impl SigningKey for ECDSAPrivateKey {
-    fn sign(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+    fn sign(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
         let (sender, receiver) = channel(0);
         let data: TypedArray<u8> = data.into();
         js! {
@@ -223,7 +223,7 @@ impl SigningKey for ECDSAPrivateKey {
                 .map_err(|_| failure::err_msg("temp err")),
         )
     }
-    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
         let (sender, receiver) = channel(0);
         js! {
             window.crypto.subtle.exportKey("pkcs8", @{&self.key}).then((key) => {
@@ -243,7 +243,7 @@ impl SigningKey for ECDSAPrivateKey {
 }
 
 pub(crate) struct ECDSAPublicKey {
-    key: CryptoKey,
+    key: web_sys::CryptoKey,
 }
 
 impl ECDSAPublicKey {
@@ -256,7 +256,7 @@ impl ECDSAPublicKey {
             window.crypto.subtle.importKey("raw", @{data}, {
                 name: "ECDSA",
                 namedCurve: "P-256"
-            }, true, ["verify"]).then(@{move |key: CryptoKey| {
+            }, true, ["verify"]).then(@{move |key: web_sys::CryptoKey| {
                 executor::spawn(sender.clone().send(key).then(|_| Ok(())));
             }}).catch((err) => {
                 console.log(err);
@@ -285,7 +285,7 @@ impl ECDSAPrivateKey {
             window.crypto.subtle.importKey("pkcs8", @{data}, {
                 name: "ECDSA",
                 namedCurve: "P-256"
-            }, true, ["sign"]).then(@{move |key: CryptoKey| {
+            }, true, ["sign"]).then(@{move |key: web_sys::CryptoKey| {
                 executor::spawn(sender.clone().send(key).then(|_| Ok(())));
             }}).catch((err) => {
                 console.log(err);
@@ -318,7 +318,7 @@ impl ECDSAKeyPair {
                 window.crypto.subtle.generateKey({
                     name: "ECDSA",
                     namedCurve: "P-256"
-                }, true, ["sign", "verify"]).then((keyPair) => @{move |private_key: CryptoKey, public_key: CryptoKey| {
+                }, true, ["sign", "verify"]).then((keyPair) => @{move |private_key: web_sys::CryptoKey, public_key: web_sys::CryptoKey| {
                     executor::spawn(sender.clone().send((private_key, public_key)).then(|_| Ok(())));
                 }}(keyPair.privateKey, keyPair.publicKey)).catch((err) => {
                     console.log(err);
