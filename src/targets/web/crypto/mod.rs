@@ -6,13 +6,13 @@ pub(crate) mod primitives;
 
 pub(crate) fn random(bytes: u32) -> impl Future<Item = Vec<u8>, Error = Error> {
     lazy(move || {
-        let data: TypedArray<u8> = js! {
-            let data = new Uint8Array(@{bytes});
-            window.crypto.getRandomValues(data);
-            return data;
-        }
-        .try_into()
-        .unwrap();
+        let data = vec![0u8; bytes as usize];
+        web_sys::window()
+            .unwrap()
+            .crypto()
+            .unwrap()
+            .get_random_values_with_u8_array(&mut data)
+            .unwrap();
         Ok(data.into()).into_future()
     })
 }
