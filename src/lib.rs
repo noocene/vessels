@@ -1,5 +1,7 @@
-//! vessels is a general-purpose hardware abstraction layer that aims to provide a
-//! consistent and ergonomic set of interfaces for common platform-specific APIs.
+//! vessels is a software development framework intended to facilitate
+//! the ergonomic development of performant cross-platform informational
+//! ecosystems using a novel paradigm based on a single-source distributed
+//! object model and low-overhead containerisation.
 
 #![warn(
     missing_copy_implementations,
@@ -16,6 +18,8 @@
 )]
 #![recursion_limit = "128"]
 
+/// Provides abstracted cryptographic primitives.
+pub mod crypto;
 /// Provides a cross-platform abstracted asynchronous executor.
 pub mod executor;
 /// Provides interfaces to graphics APIs.

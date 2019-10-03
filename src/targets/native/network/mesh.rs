@@ -243,12 +243,11 @@ impl RTCDataChannel {
                 None
             })
             .unwrap();
-        let data_channel = RTCDataChannel {
+        RTCDataChannel {
             channel: WebRTCDataChannel(channel),
             incoming_messages,
             incoming_messages_task,
-        };
-        data_channel
+        }
     }
     fn local_create(channel: Object) -> RTCDataChannelOpening {
         let task = Arc::new(AtomicTask::new());
@@ -394,7 +393,7 @@ pub(crate) fn new(
         let missing = needed
             .iter()
             .filter(|n| registry.find_plugin(n).is_none())
-            .map(|n| *n)
+            .cloned()
             .collect::<Vec<_>>();
         if !missing.is_empty() {
             panic!("missing plugins: {:?}", missing);

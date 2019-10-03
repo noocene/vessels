@@ -13,8 +13,6 @@ use std::{
     rc::Rc,
 };
 
-use libc::c_void;
-
 #[cfg(target_os = "macos")]
 mod cm_backing {
     use libc::c_void;
@@ -96,6 +94,7 @@ impl Profile {
     #[cfg(target_os = "macos")]
     fn from_window_macos(window: &Window) -> Result<Profile, ()> {
         use glutin::os::macos::WindowExt;
+        use libc::c_void;
         let os_window = window.get_nswindow();
         let display_profile =
             lcms2::Profile::new_icc(cm_backing::get_profile_data(os_window as *const c_void)?)

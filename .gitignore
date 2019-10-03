@@ -1,7 +1,6 @@
 /target
-vitruvia_derive/target
-vitruvia_derive/Cargo.lock
+vessels_derive/target
+vessels_derive/Cargo.lock
 **/*.rs.bk
 Cargo.lock
 .DS_Store
-.vscode

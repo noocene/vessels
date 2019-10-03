@@ -56,7 +56,7 @@ struct Core;
 
 impl<F> Executor<F> for Core
 where
-    F: Future<Item = (), Error = ()> + Send + 'static,
+    F: Future<Item = (), Error = ()> + 'static,
 {
     fn execute(&self, future: F) -> StdResult<(), ExecuteError<F>> {
         SpawnedTask::notify(SpawnedTask::new(future));
@@ -80,7 +80,7 @@ impl Notify for Core {
 
 pub(crate) fn spawn<F>(future: F)
 where
-    F: Future<Item = (), Error = ()> + Send + 'static,
+    F: Future<Item = (), Error = ()> + 'static,
 {
     Core.execute(future).unwrap();
 }
