@@ -40,9 +40,9 @@ pub mod consecutive {
         F: Future<Item = (), Error = ()> + 'static,
     {
         #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        unimplemented!("Native consecutive executor is unimplemented");
+        targets::native::executor::consecutive::run(future);
         #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
-        targets::web::executor::spawn(future);
+        targets::web::executor::consecutive::spawn(future);
     }
 
     /// Spawns the provided future on the currently running executor.
@@ -51,9 +51,9 @@ pub mod consecutive {
         F: Future<Item = (), Error = ()> + 'static,
     {
         #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        unimplemented!("Native consecutive executor is unimplemented");
+        targets::native::executor::consecutive::spawn(future);
         #[cfg(any(target_arch = "wasm32", target_arch = "asmjs"))]
-        targets::web::executor::spawn(future);
+        targets::web::executor::consecutive::spawn(future);
     }
 
 }
