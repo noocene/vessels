@@ -1,12 +1,11 @@
 use failure::Error;
 use futures::{lazy, Future, IntoFuture};
-use stdweb::{unstable::TryInto, web::TypedArray};
 
 pub(crate) mod primitives;
 
 pub(crate) fn random(bytes: u32) -> impl Future<Item = Vec<u8>, Error = Error> {
     lazy(move || {
-        let data = vec![0u8; bytes as usize];
+        let mut data = vec![0u8; bytes as usize];
         web_sys::window()
             .unwrap()
             .crypto()

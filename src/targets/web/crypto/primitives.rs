@@ -5,12 +5,8 @@ use crate::{
 use failure::Error;
 use futures::{lazy, sync::mpsc::channel, Future, Sink, Stream};
 use std::sync::Mutex;
-use stdweb::{
-    unstable::TryInto,
-    web::{ArrayBuffer, TypedArray},
-};
 
-type CryptoKey = stdweb::Value;
+use wasm_bindgen::{prelude::*, JsCast};
 
 pub(crate) struct AESKey<T: NonceProvider> {
     key: web_sys::CryptoKey,
@@ -24,22 +20,30 @@ impl<T: NonceProvider> SymmetricKey<T> for AESKey<T> {
     {
         let (sender, receiver) = channel(0);
         let iv = self.nonce_provider.lock().unwrap().next_encrypt();
-        let js_iv: TypedArray<u8> = iv.as_ref().clone().as_ref().into();
-        let data: TypedArray<u8> = data.to_owned().as_slice().into();
-        js! {
-            let iv = @{js_iv};
-            window.crypto.subtle.encrypt({
-                name: "AES-GCM",
-                iv: iv,
-            }, @{&self.key}, @{data}).then(
-                @{move |data: ArrayBuffer| {
-                    let s = sender.clone();
-                    let mut data: Vec<u8> = data.into();
-                    iv.after_encrypt(&mut data);
-                    executor::spawn(sender.clone().send(data).then(|_| Ok(())));
-                }}
-            );
-        };
+        let iv_data: &[u8] = iv.as_ref();
+        let iv_data: js_sys::Uint8Array = iv_data.into();
+        let mut data = data.to_vec();
+        web_sys::window()
+            .unwrap()
+            .crypto()
+            .unwrap()
+            .subtle()
+            .encrypt_with_object_and_u8_array(
+                web_sys::AesGcmParams::new("AES-GCM", &iv_data)
+                    .as_ref()
+                    .dyn_ref::<js_sys::Object>()
+                    .unwrap(),
+                &self.key,
+                &mut data,
+            )
+            .unwrap()
+            .then(&Closure::once(Box::new(move |data: JsValue| {
+                let buffer = js_sys::Uint8Array::new(&data);
+                let mut data = vec![0u8; buffer.length() as usize];
+                buffer.copy_to(&mut data);
+                iv.after_encrypt(&mut data);
+                executor::spawn(sender.send(data).then(|_| Ok(())));
+            }) as Box<dyn FnOnce(_)>));
         Box::new(
             receiver
                 .take(1)
@@ -54,25 +58,29 @@ impl<T: NonceProvider> SymmetricKey<T> for AESKey<T> {
     {
         let (sender, receiver) = channel(0);
         let mut data = data.to_owned();
-        let iv: TypedArray<u8> = self
-            .nonce_provider
-            .lock()
+        let iv = self.nonce_provider.lock().unwrap().next_decrypt(&mut data);
+        let iv_data: &[u8] = iv.as_ref();
+        let iv: js_sys::Uint8Array = iv_data.into();
+        web_sys::window()
             .unwrap()
-            .next_decrypt(&mut data)
-            .as_ref()
-            .into();
-        let data: TypedArray<u8> = data.as_slice().into();
-        js! {
-            window.crypto.subtle.decrypt({
-                name: "AES-GCM",
-                iv: @{iv},
-            }, @{&self.key}, @{data}).then((decrypted) => {
-                @{move |data: ArrayBuffer| {
-                    let s = sender.clone();
-                    executor::spawn(sender.clone().send(data).then(|_| Ok(())));
-                }}(decrypted);
-            });
-        };
+            .crypto()
+            .unwrap()
+            .subtle()
+            .decrypt_with_object_and_u8_array(
+                web_sys::AesGcmParams::new("AES-GCM", &iv)
+                    .as_ref()
+                    .dyn_ref::<js_sys::Object>()
+                    .unwrap(),
+                &self.key,
+                &mut data,
+            )
+            .unwrap()
+            .then(&Closure::once(Box::new(move |data: JsValue| {
+                let buffer = js_sys::Uint8Array::new(&data);
+                let mut data = vec![0u8; buffer.length() as usize];
+                buffer.copy_to(&mut data);
+                executor::spawn(sender.send(data).then(|_| Ok(())));
+            }) as Box<dyn FnOnce(_)>));
         Box::new(
             receiver
                 .take(1)
@@ -83,22 +91,24 @@ impl<T: NonceProvider> SymmetricKey<T> for AESKey<T> {
     }
     fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error>> {
         let (sender, receiver) = channel(0);
-        js! {
-            window.crypto.subtle.exportKey("raw", @{&self.key}).then((key) => {
-                @{move |data: ArrayBuffer| {
-                    let s = sender.clone();
-                    let data: Vec<u8> = data.into();
-                    let mut a: [u8; 16] = Default::default();
-                    a.copy_from_slice(data.as_slice());
-                    executor::spawn(sender.clone().send(a).then(|_| Ok(())));
-                }}(key);
-            });
-        };
+        web_sys::window()
+            .unwrap()
+            .crypto()
+            .unwrap()
+            .subtle()
+            .export_key("raw", &self.key)
+            .unwrap()
+            .then(&Closure::once(Box::new(move |data: JsValue| {
+                let buffer = js_sys::Uint8Array::new(&data);
+                let mut data: [u8; 16] = Default::default();
+                buffer.copy_to(&mut data);
+                executor::consecutive::spawn(sender.send(data).then(|_| Ok(())));
+            }) as Box<dyn FnOnce(_)>));
         Box::new(
             receiver
                 .take(1)
                 .into_future()
-                .and_then(|i| Ok(i.0.unwrap().into()))
+                .and_then(|i| Ok(i.0.unwrap()))
                 .map_err(|_| failure::err_msg("temp err")),
         )
     }
@@ -107,16 +117,26 @@ impl<T: NonceProvider> SymmetricKey<T> for AESKey<T> {
 impl<T: NonceProvider + 'static> AESKey<T> {
     pub(crate) fn new() -> impl Future<Item = Box<dyn SymmetricKey<T> + 'static>, Error = Error> {
         let (sender, receiver) = channel(0);
-        js! {
-            window.crypto.subtle.generateKey({
-                name: "AES-GCM",
-                length: 128
-            }, true, ["encrypt", "decrypt"]).then(@{move |key: web_sys::CryptoKey| {
-                executor::spawn(sender.clone().send(key).then(|_| Ok(())));
-            }}).catch((err) => {
-                console.log(err);
-            });
-        };
+        web_sys::window()
+            .unwrap()
+            .crypto()
+            .unwrap()
+            .subtle()
+            .generate_key_with_object(
+                web_sys::AesKeyGenParams::new("AES-GCM", 128)
+                    .as_ref()
+                    .dyn_ref::<js_sys::Object>()
+                    .unwrap(),
+                true,
+                &vec![JsValue::from("encrypt"), JsValue::from("decrypt")]
+                    .iter()
+                    .collect::<js_sys::Array>(),
+            )
+            .unwrap()
+            .then(&Closure::once(Box::new(move |key: JsValue| {
+                let key = key.dyn_ref::<web_sys::CryptoKey>().unwrap().clone();
+                executor::consecutive::spawn(sender.send(key).then(|_| Ok(())));
+            }) as Box<dyn FnOnce(_)>));
         receiver
             .take(1)
             .into_future()
@@ -133,14 +153,27 @@ impl<T: NonceProvider + 'static> AESKey<T> {
         data: [u8; 16],
     ) -> impl Future<Item = Box<dyn SymmetricKey<T> + 'static>, Error = Error> {
         let (sender, receiver) = channel(0);
-        let data: TypedArray<u8> = data.as_ref().into();
-        js! {
-            window.crypto.subtle.importKey("raw", @{data}, "AES-GCM", true, ["encrypt", "decrypt"]).then(@{move |key: web_sys::CryptoKey| {
-                executor::spawn(sender.clone().send(key).then(|_| Ok(())));
-            }}).catch((err) => {
-                console.log(err);
-            });
-        };
+        web_sys::window()
+            .unwrap()
+            .crypto()
+            .unwrap()
+            .subtle()
+            .import_key_with_str(
+                "raw",
+                js_sys::Uint8Array::from(data.as_ref())
+                    .dyn_ref::<js_sys::Object>()
+                    .unwrap(),
+                "AES-GCM",
+                true,
+                &vec![JsValue::from("encrypt"), JsValue::from("decrypt")]
+                    .iter()
+                    .collect::<js_sys::Array>(),
+            )
+            .unwrap()
+            .then(&Closure::once(Box::new(move |pair: JsValue| {
+                let key = pair.dyn_ref::<web_sys::CryptoKey>().unwrap().clone();
+                executor::consecutive::spawn(sender.send(key).then(|_| Ok(())));
+            }) as Box<dyn FnOnce(_)>));
         receiver
             .take(1)
             .into_future()
@@ -168,32 +201,50 @@ impl VerifyingKey for ECDSAPublicKey {
         signature: &'_ [u8],
     ) -> Box<dyn Future<Item = bool, Error = Error>> {
         let (sender, receiver) = channel(0);
-        let data: TypedArray<u8> = data.into();
-        let signature: TypedArray<u8> = signature.into();
-        js! {
-            window.crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, @{&self.key}, @{signature}, @{data}).then(@{move |result: bool| {
-                executor::spawn(sender.clone().send(result).then(|_| Ok(())));
-            }}).catch((err) => {
-                console.log(err);
-            });
-        };
+        let mut data = data.to_vec();
+        let mut signature = signature.to_vec();
+        web_sys::window()
+            .unwrap()
+            .crypto()
+            .unwrap()
+            .subtle()
+            .verify_with_object_and_u8_array_and_u8_array(
+                web_sys::EcdsaParams::new("ECDSA", &"SHA-256".into())
+                    .as_ref()
+                    .dyn_ref::<js_sys::Object>()
+                    .unwrap(),
+                &self.key,
+                &mut signature,
+                &mut data,
+            )
+            .unwrap()
+            .then(&Closure::once(Box::new(move |result: JsValue| {
+                let result = result.dyn_ref::<js_sys::Boolean>().unwrap().clone();
+                executor::consecutive::spawn(sender.send(result.into()).then(|_| Ok(())));
+            }) as Box<dyn FnOnce(_)>));
         Box::new(
             receiver
                 .take(1)
                 .into_future()
-                .and_then(|i| Ok(i.0.unwrap().into()))
+                .and_then(|i| Ok(i.0.unwrap()))
                 .map_err(|_| failure::err_msg("temp err")),
         )
     }
     fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
         let (sender, receiver) = channel(0);
-        js! {
-            window.crypto.subtle.exportKey("raw", @{&self.key}).then((key) => {
-                @{move |data: ArrayBuffer| {
-                    executor::spawn(sender.clone().send(data.into()).then(|_| Ok(())));
-                }}(key);
-            });
-        };
+        web_sys::window()
+            .unwrap()
+            .crypto()
+            .unwrap()
+            .subtle()
+            .export_key("raw", &self.key)
+            .unwrap()
+            .then(&Closure::once(Box::new(move |data: JsValue| {
+                let buffer = js_sys::Uint8Array::new(&data);
+                let mut data = vec![0u8; buffer.length() as usize];
+                buffer.copy_to(&mut data);
+                executor::consecutive::spawn(sender.send(data).then(|_| Ok(())));
+            }) as Box<dyn FnOnce(_)>));
         Box::new(
             receiver
                 .take(1)
@@ -207,31 +258,50 @@ impl VerifyingKey for ECDSAPublicKey {
 impl SigningKey for ECDSAPrivateKey {
     fn sign(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
         let (sender, receiver) = channel(0);
-        let data: TypedArray<u8> = data.into();
-        js! {
-            window.crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, @{&self.key}, @{data}).then(@{move |signature: ArrayBuffer| {
-                executor::spawn(sender.clone().send(signature).then(|_| Ok(())));
-            }}).catch((err) => {
-                console.log(err);
-            });
-        };
+        let mut data = data.to_vec();
+        web_sys::window()
+            .unwrap()
+            .crypto()
+            .unwrap()
+            .subtle()
+            .sign_with_object_and_u8_array(
+                web_sys::EcdsaParams::new("ECDSA", &"SHA-256".into())
+                    .as_ref()
+                    .dyn_ref::<js_sys::Object>()
+                    .unwrap(),
+                &self.key,
+                &mut data,
+            )
+            .unwrap()
+            .then(&Closure::once(Box::new(move |result: JsValue| {
+                let buffer = js_sys::Uint8Array::new(&result);
+                let mut data = vec![0u8; buffer.length() as usize];
+                buffer.copy_to(&mut data);
+                executor::consecutive::spawn(sender.send(data).then(|_| Ok(())));
+            }) as Box<dyn FnOnce(_)>));
         Box::new(
             receiver
                 .take(1)
                 .into_future()
-                .and_then(|i| Ok(i.0.unwrap().into()))
+                .and_then(|i| Ok(i.0.unwrap()))
                 .map_err(|_| failure::err_msg("temp err")),
         )
     }
     fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
         let (sender, receiver) = channel(0);
-        js! {
-            window.crypto.subtle.exportKey("pkcs8", @{&self.key}).then((key) => {
-                @{move |data: ArrayBuffer| {
-                    executor::spawn(sender.clone().send(data.into()).then(|_| Ok(())));
-                }}(key);
-            });
-        };
+        web_sys::window()
+            .unwrap()
+            .crypto()
+            .unwrap()
+            .subtle()
+            .export_key("pkcs8", &self.key)
+            .unwrap()
+            .then(&Closure::once(Box::new(move |data: JsValue| {
+                let buffer = js_sys::Uint8Array::new(&data);
+                let mut data = vec![0u8; buffer.length() as usize];
+                buffer.copy_to(&mut data);
+                executor::consecutive::spawn(sender.send(data).then(|_| Ok(())));
+            }) as Box<dyn FnOnce(_)>));
         Box::new(
             receiver
                 .take(1)
@@ -251,17 +321,31 @@ impl ECDSAPublicKey {
         data: &'_ [u8],
     ) -> impl Future<Item = Box<dyn VerifyingKey + 'static>, Error = Error> {
         let (sender, receiver) = channel(0);
-        let data: TypedArray<u8> = data.as_ref().into();
-        js! {
-            window.crypto.subtle.importKey("raw", @{data}, {
-                name: "ECDSA",
-                namedCurve: "P-256"
-            }, true, ["verify"]).then(@{move |key: web_sys::CryptoKey| {
-                executor::spawn(sender.clone().send(key).then(|_| Ok(())));
-            }}).catch((err) => {
-                console.log(err);
-            });
-        };
+        web_sys::window()
+            .unwrap()
+            .crypto()
+            .unwrap()
+            .subtle()
+            .import_key_with_object(
+                "raw",
+                js_sys::Uint8Array::from(data)
+                    .dyn_ref::<js_sys::Object>()
+                    .unwrap(),
+                web_sys::EcKeyImportParams::new("ECDSA")
+                    .named_curve("P-256")
+                    .as_ref()
+                    .dyn_ref::<js_sys::Object>()
+                    .unwrap(),
+                true,
+                &vec![JsValue::from("verify")]
+                    .iter()
+                    .collect::<js_sys::Array>(),
+            )
+            .unwrap()
+            .then(&Closure::once(Box::new(move |pair: JsValue| {
+                let key = pair.dyn_ref::<web_sys::CryptoKey>().unwrap().clone();
+                executor::consecutive::spawn(sender.send(key).then(|_| Ok(())));
+            }) as Box<dyn FnOnce(_)>));
         receiver
             .take(1)
             .into_future()
@@ -280,17 +364,31 @@ impl ECDSAPrivateKey {
         data: &'_ [u8],
     ) -> impl Future<Item = Box<dyn SigningKey + 'static>, Error = Error> {
         let (sender, receiver) = channel(0);
-        let data: TypedArray<u8> = data.as_ref().into();
-        js! {
-            window.crypto.subtle.importKey("pkcs8", @{data}, {
-                name: "ECDSA",
-                namedCurve: "P-256"
-            }, true, ["sign"]).then(@{move |key: web_sys::CryptoKey| {
-                executor::spawn(sender.clone().send(key).then(|_| Ok(())));
-            }}).catch((err) => {
-                console.log(err);
-            });
-        };
+        web_sys::window()
+            .unwrap()
+            .crypto()
+            .unwrap()
+            .subtle()
+            .import_key_with_object(
+                "pkcs8",
+                js_sys::Uint8Array::from(data)
+                    .dyn_ref::<js_sys::Object>()
+                    .unwrap(),
+                web_sys::EcKeyImportParams::new("ECDSA")
+                    .named_curve("P-256")
+                    .as_ref()
+                    .dyn_ref::<js_sys::Object>()
+                    .unwrap(),
+                true,
+                &vec![JsValue::from("sign")]
+                    .iter()
+                    .collect::<js_sys::Array>(),
+            )
+            .unwrap()
+            .then(&Closure::once(Box::new(move |pair: JsValue| {
+                let key = pair.dyn_ref::<web_sys::CryptoKey>().unwrap().clone();
+                executor::consecutive::spawn(sender.send(key).then(|_| Ok(())));
+            }) as Box<dyn FnOnce(_)>));
         receiver
             .take(1)
             .into_future()
@@ -314,16 +412,37 @@ impl ECDSAKeyPair {
     > {
         lazy(|| {
             let (sender, receiver) = channel(0);
-            js! {
-                window.crypto.subtle.generateKey({
-                    name: "ECDSA",
-                    namedCurve: "P-256"
-                }, true, ["sign", "verify"]).then((keyPair) => @{move |private_key: web_sys::CryptoKey, public_key: web_sys::CryptoKey| {
-                    executor::spawn(sender.clone().send((private_key, public_key)).then(|_| Ok(())));
-                }}(keyPair.privateKey, keyPair.publicKey)).catch((err) => {
-                    console.log(err);
-                });
-            };
+            web_sys::window()
+                .unwrap()
+                .crypto()
+                .unwrap()
+                .subtle()
+                .generate_key_with_object(
+                    web_sys::EcKeyGenParams::new("ECDSA", "P-256")
+                        .as_ref()
+                        .dyn_ref::<js_sys::Object>()
+                        .unwrap(),
+                    true,
+                    &vec![JsValue::from("sign"), JsValue::from("verify")]
+                        .iter()
+                        .collect::<js_sys::Array>(),
+                )
+                .unwrap()
+                .then(&Closure::once(Box::new(move |pair: JsValue| {
+                    let private_key = js_sys::Reflect::get(&pair, &"privateKey".into())
+                        .unwrap()
+                        .dyn_ref::<web_sys::CryptoKey>()
+                        .unwrap()
+                        .clone();
+                    let public_key = js_sys::Reflect::get(&pair, &"publicKey".into())
+                        .unwrap()
+                        .dyn_ref::<web_sys::CryptoKey>()
+                        .unwrap()
+                        .clone();
+                    executor::consecutive::spawn(
+                        sender.send((private_key, public_key)).then(|_| Ok(())),
+                    );
+                }) as Box<dyn FnOnce(_)>));
             receiver
                 .take(1)
                 .into_future()
