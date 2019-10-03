@@ -1,11 +1,8 @@
 use futures::Future;
-use vessels::{
-    crypto::primitives::SigningKeyPair,
-    executor,
-};
+use vessels::{crypto::primitives::SigningKeyPair, executor};
 
 fn main() {
-    executor::run(
+    executor::consecutive::run(
         SigningKeyPair::new()
             .and_then(|(private_key, public_key)| {
                 private_key
