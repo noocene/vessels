@@ -60,10 +60,10 @@ impl<T: NonceProvider + 'static> AESKey<T> {
 }
 
 impl<T: NonceProvider + 'static> SymmetricKey<T> for AESKey<T> {
-    fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error> + Send> {
+    fn as_bytes(&self) -> Box<dyn Future<Item = [u8; 16], Error = Error>> {
         Box::new(ok(self.state.lock().unwrap().key_bytes))
     }
-    fn encrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+    fn encrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
         let state = self.state.clone();
         let data = data.to_owned();
         Box::new(lazy(move || {
@@ -82,7 +82,7 @@ impl<T: NonceProvider + 'static> SymmetricKey<T> for AESKey<T> {
             Ok(data)
         }))
     }
-    fn decrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+    fn decrypt(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
         let state = self.state.clone();
         let data = data.to_owned();
         Box::new(lazy(move || {
@@ -131,7 +131,7 @@ impl ECDSAPrivateKey {
 }
 
 impl SigningKey for ECDSAPrivateKey {
-    fn sign(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+    fn sign(&self, data: &'_ [u8]) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
         let state = self.state.clone();
         let data = data.to_owned();
         Box::new(lazy(move || {
@@ -144,7 +144,7 @@ impl SigningKey for ECDSAPrivateKey {
                 .to_owned())
         }))
     }
-    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
         Box::new(ok(Vec::from(self.state.lock().unwrap().key_data.clone())))
     }
 }
@@ -180,7 +180,7 @@ impl VerifyingKey for ECDSAPublicKey {
         &self,
         data: &'_ [u8],
         signature: &'_ [u8],
-    ) -> Box<dyn Future<Item = bool, Error = Error> + Send> {
+    ) -> Box<dyn Future<Item = bool, Error = Error>> {
         let state = self.state.clone();
         let data = data.to_owned();
         let signature = signature.to_owned();
@@ -192,7 +192,7 @@ impl VerifyingKey for ECDSAPublicKey {
                 .is_ok())
         }))
     }
-    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error> + Send> {
+    fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
         Box::new(ok(self.state.lock().unwrap().key_data.clone()))
     }
 }
