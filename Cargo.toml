@@ -20,7 +20,7 @@ itertools = "0.8.0"
 
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen = "0.2.51"
-web-sys = { version = "0.3.28", features = ["Document", "Window", "HtmlHeadElement", "Element", "HtmlElement", "Node", "EventTarget", "MouseEvent", "Event", "WheelEvent", "KeyboardEvent", "HtmlCanvasElement", "CanvasRenderingContext2d", "TextMetrics", "ImageData", "DomTokenList", "CanvasGradient", "CanvasPattern", "CssStyleDeclaration", "console", "WebSocket", "BinaryType", "MessageEvent", "RtcPeerConnection", "RtcDataChannel", "RtcSessionDescriptionInit", "RtcSessionDescription", "RtcSdpType", "RtcIceCandidateInit", "RtcIceCandidate"] }
+web-sys = { version = "0.3.28", features = ["Document", "Window", "HtmlHeadElement", "Element", "HtmlElement", "Node", "EventTarget", "MouseEvent", "Event", "WheelEvent", "KeyboardEvent", "HtmlCanvasElement", "CanvasRenderingContext2d", "TextMetrics", "ImageData", "DomTokenList", "CanvasGradient", "CanvasPattern", "CssStyleDeclaration", "console", "WebSocket", "BinaryType", "MessageEvent", "RtcPeerConnection", "RtcDataChannel", "RtcSessionDescriptionInit", "RtcSessionDescription", "RtcSdpType", "RtcIceCandidateInit", "RtcIceCandidate", "Crypto", "CryptoKey", "SubtleCrypto", "Algorithm", "AesKeyAlgorithm", "AesGcmParams", "EcdsaParams", "EcKeyGenParams", "CryptoKeyPair", "AesKeyGenParams", "EcKeyImportParams"] }
 js-sys = "0.3.28"
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
@@ -38,8 +38,14 @@ ws = "0.8.1"
 gstreamer-webrtc = "0.13.0"
 gstreamer-sdp = "0.13.0"
 gstreamer = "0.13.0"
+wasmer-runtime = "0.6.0"
+ring = "0.16.5"
 lazy_static = "1.3.0"
 
 [profile.release]
 lto = true
 debug = false
+
+[[bin]]
+name = "main"
+path = "./src/main.rs"
