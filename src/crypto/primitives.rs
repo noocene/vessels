@@ -1,8 +1,7 @@
-use crate::{crypto, targets};
+use crate::targets;
 use failure::Error;
 use futures::Future;
 use serde::{
-    de::DeserializeOwned,
     de::{Deserialize, Deserializer, Visitor},
     ser::Serializer,
     Serialize,

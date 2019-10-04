@@ -1220,12 +1220,12 @@ void main()
                 } else {
                     None
                 };
-                e.map(|e| {
+                if let Some(e) = e {
                     if send_events {
                         state.event_sender.send(e).unwrap();
-                        state.event_task.notify()
+                        state.event_task.notify();
                     }
-                });
+                }
             });
 
             let state = self.state.borrow();
