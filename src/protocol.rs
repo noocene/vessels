@@ -227,7 +227,7 @@ impl<T: Value + Send + 'static, E: Value + Send + 'static> Value for Future<T, E
                     let ctx = context
                         .map(|item| {
                             if let Ok(item) = item {
-                                return item;
+                                item
                             } else {
                                 panic!("Invalid result in future stream");
                             }
@@ -239,7 +239,7 @@ impl<T: Value + Send + 'static, E: Value + Send + 'static> Value for Future<T, E
                     let ctx = context
                         .map(|item| {
                             if let Err(item) = item {
-                                return item;
+                                item
                             } else {
                                 panic!("Invalid result in future stream");
                             }
@@ -285,7 +285,7 @@ where
         context: C,
     ) -> Self {
         if let Ok(v) = context.into_future().wait() {
-            return v.0.unwrap();
+            v.0.unwrap()
         } else {
             panic!("panic in construction");
         }

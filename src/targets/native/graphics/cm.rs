@@ -210,7 +210,7 @@ impl Profile {
                     .shadows
                     .iter()
                     .map(|shadow| {
-                        let mut corrected_shadow = shadow.clone();
+                        let mut corrected_shadow = *shadow;
                         corrected_shadow.color = self.transform(shadow.color);
                         corrected_shadow
                     })

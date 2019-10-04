@@ -145,7 +145,7 @@ impl SigningKey for ECDSAPrivateKey {
         }))
     }
     fn as_bytes(&self) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
-        Box::new(ok(Vec::from(self.state.lock().unwrap().key_data.clone())))
+        Box::new(ok(self.state.lock().unwrap().key_data.clone()))
     }
 }
 
