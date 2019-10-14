@@ -1,0 +1,22 @@
+[package]
+name = "valuedev"
+version = "0.1.0"
+authors = ["Izzy Swart <zenerboson@gmail.com>"]
+edition = "2018"
+
+[workspace]
+members = [".", "./derive"]
+
+[dependencies]
+futures = "0.1.29"
+serde = { version = "1.0.101", features = ["derive"] }
+failure = "0.1.5"
+tokio = "0.1.22"
+erased-serde = "0.3.9"
+inventory = "0.1.4"
+serde_json = "1.0.41"
+lazy_static = "1.4.0"
+
+[dependencies.derive]
+version = "0.1.0"
+path = "./derive"
