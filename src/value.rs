@@ -308,6 +308,27 @@ pub trait Format {
         Self: Sized;
 }
 
+pub trait ApplySelf<'de>:
+    UniformStreamSink<<<Self as Context<'de>>::Target as DeserializeSeed<'de>>::Value>
+    + Context<'de>
+    + 'static
+    + Send
+where
+    <Self as Context<'de>>::Item: Send,
+{
+    fn apply<T: Format + 'static>(
+        self,
+    ) -> StreamSink<
+        Box<dyn Stream<Item = T::Representation, Error = ()> + Send>,
+        Box<dyn Sink<SinkItem = T::Representation, SinkError = ()> + Send>,
+    >
+    where
+        Self: Sized,
+    {
+        <T as Apply>::format(self)
+    }
+}
+
 pub trait Apply {
     type Format: Format + 'static;
 
