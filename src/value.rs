@@ -6,7 +6,6 @@ use futures::{
     sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
     Future as IFuture, Poll, Sink, StartSend, Stream,
 };
-use lazy_static::lazy_static;
 use serde::{
     de::{DeserializeOwned, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor},
     ser::{SerializeMap, SerializeSeq},
@@ -26,15 +25,10 @@ use std::{
     ops::Deref,
     sync::{
         atomic::{AtomicU64, Ordering},
-        Mutex,
+        Arc, Mutex,
     },
     time::{Duration, SystemTime},
 };
-
-lazy_static! {
-    static ref IDX: AtomicU64 = AtomicU64::new(0);
-    static ref CHANNELS: Mutex<HashMap<u64, [TypeId; 2]>> = Mutex::new(HashMap::new());
-}
 
 pub struct Item {
     ty: TypeId,
@@ -75,7 +69,6 @@ pub trait Channel<
 
 pub trait Target {
     fn new_with<V: Value>(value: V) -> Self;
-    fn value<V: Value>(self) -> V;
 }
 
 pub trait Value: Send + 'static {
@@ -95,18 +88,11 @@ pub trait Value: Send + 'static {
     #[doc(hidden)]
     const DO_NOT_IMPLEMENT_THIS_TRAIT_MANUALLY: ();
 
-    fn on_to<T: Target>(self) -> T
+    fn on_new<T: Target>(self) -> T
     where
         Self: Sized,
     {
         T::new_with(self)
-    }
-
-    fn of<T: Target>(target: T) -> Self
-    where
-        Self: Sized,
-    {
-        target.value()
     }
 }
 
@@ -295,8 +281,128 @@ where
     }
 }
 
+struct IdChannelContextState {
+    channel_types: HashMap<u32, (TypeId, TypeId)>,
+    unused_indices: Vec<u32>,
+    next_index: u32,
+}
+
+pub trait Format {
+    type Representation;
+
+    fn serialize<T: Serialize>(item: T) -> Self::Representation;
+    fn deserialize<'de, T: DeserializeSeed<'de>>(
+        item: Self::Representation,
+        context: T,
+    ) -> T::Value;
+}
+
+pub struct JSON;
+
+impl Format for JSON {
+    type Representation = String;
+
+    fn serialize<T: Serialize>(item: T) -> Self::Representation {
+        serde_json::to_string(&item).unwrap()
+    }
+
+    fn deserialize<'de, T: DeserializeSeed<'de>>(
+        item: Self::Representation,
+        context: T,
+    ) -> T::Value {
+        let mut deserializer = serde_json::Deserializer::from_reader(item.as_bytes());
+        context.deserialize(&mut deserializer).unwrap()
+    }
+}
+
+pub struct CBOR {}
+
+impl Format for CBOR {
+    type Representation = Vec<u8>;
+
+    fn serialize<T: Serialize>(item: T) -> Self::Representation {
+        serde_cbor::to_vec(&item).unwrap()
+    }
+
+    fn deserialize<'de, T: DeserializeSeed<'de>>(
+        item: Self::Representation,
+        context: T,
+    ) -> T::Value {
+        let mut deserializer = serde_cbor::Deserializer::from_reader(item.as_slice());
+        context.deserialize(&mut deserializer).unwrap()
+    }
+}
+
+pub struct AsBytes<T: Format>(PhantomData<T>);
+
+impl<F: Format<Representation = String>> Format for AsBytes<F> {
+    type Representation = Vec<u8>;
+
+    fn serialize<T: Serialize>(item: T) -> Self::Representation {
+        F::serialize(&item).as_bytes().to_owned()
+    }
+
+    fn deserialize<'de, T: DeserializeSeed<'de>>(
+        item: Self::Representation,
+        context: T,
+    ) -> T::Value {
+        F::deserialize(String::from_utf8(item).unwrap(), context)
+    }
+}
+
+pub trait Transport<
+    'de,
+    T: Target + Stream<Item = F::Representation> + Sink<SinkItem = F::Representation>,
+    F: Format,
+>
+{
+}
+
+pub struct StdoutTransport {}
+
+#[derive(Clone)]
+pub struct IdChannelContext {
+    state: Arc<Mutex<IdChannelContextState>>,
+}
+
+impl IdChannelContext {
+    fn get(&self, channel: &'_ u32) -> Option<(TypeId, TypeId)> {
+        self.state
+            .lock()
+            .unwrap()
+            .channel_types
+            .get(channel)
+            .map(|c| *c)
+    }
+
+    fn add(&self, construct: TypeId, deconstruct: TypeId) -> u32 {
+        let mut state = self.state.lock().unwrap();
+
+        if let Some(id) = state.unused_indices.pop() {
+            state.channel_types.insert(id, (construct, deconstruct));
+            id
+        } else {
+            let id = state.next_index;
+            state.next_index += 1;
+            state.channel_types.insert(id, (construct, deconstruct));
+            id
+        }
+    }
+}
+
 pub struct IdChannel {
-    out_channel: Box<dyn Stream<Item = ChannelItem, Error = ()> + Send>,
+    out_channel: Box<dyn Stream<Item = ChannelItem, Error = ()> + Sync + Send>,
+    context: IdChannelContext,
+}
+
+pub trait IdChannelSource {}
+
+impl<T> IdChannelSource for T where T: Stream<Item = ChannelItem, Error = ()> {}
+
+impl IdChannel {
+    pub fn context(&self) -> IdChannelContext {
+        self.context.clone()
+    }
 }
 
 impl Stream for IdChannel {
@@ -314,7 +420,7 @@ serialize_trait_object!(SerdeAny);
 
 impl<T: ?Sized> SerdeAny for T where T: ErasedSerialize + Any + Send {}
 
-pub struct ChannelItem(pub u64, pub Box<dyn SerdeAny>);
+pub struct ChannelItem(u32, Box<dyn SerdeAny>);
 
 impl Serialize for ChannelItem {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -335,7 +441,7 @@ impl Serialize for ChannelItem {
     }
 }
 
-struct ItemVisitor;
+struct ItemVisitor(IdChannelContext);
 
 impl<'de> Visitor<'de> for ItemVisitor {
     type Value = ChannelItem;
@@ -350,14 +456,14 @@ impl<'de> Visitor<'de> for ItemVisitor {
     {
     }*/
 
-    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    fn visit_map<A>(mut self, mut map: A) -> Result<Self::Value, A::Error>
     where
         A: MapAccess<'de>,
     {
-        let mut channel: Option<u64> = None;
+        let mut channel: Option<u32> = None;
         let mut data = None;
-        while let Some(key) = map.next_key()? {
-            match key {
+        while let Some(key) = map.next_key::<String>()? {
+            match key.as_ref() {
                 "channel" => {
                     if channel.is_some() {
                         return Err(serde::de::Error::duplicate_field("channel"));
@@ -368,7 +474,7 @@ impl<'de> Visitor<'de> for ItemVisitor {
                     if data.is_some() {
                         return Err(serde::de::Error::duplicate_field("data"));
                     }
-                    data = Some(map.next_value_seed(Id(channel.unwrap()))?);
+                    data = Some(map.next_value_seed(Id(channel.unwrap(), &mut self.0))?);
                 }
                 _ => panic!(),
             }
@@ -379,44 +485,78 @@ impl<'de> Visitor<'de> for ItemVisitor {
     }
 }
 
-struct Id(u64);
+struct Id<'a>(u32, &'a mut IdChannelContext);
 
-impl<'de> DeserializeSeed<'de> for Id {
+impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
     type Value = Box<dyn SerdeAny>;
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let ty = { *CHANNELS.lock().unwrap().get(&self.0).unwrap() };
+        let ty = self.1.get(&self.0).unwrap();
         let deserializer = &mut erased_serde::Deserializer::erase(deserializer)
             as &mut dyn erased_serde::Deserializer;
         (inventory::iter::<Item>
             .into_iter()
-            .find(|item| item.ty == ty[0])
+            .find(|item| item.ty == ty.0)
             .unwrap()
             .func)(deserializer)
         .map_err(|_| panic!())
     }
 }
 
-impl<'de> Deserialize<'de> for ChannelItem {
-    fn deserialize<D>(deserializer: D) -> Result<ChannelItem, D::Error>
+impl<'de> DeserializeSeed<'de> for IdChannelContext {
+    type Value = ChannelItem;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<ChannelItem, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let human_readable = deserializer.is_human_readable();
+        let deserializer = &mut erased_serde::Deserializer::erase(deserializer)
+            as &mut dyn erased_serde::Deserializer;
+        if human_readable {
+            deserializer
+                .deserialize_map(ItemVisitor(self))
+                .map_err(|e| {
+                    println!("{:?}", e);
+                    panic!();
+                })
+        } else {
+            deserializer
+                .deserialize_seq(ItemVisitor(self))
+                .map_err(|e| {
+                    println!("{:?}", e);
+                    panic!();
+                })
+        }
+    }
+}
+
+impl<'de> DeserializeSeed<'de> for IdChannel {
+    type Value = ChannelItem;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<ChannelItem, D::Error>
     where
         D: Deserializer<'de>,
     {
         let deserializer = &mut erased_serde::Deserializer::erase(deserializer)
             as &mut dyn erased_serde::Deserializer;
         if deserializer.is_human_readable() {
-            deserializer.deserialize_map(ItemVisitor).map_err(|e| {
-                println!("{:?}", e);
-                panic!();
-            })
+            deserializer
+                .deserialize_map(ItemVisitor(self.context))
+                .map_err(|e| {
+                    println!("{:?}", e);
+                    panic!();
+                })
         } else {
-            deserializer.deserialize_seq(ItemVisitor).map_err(|e| {
-                println!("{:?}", e);
-                panic!();
-            })
+            deserializer
+                .deserialize_seq(ItemVisitor(self.context))
+                .map_err(|e| {
+                    println!("{:?}", e);
+                    panic!();
+                })
         }
     }
 }
@@ -435,26 +575,30 @@ impl Sink for IdChannel {
 
 impl Target for IdChannel {
     fn new_with<V: Value>(value: V) -> Self {
-        let first_channel = IDX.fetch_add(1, Ordering::SeqCst);
         let (sender, receiver) = IdChannelFork::new_with(value);
 
-        CHANNELS.lock().unwrap().insert(
-            first_channel,
-            [
+        let mut channel_types = HashMap::new();
+
+        channel_types.insert(
+            0,
+            (
                 TypeId::of::<V::ConstructItem>(),
                 TypeId::of::<V::DeconstructItem>(),
-            ],
+            ),
         );
 
         IdChannel {
             out_channel: Box::new(
-                receiver.map(move |v| ChannelItem(first_channel, Box::new(v) as Box<dyn SerdeAny>)),
+                receiver.map(move |v| ChannelItem(0, Box::new(v) as Box<dyn SerdeAny>)),
             ),
+            context: IdChannelContext {
+                state: Arc::new(Mutex::new(IdChannelContextState {
+                    channel_types,
+                    next_index: 1,
+                    unused_indices: vec![],
+                })),
+            },
         }
-    }
-
-    fn value<V: Value>(self) -> V {
-        panic!()
     }
 }
 
