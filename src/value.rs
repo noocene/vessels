@@ -346,46 +346,6 @@ pub trait UniformStreamSink<T>: Sink<SinkItem = T> + Stream<Item = T> {}
 
 impl<T, U> UniformStreamSink<T> for U where U: Sink<SinkItem = T> + Stream<Item = T> {}
 
-/*pub trait Formatted<'de>:
-    UniformStreamSink<<<Self as Context<'de>>::Target as DeserializeSeed<'de>>::Value> + Context<'de>
-{
-    fn format(self) -> Self::Output;
-}*/
-
-pub trait Formats<'de, F: Format>:
-    UniformStreamSink<<<Self as Context<'de>>::Target as DeserializeSeed<'de>>::Value> + Context<'de>
-{
-    type Output: Stream<Item = F::Representation> + Sink<SinkItem = F::Representation>;
-
-    fn apply(self) -> Self::Output;
-}
-
-impl<'de, F: Format + 'static, C> Formats<'de, F> for C
-where
-    C: Context<'de>
-        + UniformStreamSink<<<C as Context<'de>>::Target as DeserializeSeed<'de>>::Value>
-        + Send
-        + 'static,
-    <C as Context<'de>>::Item: Send + 'static,
-{
-    type Output = StreamSink<
-        Box<dyn Stream<Item = F::Representation, Error = ()> + Send>,
-        Box<dyn Sink<SinkItem = F::Representation, SinkError = ()> + Send>,
-    >;
-
-    fn apply(self) -> Self::Output {
-        let ctx = self.context();
-        let (sink, stream) = self.split();
-        StreamSink(
-            Box::new(stream.map(F::serialize).map_err(|_| ())),
-            Box::new(
-                sink.sink_map_err(|_| ())
-                    .with(move |data| Ok(F::deserialize(data, ctx.clone()))),
-            ),
-        )
-    }
-}
-
 pub trait Context<'de> {
     type Item: Serialize + 'static;
     type Target: DeserializeSeed<'de, Value = Self::Item> + Clone + Send + 'static;
