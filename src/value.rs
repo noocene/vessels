@@ -316,7 +316,7 @@ pub trait ApplySelf<'de>:
 where
     <Self as Context<'de>>::Item: Send,
 {
-    fn apply<T: Format + 'static>(
+    fn encode<T: Format + 'static>(
         self,
     ) -> StreamSink<
         Box<dyn Stream<Item = T::Representation, Error = ()> + Send>,
@@ -325,14 +325,14 @@ where
     where
         Self: Sized,
     {
-        <T as Apply>::format(self)
+        <T as Apply>::encode(self)
     }
 }
 
 pub trait Apply {
     type Format: Format + 'static;
 
-    fn format<
+    fn encode<
         'de,
         C: UniformStreamSink<<<C as Context<'de>>::Target as DeserializeSeed<'de>>::Value>
             + Context<'de>
