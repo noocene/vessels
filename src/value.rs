@@ -3,6 +3,9 @@ use erased_serde::Serialize as ErasedSerialize;
 use failure::Error;
 use futures::{
     future::{empty, ok},
+    lazy,
+    sink::With,
+    stream::{Map, SplitSink, SplitStream},
     sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
     Future as IFuture, Poll, Sink, StartSend, Stream,
 };
@@ -68,7 +71,11 @@ pub trait Channel<
 }
 
 pub trait Target {
-    fn new_with<V: Value>(value: V) -> Self;
+    type Error;
+
+    fn new_with<V: Value>(
+        value: V,
+    ) -> Box<dyn IFuture<Item = Self, Error = Self::Error> + Send + 'static>;
 }
 
 pub trait Value: Send + 'static {
@@ -88,7 +95,7 @@ pub trait Value: Send + 'static {
     #[doc(hidden)]
     const DO_NOT_IMPLEMENT_THIS_TRAIT_MANUALLY: ();
 
-    fn on_new<T: Target>(self) -> T
+    fn stream<T: Target>(self) -> Box<dyn IFuture<Item = T, Error = T::Error> + Send + 'static>
     where
         Self: Sized,
     {
@@ -297,6 +304,51 @@ pub trait Format {
     ) -> T::Value;
 }
 
+pub trait UniformStreamSink<T>: Sink<SinkItem = T> + Stream<Item = T> {}
+
+impl<T, U> UniformStreamSink<T> for U where U: Sink<SinkItem = T> + Stream<Item = T> {}
+
+pub trait Formats<'de, F: Format>:
+    UniformStreamSink<<<Self as Context<'de>>::Target as DeserializeSeed<'de>>::Value> + Context<'de>
+{
+    type Output: Stream<Item = F::Representation> + Sink<SinkItem = F::Representation>;
+
+    fn apply(self) -> Self::Output;
+}
+
+impl<'de, F: Format + 'static, C> Formats<'de, F> for C
+where
+    C: Context<'de>
+        + UniformStreamSink<<<C as Context<'de>>::Target as DeserializeSeed<'de>>::Value>
+        + Send
+        + 'static,
+    <C as Context<'de>>::Item: Send + 'static,
+{
+    type Output = StreamSink<
+        Box<dyn Stream<Item = F::Representation, Error = ()> + Send>,
+        Box<dyn Sink<SinkItem = F::Representation, SinkError = ()> + Send>,
+    >;
+
+    fn apply(self) -> Self::Output {
+        let ctx = self.context();
+        let (sink, stream) = self.split();
+        StreamSink(
+            Box::new(stream.map(F::serialize).map_err(|_| ())),
+            Box::new(
+                sink.sink_map_err(|_| ())
+                    .with(move |data| Ok(F::deserialize(data, ctx.clone()))),
+            ),
+        )
+    }
+}
+
+pub trait Context<'de> {
+    type Item: Serialize + 'static;
+    type Target: DeserializeSeed<'de, Value = Self::Item> + Clone + Send + 'static;
+
+    fn context(&self) -> Self::Target;
+}
+
 pub struct JSON;
 
 impl Format for JSON {
@@ -395,15 +447,9 @@ pub struct IdChannel {
     context: IdChannelContext,
 }
 
-pub trait IdChannelSource {}
+pub trait IdChannelFormats {}
 
-impl<T> IdChannelSource for T where T: Stream<Item = ChannelItem, Error = ()> {}
-
-impl IdChannel {
-    pub fn context(&self) -> IdChannelContext {
-        self.context.clone()
-    }
-}
+impl<T> IdChannelFormats for T where T: Stream<Item = ChannelItem, Error = ()> {}
 
 impl Stream for IdChannel {
     type Item = ChannelItem;
@@ -573,32 +619,47 @@ impl Sink for IdChannel {
     }
 }
 
+impl<'de> Context<'de> for IdChannel {
+    type Item = ChannelItem;
+    type Target = IdChannelContext;
+
+    fn context(&self) -> Self::Target {
+        self.context.clone()
+    }
+}
+
 impl Target for IdChannel {
-    fn new_with<V: Value>(value: V) -> Self {
-        let (sender, receiver) = IdChannelFork::new_with(value);
+    type Error = ();
 
-        let mut channel_types = HashMap::new();
+    fn new_with<V: Value>(
+        value: V,
+    ) -> Box<dyn IFuture<Item = Self, Error = Self::Error> + Send + 'static> {
+        Box::new(
+            IdChannelFork::new_with(value).and_then(|(sender, receiver)| {
+                let mut channel_types = HashMap::new();
 
-        channel_types.insert(
-            0,
-            (
-                TypeId::of::<V::ConstructItem>(),
-                TypeId::of::<V::DeconstructItem>(),
-            ),
-        );
+                channel_types.insert(
+                    0,
+                    (
+                        TypeId::of::<V::ConstructItem>(),
+                        TypeId::of::<V::DeconstructItem>(),
+                    ),
+                );
 
-        IdChannel {
-            out_channel: Box::new(
-                receiver.map(move |v| ChannelItem(0, Box::new(v) as Box<dyn SerdeAny>)),
-            ),
-            context: IdChannelContext {
-                state: Arc::new(Mutex::new(IdChannelContextState {
-                    channel_types,
-                    next_index: 1,
-                    unused_indices: vec![],
-                })),
-            },
-        }
+                ok(IdChannel {
+                    out_channel: Box::new(
+                        receiver.map(move |v| ChannelItem(0, Box::new(v) as Box<dyn SerdeAny>)),
+                    ),
+                    context: IdChannelContext {
+                        state: Arc::new(Mutex::new(IdChannelContextState {
+                            channel_types,
+                            next_index: 1,
+                            unused_indices: vec![],
+                        })),
+                    },
+                })
+            }),
+        )
     }
 }
 
@@ -639,9 +700,9 @@ impl<
     }
 }
 
-struct SinkStream<T: Stream, U: Sink>(T, U);
+pub struct StreamSink<T: Stream, U: Sink>(T, U);
 
-impl<T: Stream, U: Sink> Sink for SinkStream<T, U> {
+impl<T: Stream, U: Sink> Sink for StreamSink<T, U> {
     type SinkItem = U::SinkItem;
     type SinkError = U::SinkError;
 
@@ -653,7 +714,7 @@ impl<T: Stream, U: Sink> Sink for SinkStream<T, U> {
     }
 }
 
-impl<T: Stream, U: Sink> Stream for SinkStream<T, U> {
+impl<T: Stream, U: Sink> Stream for StreamSink<T, U> {
     type Item = T::Item;
     type Error = T::Error;
 
@@ -669,11 +730,13 @@ impl<
 {
     fn new_with<V: Value<DeconstructItem = I, ConstructItem = O>>(
         value: V,
-    ) -> (UnboundedSender<I>, UnboundedReceiver<O>) {
+    ) -> impl IFuture<Item = (UnboundedSender<I>, UnboundedReceiver<O>), Error = ()> {
         let (o, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
         let (oi, i): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
-        tokio::spawn(value.deconstruct(IdChannelFork { o: oi, i: oo }));
-        (o, i)
+        lazy(move || {
+            tokio::spawn(value.deconstruct(IdChannelFork { o: oi, i: oo }));
+            ok((o, i))
+        })
     }
 }
 
