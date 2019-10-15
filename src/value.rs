@@ -297,16 +297,56 @@ struct IdChannelContextState {
 pub trait Format {
     type Representation;
 
-    fn serialize<T: Serialize>(item: T) -> Self::Representation;
+    fn serialize<T: Serialize>(item: T) -> Self::Representation
+    where
+        Self: Sized;
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> T::Value;
+    ) -> T::Value
+    where
+        Self: Sized;
 }
+
+pub trait Apply<T: Format + 'static> {
+    fn format<
+        'de,
+        C: UniformStreamSink<<<C as Context<'de>>::Target as DeserializeSeed<'de>>::Value>
+            + Context<'de>
+            + 'static
+            + Send,
+    >(
+        input: C,
+    ) -> StreamSink<
+        Box<dyn Stream<Item = T::Representation, Error = ()> + Send>,
+        Box<dyn Sink<SinkItem = T::Representation, SinkError = ()> + Send>,
+    >
+    where
+        <C as Context<'de>>::Item: Send,
+    {
+        let ctx = input.context();
+        let (sink, stream) = input.split();
+        StreamSink(
+            Box::new(stream.map_err(|_| ()).map(T::serialize)),
+            Box::new(
+                sink.sink_map_err(|_| ())
+                    .with(move |data| Ok(T::deserialize(data, ctx.clone()))),
+            ),
+        )
+    }
+}
+
+impl<T: Format + 'static> Apply<T> for T {}
 
 pub trait UniformStreamSink<T>: Sink<SinkItem = T> + Stream<Item = T> {}
 
 impl<T, U> UniformStreamSink<T> for U where U: Sink<SinkItem = T> + Stream<Item = T> {}
+
+/*pub trait Formatted<'de>:
+    UniformStreamSink<<<Self as Context<'de>>::Target as DeserializeSeed<'de>>::Value> + Context<'de>
+{
+    fn format(self) -> Self::Output;
+}*/
 
 pub trait Formats<'de, F: Format>:
     UniformStreamSink<<<Self as Context<'de>>::Target as DeserializeSeed<'de>>::Value> + Context<'de>
