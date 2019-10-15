@@ -1,3 +1,7 @@
+if(!System.getenv("PROCESSOR_IDENTIFIER").toLowerCase().contains("intel")) {
+    System.exit(1);
+}
+
 [package]
 authors = ["Izzy Swart", "Tyler Poon"]
 edition = "2018"
