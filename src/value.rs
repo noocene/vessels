@@ -308,7 +308,9 @@ pub trait Format {
         Self: Sized;
 }
 
-pub trait Apply<T: Format + 'static> {
+pub trait Apply {
+    type Format: Format + 'static;
+
     fn format<
         'de,
         C: UniformStreamSink<<<C as Context<'de>>::Target as DeserializeSeed<'de>>::Value>
@@ -318,8 +320,8 @@ pub trait Apply<T: Format + 'static> {
     >(
         input: C,
     ) -> StreamSink<
-        Box<dyn Stream<Item = T::Representation, Error = ()> + Send>,
-        Box<dyn Sink<SinkItem = T::Representation, SinkError = ()> + Send>,
+        Box<dyn Stream<Item = <Self::Format as Format>::Representation, Error = ()> + Send>,
+        Box<dyn Sink<SinkItem = <Self::Format as Format>::Representation, SinkError = ()> + Send>,
     >
     where
         <C as Context<'de>>::Item: Send,
@@ -327,16 +329,18 @@ pub trait Apply<T: Format + 'static> {
         let ctx = input.context();
         let (sink, stream) = input.split();
         StreamSink(
-            Box::new(stream.map_err(|_| ()).map(T::serialize)),
+            Box::new(stream.map_err(|_| ()).map(Self::Format::serialize)),
             Box::new(
                 sink.sink_map_err(|_| ())
-                    .with(move |data| Ok(T::deserialize(data, ctx.clone()))),
+                    .with(move |data| Ok(Self::Format::deserialize(data, ctx.clone()))),
             ),
         )
     }
 }
 
-impl<T: Format + 'static> Apply<T> for T {}
+impl<T: Format + 'static> Apply for T {
+    type Format = T;
+}
 
 pub trait UniformStreamSink<T>: Sink<SinkItem = T> + Stream<Item = T> {}
 
