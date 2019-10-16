@@ -58,9 +58,12 @@ impl Target for IdChannel {
     type Error = ();
     type Item = Item;
 
-    fn new_with<V: Value>(
+    fn new_with<V: Value + Send + 'static>(
         value: V,
-    ) -> Box<dyn Future<Item = Self, Error = <Self as Target>::Error> + Send + 'static> {
+    ) -> Box<dyn Future<Item = Self, Error = <Self as Target>::Error> + Send + 'static>
+    where
+        V::DeconstructFuture: Send,
+    {
         Box::new(
             IdChannelFork::new_with(value).and_then(|(sender, receiver)| {
                 Ok(IdChannel {
@@ -74,7 +77,7 @@ impl Target for IdChannel {
     }
 
     fn new<
-        V: Value,
+        V: Value + Send + 'static,
         C: Stream<Item = <Self as Target>::Item> + Sink<SinkItem = <Self as Target>::Item> + 'static,
     >(
         input: C,
@@ -91,7 +94,7 @@ impl<
     fn fork<V: Value>(&self, value: V) -> ForkHandle {
         ForkHandle(0)
     }
-    fn get_fork<V: Value>(
+    fn get_fork<V: Value + Send + 'static>(
         &self,
         fork_ref: ForkHandle,
     ) -> Box<dyn Future<Item = V, Error = ()> + Send + 'static> {
@@ -127,11 +130,18 @@ impl<
 {
     fn new_with<V: Value<DeconstructItem = I, ConstructItem = O>>(
         value: V,
-    ) -> impl Future<Item = (UnboundedSender<I>, UnboundedReceiver<O>), Error = ()> {
+    ) -> impl Future<Item = (UnboundedSender<I>, UnboundedReceiver<O>), Error = ()>
+    where
+        V::DeconstructFuture: Send + 'static,
+    {
         let (o, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
         let (oi, i): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
         lazy(move || {
-            tokio::spawn(value.deconstruct(IdChannelFork { o: oi, i: oo }));
+            tokio::spawn(
+                value
+                    .deconstruct(IdChannelFork { o: oi, i: oo })
+                    .map_err(|_| ()),
+            );
             Ok((o, i))
         })
     }
@@ -170,9 +180,9 @@ impl<
         O: Serialize + DeserializeOwned + Send + 'static,
     > Channel<I, O> for IdChannelFork<I, O>
 {
-    type ForkFactory = IdChannelFork<I, O>;
+    type Fork = IdChannelFork<I, O>;
 
-    fn split_factory(&self) -> Self::ForkFactory {
+    fn split_factory(&self) -> Self::Fork {
         panic!()
     }
 }

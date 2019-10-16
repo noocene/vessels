@@ -8,8 +8,10 @@ pub mod value;
 
 pub use derive::value;
 use erased_serde::Serialize as ErasedSerialize;
-use failure::Error;
-use futures::{future::ok, Future};
+use futures::{
+    future::{ok, FutureResult},
+    Future,
+};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     any::{Any, TypeId},
@@ -39,19 +41,21 @@ type DeserializeFn =
 
 inventory::collect!(ErasedDeserialize);
 
-pub trait Value: Send + 'static {
+pub trait Value: Sized {
     type ConstructItem: Serialize + DeserializeOwned + Send + 'static;
+    type ConstructFuture: Future<Item = Self>;
+
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         channel: C,
-    ) -> Box<dyn Future<Item = Self, Error = Error> + Send + 'static>
-    where
-        Self: Sized;
+    ) -> Self::ConstructFuture;
 
     type DeconstructItem: Serialize + DeserializeOwned + Send + 'static;
+    type DeconstructFuture: Future<Item = ()>;
+
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         channel: C,
-    ) -> Box<dyn Future<Item = (), Error = ()> + Send + 'static>;
+    ) -> Self::DeconstructFuture;
 
     #[doc(hidden)]
     const DO_NOT_IMPLEMENT_THIS_TRAIT_MANUALLY: ();
@@ -60,7 +64,8 @@ pub trait Value: Send + 'static {
         self,
     ) -> Box<dyn Future<Item = T, Error = <T as Target>::Error> + Send + 'static>
     where
-        Self: Sized,
+        Self: Send + 'static,
+        Self::DeconstructFuture: Send,
     {
         T::new_with(self)
     }
@@ -70,35 +75,39 @@ pub trait Value: Send + 'static {
 impl Value for () {
     type ConstructItem = ();
     type DeconstructItem = ();
+    type ConstructFuture = FutureResult<(), ()>;
+    type DeconstructFuture = FutureResult<(), ()>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         _: C,
-    ) -> Box<dyn Future<Item = (), Error = ()> + Send + 'static> {
-        Box::new(ok(()))
+    ) -> Self::DeconstructFuture {
+        ok(())
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         _: C,
-    ) -> Box<dyn Future<Item = Self, Error = Error> + Send + 'static> {
-        Box::new(ok(()))
+    ) -> Self::ConstructFuture {
+        ok(())
     }
 }
 
 #[value]
 impl<T: Send + 'static> Value for PhantomData<T> {
     type ConstructItem = ();
+    type ConstructFuture = FutureResult<PhantomData<T>, ()>;
     type DeconstructItem = ();
+    type DeconstructFuture = FutureResult<(), ()>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         _: C,
-    ) -> Box<dyn Future<Item = (), Error = ()> + Send + 'static> {
-        Box::new(ok(()))
+    ) -> Self::DeconstructFuture {
+        ok(())
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         _: C,
-    ) -> Box<dyn Future<Item = Self, Error = Error> + Send + 'static> {
-        Box::new(ok(PhantomData))
+    ) -> Self::ConstructFuture {
+        ok(PhantomData)
     }
 }
 
@@ -107,24 +116,24 @@ macro_rules! primitive_impl {
         #[value]
         impl Value for $ty {
             type ConstructItem = $ty;
+            type ConstructFuture = Box<dyn Future<Item = $ty, Error = ()>>;
             type DeconstructItem = ();
+            type DeconstructFuture = Box<dyn Future<Item = (), Error = ()>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
                 channel: C,
-            ) -> Box<dyn Future<Item = (), Error = ()> + Send + 'static> {
+            ) -> Self::DeconstructFuture {
                 Box::new(channel.send(self).then(|_| Ok(())))
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
                 channel: C,
-            ) -> Box<dyn Future<Item = Self, Error = Error> + Send + 'static>
-            where
-                Self: Sized,
+            ) -> Self::ConstructFuture
             {
                 Box::new(
                     channel
                         .into_future()
-                        .map_err(|_| failure::err_msg("test"))
+                        .map_err(|_| ())
                         .map(|v| v.0.unwrap()),
                 )
             }

@@ -45,15 +45,17 @@ where
 #[value]
 impl<T, E> Value for Future<T, E>
 where
-    T: Value,
-    E: Value,
+    T: Value + Send + 'static,
+    E: Value + Send + 'static,
 {
     type ConstructItem = FResult;
+    type ConstructFuture = Box<dyn IFuture<Item = Self, Error = Error> + Send>;
     type DeconstructItem = ();
+    type DeconstructFuture = Box<dyn IFuture<Item = (), Error = ()> + Send>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         channel: C,
-    ) -> Box<dyn IFuture<Item = (), Error = ()> + Send + 'static> {
+    ) -> Self::DeconstructFuture {
         Box::new(self.0.then(|v| {
             let fork_factory = channel.split_factory();
             channel
@@ -66,10 +68,7 @@ where
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         channel: C,
-    ) -> Box<dyn IFuture<Item = Self, Error = Error> + Send + 'static>
-    where
-        Self: Sized,
-    {
+    ) -> Self::ConstructFuture {
         Box::new(channel.into_future().then(|v| match v {
             Ok(v) => Ok(match v.0.unwrap() {
                 FResult::Ok(r) => Future::<T, E>::from(v.1.get_fork::<T>(r).map_err(|_| panic!())),
