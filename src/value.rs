@@ -70,12 +70,22 @@ pub trait Channel<
     fn split_factory(&self) -> Self::ForkFactory;
 }
 
-pub trait Target {
+pub trait Target:
+    Stream<Item = <Self as Target>::Item> + Sink<SinkItem = <Self as Target>::Item>
+{
     type Error;
+    type Item;
 
     fn new_with<V: Value>(
         value: V,
-    ) -> Box<dyn IFuture<Item = Self, Error = Self::Error> + Send + 'static>;
+    ) -> Box<dyn IFuture<Item = Self, Error = <Self as Target>::Error> + Send + 'static>;
+
+    fn new<
+        V: Value,
+        C: Stream<Item = <Self as Target>::Item> + Sink<SinkItem = <Self as Target>::Item> + 'static,
+    >(
+        item: C,
+    ) -> Box<dyn IFuture<Item = V, Error = <Self as Target>::Error> + Send + 'static>;
 }
 
 pub trait Value: Send + 'static {
@@ -95,7 +105,9 @@ pub trait Value: Send + 'static {
     #[doc(hidden)]
     const DO_NOT_IMPLEMENT_THIS_TRAIT_MANUALLY: ();
 
-    fn stream<T: Target>(self) -> Box<dyn IFuture<Item = T, Error = T::Error> + Send + 'static>
+    fn stream<T: Target>(
+        self,
+    ) -> Box<dyn IFuture<Item = T, Error = <T as Target>::Error> + Send + 'static>
     where
         Self: Sized,
     {
@@ -308,7 +320,7 @@ pub trait Format {
         Self: Sized;
 }
 
-pub trait ApplySelf<'de>:
+pub trait ApplyEncode<'de>:
     UniformStreamSink<<<Self as Context<'de>>::Target as DeserializeSeed<'de>>::Value>
     + Context<'de>
     + 'static
@@ -316,37 +328,127 @@ pub trait ApplySelf<'de>:
 where
     <Self as Context<'de>>::Item: Send,
 {
-    fn encode<T: Format + 'static>(
+    fn encode<F: Format + 'static>(
         self,
     ) -> StreamSink<
-        Box<dyn Stream<Item = T::Representation, Error = ()> + Send>,
-        Box<dyn Sink<SinkItem = T::Representation, SinkError = ()> + Send>,
+        Box<dyn Stream<Item = F::Representation, Error = ()> + Send>,
+        Box<dyn Sink<SinkItem = F::Representation, SinkError = ()> + Send>,
     >
     where
         Self: Sized,
+        <F as Format>::Representation: Send,
     {
-        <T as Apply>::encode(self)
+        <F as Encode<_>>::encode(self)
     }
 }
 
-pub trait Apply {
-    type Format: Format + 'static;
+impl<'de, T> ApplyEncode<'de> for T
+where
+    T: UniformStreamSink<<<Self as Context<'de>>::Target as DeserializeSeed<'de>>::Value>
+        + Context<'de>
+        + 'static
+        + Send,
+    <Self as Context<'de>>::Item: Send,
+{
+}
 
-    fn encode<
-        'de,
-        C: UniformStreamSink<<<C as Context<'de>>::Target as DeserializeSeed<'de>>::Value>
+pub trait ApplyDecode<'de> {
+    fn decode<F: Format + Send + 'static>(self) -> <F as Decode<'de, Self>>::Output
+    where
+        Self: Sized
+            + UniformStreamSink<<F as Format>::Representation>
             + Context<'de>
             + 'static
             + Send,
-    >(
-        input: C,
-    ) -> StreamSink<
+        <F as Format>::Representation: Send,
+        <Self as Context<'de>>::Item: Send,
+    {
+        <F as Decode<Self>>::decode(self)
+    }
+}
+
+impl<'de, T> ApplyDecode<'de> for T {}
+
+pub trait Decode<
+    'de,
+    C: UniformStreamSink<<Self::Format as Format>::Representation>
+        + Context<'de>
+        + 'static
+        + Send
+        + Sized,
+> where
+    <Self::Format as Format>::Representation: Send,
+    <C as Context<'de>>::Item: Send,
+{
+    type Format: Format + 'static;
+    type Output: Stream<Item = <C as Context<'de>>::Item>
+        + Sink<SinkItem = <C as Context<'de>>::Item>;
+
+    fn decode(input: C) -> Self::Output;
+}
+
+pub trait Encode<
+    'de,
+    C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de> + 'static + Send + Sized,
+> where
+    <Self::Format as Format>::Representation: Send,
+    <C as Context<'de>>::Item: Send,
+{
+    type Format: Format + 'static;
+    type Output: Stream<Item = <Self::Format as Format>::Representation>
+        + Sink<SinkItem = <Self::Format as Format>::Representation>;
+
+    fn encode(input: C) -> Self::Output;
+}
+
+impl<
+        'de,
+        T: Format + 'static,
+        C: UniformStreamSink<T::Representation> + Context<'de> + 'static + Send + Sized,
+    > Decode<'de, C> for T
+where
+    T::Representation: Send,
+    <C as Context<'de>>::Item: Send,
+{
+    type Format = T;
+    type Output = StreamSink<
+        Box<dyn Stream<Item = <C as Context<'de>>::Item, Error = ()>>,
+        Box<dyn Sink<SinkItem = <C as Context<'de>>::Item, SinkError = ()>>,
+    >;
+
+    fn decode(input: C) -> Self::Output {
+        let ctx = input.context();
+        let (sink, stream) = input.split();
+        StreamSink(
+            Box::new(
+                stream
+                    .map_err(|_| ())
+                    .map(move |data| Self::Format::deserialize(data, ctx)),
+            ),
+            Box::new(
+                sink.sink_map_err(|_| ())
+                    .with(|data| Ok(Self::Format::serialize(data))),
+            ),
+        )
+    }
+}
+
+impl<
+        'de,
+        T: Format + 'static,
+        C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de> + 'static + Send + Sized,
+    > Encode<'de, C> for T
+where
+    T::Representation: Send,
+    <C as Context<'de>>::Item: Send,
+{
+    type Format = T;
+    type Output = StreamSink<
         Box<dyn Stream<Item = <Self::Format as Format>::Representation, Error = ()> + Send>,
         Box<dyn Sink<SinkItem = <Self::Format as Format>::Representation, SinkError = ()> + Send>,
-    >
-    where
-        <C as Context<'de>>::Item: Send,
-    {
+    >;
+
+    fn encode(input: C) -> Self::Output {
         let ctx = input.context();
         let (sink, stream) = input.split();
         StreamSink(
@@ -357,10 +459,6 @@ pub trait Apply {
             ),
         )
     }
-}
-
-impl<T: Format + 'static> Apply for T {
-    type Format = T;
 }
 
 pub trait UniformStreamSink<T>: Sink<SinkItem = T> + Stream<Item = T> {}
@@ -427,13 +525,13 @@ impl<F: Format<Representation = String>> Format for AsBytes<F> {
     }
 }
 
-pub trait Transport<
+/*pub trait Transport<
     'de,
     T: Target + Stream<Item = F::Representation> + Sink<SinkItem = F::Representation>,
     F: Format,
 >
 {
-}
+}*/
 
 pub struct StdoutTransport {}
 
@@ -655,10 +753,11 @@ impl<'de> Context<'de> for IdChannel {
 
 impl Target for IdChannel {
     type Error = ();
+    type Item = ChannelItem;
 
     fn new_with<V: Value>(
         value: V,
-    ) -> Box<dyn IFuture<Item = Self, Error = Self::Error> + Send + 'static> {
+    ) -> Box<dyn IFuture<Item = Self, Error = <Self as Target>::Error> + Send + 'static> {
         Box::new(
             IdChannelFork::new_with(value).and_then(|(sender, receiver)| {
                 let mut channel_types = HashMap::new();
@@ -685,6 +784,15 @@ impl Target for IdChannel {
                 })
             }),
         )
+    }
+
+    fn new<
+        V: Value,
+        C: Stream<Item = <Self as Target>::Item> + Sink<SinkItem = <Self as Target>::Item> + 'static,
+    >(
+        input: C,
+    ) -> Box<dyn IFuture<Item = V, Error = <Self as Target>::Error> + Send + 'static> {
+        Box::new(IdChannelFork::deconstruct(input))
     }
 }
 
@@ -761,6 +869,18 @@ impl<
         lazy(move || {
             tokio::spawn(value.deconstruct(IdChannelFork { o: oi, i: oo }));
             ok((o, i))
+        })
+    }
+
+    fn deconstruct<
+        V: Value<DeconstructItem = I, ConstructItem = O>,
+        C: Stream<Item = ChannelItem> + Sink<SinkItem = ChannelItem>,
+    >(
+        input: C,
+    ) -> impl IFuture<Item = V, Error = ()> {
+        lazy(move || {
+            let _ = ();
+            Err(())
         })
     }
 }
