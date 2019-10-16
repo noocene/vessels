@@ -57,3 +57,24 @@ pub trait Context<'de> {
 
     fn context(&self) -> Self::Target;
 }
+
+pub trait IntoStream: Value {
+    fn stream<T: Target>(
+        self,
+    ) -> Box<dyn Future<Item = T, Error = <T as Target>::Error> + Send + 'static>
+    where
+        Self: Send + 'static,
+        Self::DeconstructFuture: Send;
+}
+
+impl<V: Value> IntoStream for V {
+    fn stream<T: Target>(
+        self,
+    ) -> Box<dyn Future<Item = T, Error = <T as Target>::Error> + Send + 'static>
+    where
+        Self: Send + 'static,
+        Self::DeconstructFuture: Send,
+    {
+        T::new_with(self)
+    }
+}

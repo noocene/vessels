@@ -8,6 +8,10 @@ pub use json::Json;
 pub mod cbor;
 #[cfg(feature = "cbor")]
 pub use cbor::Cbor;
+#[cfg(feature = "bincode")]
+pub mod bincode;
+#[cfg(feature = "bincode")]
+pub use bincode::Bincode;
 
 use futures::{Poll, Sink, StartSend, Stream};
 

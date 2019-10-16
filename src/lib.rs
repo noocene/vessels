@@ -2,6 +2,7 @@
 extern crate erased_serde;
 
 pub mod channel;
+pub use channel::IntoStream;
 use channel::{Channel, Target};
 pub mod format;
 pub mod value;
@@ -43,14 +44,14 @@ inventory::collect!(ErasedDeserialize);
 
 pub trait Value: Sized {
     type ConstructItem: Serialize + DeserializeOwned + Send + 'static;
-    type ConstructFuture: Future<Item = Self>;
+    type ConstructFuture: Future<Item = Self> + Send + 'static;
 
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         channel: C,
     ) -> Self::ConstructFuture;
 
     type DeconstructItem: Serialize + DeserializeOwned + Send + 'static;
-    type DeconstructFuture: Future<Item = ()>;
+    type DeconstructFuture: Future<Item = ()> + Send + 'static;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
@@ -59,16 +60,6 @@ pub trait Value: Sized {
 
     #[doc(hidden)]
     const DO_NOT_IMPLEMENT_THIS_TRAIT_MANUALLY: ();
-
-    fn stream<T: Target>(
-        self,
-    ) -> Box<dyn Future<Item = T, Error = <T as Target>::Error> + Send + 'static>
-    where
-        Self: Send + 'static,
-        Self::DeconstructFuture: Send,
-    {
-        T::new_with(self)
-    }
 }
 
 #[value]
@@ -116,9 +107,9 @@ macro_rules! primitive_impl {
         #[value]
         impl Value for $ty {
             type ConstructItem = $ty;
-            type ConstructFuture = Box<dyn Future<Item = $ty, Error = ()>>;
+            type ConstructFuture = Box<dyn Future<Item = $ty, Error = ()> + Send + 'static>;
             type DeconstructItem = ();
-            type DeconstructFuture = Box<dyn Future<Item = (), Error = ()>>;
+            type DeconstructFuture = Box<dyn Future<Item = (), Error = ()> + Send + 'static>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
