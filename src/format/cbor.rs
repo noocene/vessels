@@ -2,7 +2,7 @@ use super::Format;
 
 use serde::{de::DeserializeSeed, Serialize};
 
-pub struct Cbor {}
+pub struct Cbor;
 
 impl Format for Cbor {
     type Representation = Vec<u8>;
