@@ -321,82 +321,49 @@ pub trait Format {
 }
 
 pub trait ApplyEncode<'de>:
-    UniformStreamSink<<<Self as Context<'de>>::Target as DeserializeSeed<'de>>::Value>
-    + Context<'de>
-    + 'static
-    + Send
-where
-    <Self as Context<'de>>::Item: Send,
+    Sized + UniformStreamSink<<Self as Context<'de>>::Item> + Context<'de>
 {
-    fn encode<F: Format + 'static>(
-        self,
-    ) -> StreamSink<
-        Box<dyn Stream<Item = F::Representation, Error = ()> + Send>,
-        Box<dyn Sink<SinkItem = F::Representation, SinkError = ()> + Send>,
-    >
-    where
-        Self: Sized,
-        <F as Format>::Representation: Send,
-    {
-        <F as Encode<_>>::encode(self)
-    }
+    fn encode<F: Format + Encode<'de, Self>>(self) -> <F as Encode<'de, Self>>::Output;
 }
 
 impl<'de, T> ApplyEncode<'de> for T
 where
-    T: UniformStreamSink<<<Self as Context<'de>>::Target as DeserializeSeed<'de>>::Value>
-        + Context<'de>
-        + 'static
-        + Send,
-    <Self as Context<'de>>::Item: Send,
+    T: UniformStreamSink<<Self as Context<'de>>::Item> + Context<'de>,
 {
-}
-
-pub trait ApplyDecode<'de> {
-    fn decode<F: Format + Send + 'static>(self) -> <F as Decode<'de, Self>>::Output
-    where
-        Self: Sized
-            + UniformStreamSink<<F as Format>::Representation>
-            + Context<'de>
-            + 'static
-            + Send,
-        <F as Format>::Representation: Send,
-        <Self as Context<'de>>::Item: Send,
-    {
-        <F as Decode<Self>>::decode(self)
+    fn encode<F: Format + Encode<'de, Self>>(self) -> <F as Encode<'de, Self>>::Output {
+        <F as Encode<_>>::encode(self)
     }
 }
 
-impl<'de, T> ApplyDecode<'de> for T {}
+pub trait ApplyDecode<'de> {
+    fn decode<F: Format + Decode<'de, Self>>(self) -> <F as Decode<'de, Self>>::Output
+    where
+        Self: Sized + UniformStreamSink<<F as Format>::Representation> + Context<'de>;
+}
 
-pub trait Decode<
-    'de,
-    C: UniformStreamSink<<Self::Format as Format>::Representation>
-        + Context<'de>
-        + 'static
-        + Send
-        + Sized,
-> where
-    <Self::Format as Format>::Representation: Send,
-    <C as Context<'de>>::Item: Send,
+impl<'de, T> ApplyDecode<'de> for T {
+    fn decode<F: Format + Decode<'de, Self>>(self) -> <F as Decode<'de, Self>>::Output
+    where
+        Self: Sized + UniformStreamSink<<F as Format>::Representation> + Context<'de>,
+    {
+        <F as Decode<_>>::decode(self)
+    }
+}
+
+pub trait Decode<'de, C: UniformStreamSink<<Self as Format>::Representation> + Context<'de>>:
+    Format
 {
-    type Format: Format + 'static;
     type Output: Stream<Item = <C as Context<'de>>::Item>
         + Sink<SinkItem = <C as Context<'de>>::Item>;
 
     fn decode(input: C) -> Self::Output;
 }
 
-pub trait Encode<
-    'de,
-    C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de> + 'static + Send + Sized,
-> where
-    <Self::Format as Format>::Representation: Send,
-    <C as Context<'de>>::Item: Send,
+pub trait Encode<'de, C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de>>:
+    Format
 {
-    type Format: Format + 'static;
-    type Output: Stream<Item = <Self::Format as Format>::Representation>
-        + Sink<SinkItem = <Self::Format as Format>::Representation>;
+    type Output: Stream<Item = <Self as Format>::Representation>
+        + Sink<SinkItem = <Self as Format>::Representation>;
 
     fn encode(input: C) -> Self::Output;
 }
@@ -404,16 +371,14 @@ pub trait Encode<
 impl<
         'de,
         T: Format + 'static,
-        C: UniformStreamSink<T::Representation> + Context<'de> + 'static + Send + Sized,
+        C: UniformStreamSink<<Self as Format>::Representation> + Context<'de> + 'static + Send,
     > Decode<'de, C> for T
 where
-    T::Representation: Send,
-    <C as Context<'de>>::Item: Send,
+    Self::Representation: Send,
 {
-    type Format = T;
     type Output = StreamSink<
-        Box<dyn Stream<Item = <C as Context<'de>>::Item, Error = ()>>,
-        Box<dyn Sink<SinkItem = <C as Context<'de>>::Item, SinkError = ()>>,
+        Box<dyn Stream<Item = <C as Context<'de>>::Item, Error = ()> + Send>,
+        Box<dyn Sink<SinkItem = <C as Context<'de>>::Item, SinkError = ()> + Send>,
     >;
 
     fn decode(input: C) -> Self::Output {
@@ -423,11 +388,11 @@ where
             Box::new(
                 stream
                     .map_err(|_| ())
-                    .map(move |data| Self::Format::deserialize(data, ctx)),
+                    .map(move |data| <Self as Format>::deserialize(data, ctx.clone())),
             ),
             Box::new(
                 sink.sink_map_err(|_| ())
-                    .with(|data| Ok(Self::Format::serialize(data))),
+                    .with(|data| Ok(<Self as Format>::serialize(data))),
             ),
         )
     }
@@ -442,20 +407,19 @@ where
     T::Representation: Send,
     <C as Context<'de>>::Item: Send,
 {
-    type Format = T;
     type Output = StreamSink<
-        Box<dyn Stream<Item = <Self::Format as Format>::Representation, Error = ()> + Send>,
-        Box<dyn Sink<SinkItem = <Self::Format as Format>::Representation, SinkError = ()> + Send>,
+        Box<dyn Stream<Item = <Self as Format>::Representation, Error = ()> + Send>,
+        Box<dyn Sink<SinkItem = <Self as Format>::Representation, SinkError = ()> + Send>,
     >;
 
     fn encode(input: C) -> Self::Output {
         let ctx = input.context();
         let (sink, stream) = input.split();
         StreamSink(
-            Box::new(stream.map_err(|_| ()).map(Self::Format::serialize)),
+            Box::new(stream.map_err(|_| ()).map(<Self as Format>::serialize)),
             Box::new(
                 sink.sink_map_err(|_| ())
-                    .with(move |data| Ok(Self::Format::deserialize(data, ctx.clone()))),
+                    .with(move |data| Ok(<Self as Format>::deserialize(data, ctx.clone()))),
             ),
         )
     }
