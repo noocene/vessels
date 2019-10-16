@@ -7,6 +7,10 @@ edition = "2018"
 [workspace]
 members = [".", "./derive"]
 
+[features]
+cbor = ["serde_cbor"]
+json = ["serde_json"]
+
 [dependencies]
 futures = "0.1.29"
 serde = { version = "1.0.101", features = ["derive"] }
@@ -14,8 +18,8 @@ failure = "0.1.5"
 tokio = "0.1.22"
 erased-serde = "0.3.9"
 inventory = "0.1.4"
-serde_json = "1.0.41"
-serde_cbor = "0.10.2"
+serde_json = { version = "1.0.41", optional = true }
+serde_cbor = { version = "0.10.2", optional = true }
 
 [dependencies.derive]
 version = "0.1.0"

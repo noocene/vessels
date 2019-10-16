@@ -1,8 +1,12 @@
 pub mod as_bytes;
 pub use as_bytes::AsBytes;
+#[cfg(feature = "json")]
 pub mod json;
+#[cfg(feature = "json")]
 pub use json::Json;
+#[cfg(feature = "cbor")]
 pub mod cbor;
+#[cfg(feature = "cbor")]
 pub use cbor::Cbor;
 
 use futures::{Poll, Sink, StartSend, Stream};
