@@ -62,7 +62,7 @@ pub fn value(attr: proc_macro::TokenStream, i: proc_macro::TokenStream) -> proc_
                 }
                 stream.extend(quote! {
                     inventory::submit! {
-                        Item::new({
+                        ErasedDeserialize::new({
                             ::std::any::TypeId::of::<#ty>()
                         }, |de| <#ty as ::serde::Deserialize>::deserialize(de).map(|v| Box::new(v) as Box<dyn SerdeAny>))
                     }
