@@ -2,7 +2,7 @@
 extern crate erased_serde;
 
 pub mod channel;
-use channel::{Channel, Fork, ForkHandle, Target};
+use channel::{Channel, Target};
 pub mod format;
 pub mod value;
 
@@ -10,7 +10,7 @@ pub use derive::value;
 use erased_serde::Serialize as ErasedSerialize;
 use failure::Error;
 use futures::{future::ok, Future as IFuture};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use std::{
     any::{Any, TypeId},
     ffi::{CString, OsString},
@@ -20,7 +20,6 @@ use std::{
         NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
         NonZeroU64, NonZeroU8, NonZeroUsize,
     },
-    ops::Deref,
     time::{Duration, SystemTime},
 };
 
