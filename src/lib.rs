@@ -9,7 +9,7 @@ pub mod value;
 pub use derive::value;
 use erased_serde::Serialize as ErasedSerialize;
 use failure::Error;
-use futures::{future::ok, Future as IFuture};
+use futures::{future::ok, Future};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     any::{Any, TypeId},
@@ -43,7 +43,7 @@ pub trait Value: Send + 'static {
     type ConstructItem: Serialize + DeserializeOwned + Send + 'static;
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         channel: C,
-    ) -> Box<dyn IFuture<Item = Self, Error = Error> + Send + 'static>
+    ) -> Box<dyn Future<Item = Self, Error = Error> + Send + 'static>
     where
         Self: Sized;
 
@@ -51,14 +51,14 @@ pub trait Value: Send + 'static {
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         channel: C,
-    ) -> Box<dyn IFuture<Item = (), Error = ()> + Send + 'static>;
+    ) -> Box<dyn Future<Item = (), Error = ()> + Send + 'static>;
 
     #[doc(hidden)]
     const DO_NOT_IMPLEMENT_THIS_TRAIT_MANUALLY: ();
 
     fn stream<T: Target>(
         self,
-    ) -> Box<dyn IFuture<Item = T, Error = <T as Target>::Error> + Send + 'static>
+    ) -> Box<dyn Future<Item = T, Error = <T as Target>::Error> + Send + 'static>
     where
         Self: Sized,
     {
@@ -74,12 +74,12 @@ impl Value for () {
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         _: C,
-    ) -> Box<dyn IFuture<Item = (), Error = ()> + Send + 'static> {
+    ) -> Box<dyn Future<Item = (), Error = ()> + Send + 'static> {
         Box::new(ok(()))
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         _: C,
-    ) -> Box<dyn IFuture<Item = Self, Error = Error> + Send + 'static> {
+    ) -> Box<dyn Future<Item = Self, Error = Error> + Send + 'static> {
         Box::new(ok(()))
     }
 }
@@ -92,12 +92,12 @@ impl<T: Send + 'static> Value for PhantomData<T> {
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         _: C,
-    ) -> Box<dyn IFuture<Item = (), Error = ()> + Send + 'static> {
+    ) -> Box<dyn Future<Item = (), Error = ()> + Send + 'static> {
         Box::new(ok(()))
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         _: C,
-    ) -> Box<dyn IFuture<Item = Self, Error = Error> + Send + 'static> {
+    ) -> Box<dyn Future<Item = Self, Error = Error> + Send + 'static> {
         Box::new(ok(PhantomData))
     }
 }
@@ -112,12 +112,12 @@ macro_rules! primitive_impl {
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
                 channel: C,
-            ) -> Box<dyn IFuture<Item = (), Error = ()> + Send + 'static> {
+            ) -> Box<dyn Future<Item = (), Error = ()> + Send + 'static> {
                 Box::new(channel.send(self).then(|_| Ok(())))
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
                 channel: C,
-            ) -> Box<dyn IFuture<Item = Self, Error = Error> + Send + 'static>
+            ) -> Box<dyn Future<Item = Self, Error = Error> + Send + 'static>
             where
                 Self: Sized,
             {
