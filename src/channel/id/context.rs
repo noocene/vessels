@@ -1,7 +1,7 @@
 use std::{
     any::TypeId,
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 
 use crate::Value;
@@ -14,11 +14,11 @@ struct ContextState {
 
 #[derive(Clone)]
 pub struct Context {
-    state: Arc<Mutex<ContextState>>,
+    state: Arc<RwLock<ContextState>>,
 }
 
 impl Context {
-    pub(crate) fn new<V: Value>() -> Self {
+    pub(crate) fn new_with<V: Value>() -> Self {
         let mut channel_types = HashMap::new();
 
         channel_types.insert(
@@ -30,8 +30,18 @@ impl Context {
         );
 
         Context {
-            state: Arc::new(Mutex::new(ContextState {
+            state: Arc::new(RwLock::new(ContextState {
                 channel_types,
+                next_index: 1,
+                unused_indices: vec![],
+            })),
+        }
+    }
+
+    pub(crate) fn new() -> Self {
+        Context {
+            state: Arc::new(RwLock::new(ContextState {
+                channel_types: HashMap::new(),
                 next_index: 1,
                 unused_indices: vec![],
             })),
@@ -40,7 +50,7 @@ impl Context {
 
     pub(crate) fn get(&self, channel: &'_ u32) -> Option<(TypeId, TypeId)> {
         self.state
-            .lock()
+            .read()
             .unwrap()
             .channel_types
             .get(channel)
@@ -48,7 +58,7 @@ impl Context {
     }
 
     pub(crate) fn add(&self, construct: TypeId, deconstruct: TypeId) -> u32 {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.write().unwrap();
 
         if let Some(id) = state.unused_indices.pop() {
             state.channel_types.insert(id, (construct, deconstruct));

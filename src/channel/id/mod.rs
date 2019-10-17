@@ -7,12 +7,14 @@ pub(crate) use id::Id;
 
 use futures::{
     future::empty,
-    lazy,
+    lazy, stream,
     sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
-    Future, Poll, Sink, StartSend, Stream,
+    Async, AsyncSink, Future, Poll, Sink, StartSend, Stream,
 };
 
 use serde::{de::DeserializeOwned, Serialize};
+
+use std::collections::HashMap;
 
 use crate::{
     channel::Fork,
@@ -24,13 +26,17 @@ use crate::{
 use std::{
     any::{Any, TypeId},
     marker::PhantomData,
+    sync::{Arc, Mutex},
 };
 
 use super::Shim as IShim;
 
 pub struct IdChannel {
-    out_channel: Box<dyn Stream<Item = Item, Error = ()> + Sync + Send>,
+    out_channel: Arc<Mutex<Box<dyn Stream<Item = Item, Error = ()> + Send>>>,
     context: Context,
+    in_channels: Arc<
+        Mutex<HashMap<u32, Box<dyn Sink<SinkItem = Box<dyn SerdeAny>, SinkError = ()> + Send>>>,
+    >,
 }
 
 impl Stream for IdChannel {
@@ -38,7 +44,7 @@ impl Stream for IdChannel {
     type Error = ();
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        self.out_channel.poll()
+        self.out_channel.lock().unwrap().poll()
     }
 }
 
@@ -47,10 +53,20 @@ impl Sink for IdChannel {
     type SinkError = ();
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        Err(())
+        if let Some(channel) = self.in_channels.lock().unwrap().get_mut(&item.0) {
+            channel.start_send(item.1).map(|a| {
+                if let AsyncSink::Ready = a {
+                    AsyncSink::Ready
+                } else {
+                    panic!()
+                }
+            })
+        } else {
+            Err(())
+        }
     }
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        Err(())
+        Ok(Async::Ready(()))
     }
 }
 
@@ -126,6 +142,7 @@ impl<'a, V: Value + Send + 'static> IShim<'a, IdChannel, V> for Shim<V> {
     ) -> Box<dyn Future<Item = V, Error = <IdChannel as Target<'a, V>>::Error> + Send + 'static>
     {
         Box::new(lazy(|| {
+            let channel = IdChannel::new();
             let (sink, stream) = input.split();
             let sink = sink
                 .sink_map_err(|_: <C as Sink>::SinkError| ())
@@ -159,6 +176,23 @@ impl<'a, V: Value> IContext<'a> for Shim<V> {
     }
 }
 
+impl IdChannel {
+    fn new() -> Self {
+        IdChannel {
+            out_channel: Arc::new(Mutex::new(Box::new(stream::empty()))),
+            context: Context::new(),
+            in_channels: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+    fn clone(&self) -> Self {
+        IdChannel {
+            out_channel: self.out_channel.clone(),
+            context: self.context.clone(),
+            in_channels: self.in_channels.clone(),
+        }
+    }
+}
+
 impl<'a, V: Value + Send + 'static> Target<'a, V> for IdChannel {
     type Error = ();
     type Shim = Shim<V>;
@@ -169,21 +203,12 @@ impl<'a, V: Value + Send + 'static> Target<'a, V> for IdChannel {
     where
         V::DeconstructFuture: Send,
     {
-        Box::new(
-            IdChannelFork::new_with(value).and_then(|(sender, receiver)| {
-                Ok(IdChannel {
-                    out_channel: Box::new(
-                        receiver.map(move |v| Item::new(0, Box::new(v) as Box<dyn SerdeAny>)),
-                    ),
-                    context: Context::new::<V>(),
-                })
-            }),
-        )
+        Box::new(IdChannelFork::new_with(value))
     }
 
-    fn new() -> Self::Shim {
+    fn new_shim() -> Self::Shim {
         Shim {
-            context: Context::new::<V>(),
+            context: Context::new_with::<V>(),
             _marker: PhantomData,
         }
     }
@@ -211,6 +236,7 @@ pub(crate) struct IdChannelFork<
 > {
     i: UnboundedReceiver<I>,
     o: UnboundedSender<O>,
+    channel: IdChannel,
 }
 
 impl<
@@ -233,34 +259,41 @@ impl<
 {
     fn new_with<V: Value<DeconstructItem = I, ConstructItem = O>>(
         value: V,
-    ) -> impl Future<Item = (UnboundedSender<I>, UnboundedReceiver<O>), Error = ()>
+    ) -> impl Future<Item = IdChannel, Error = ()>
     where
         V::DeconstructFuture: Send + 'static,
     {
-        let (o, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
-        let (oi, i): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
         lazy(move || {
+            let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
+            let (oi, receiver): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
+            let mut in_channels = HashMap::new();
+            in_channels.insert(
+                0u32,
+                Box::new(sender.sink_map_err(|_| ()).with(|item: Box<dyn SerdeAny>| {
+                    Ok(*(item
+                        .downcast::<V::DeconstructItem>()
+                        .map_err(|_| ())
+                        .unwrap()))
+                }))
+                    as Box<dyn Sink<SinkItem = Box<dyn SerdeAny>, SinkError = ()> + Send>,
+            );
+            let channel = IdChannel {
+                out_channel: Arc::new(Mutex::new(Box::new(
+                    receiver.map(move |v| Item::new(0, Box::new(v) as Box<dyn SerdeAny>)),
+                ))),
+                context: Context::new_with::<V>(),
+                in_channels: Arc::new(Mutex::new(in_channels)),
+            };
             tokio::spawn(
                 value
-                    .deconstruct(IdChannelFork { o: oi, i: oo })
+                    .deconstruct(IdChannelFork {
+                        o: oi,
+                        i: oo,
+                        channel: channel.clone(),
+                    })
                     .map_err(|e| ()),
             );
-            Ok((o, i))
-        })
-    }
-
-    fn construct<
-        V: Value<DeconstructItem = I, ConstructItem = O>,
-        C: Stream<Item = Item> + Sink<SinkItem = Item>,
-    >(
-        input: C,
-    ) -> impl Future<Item = V, Error = ()> {
-        lazy(move || {
-            let (o, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
-            let (oi, i): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
-            let (sender, receiver) = input.split();
-            //V::construct(StreamSink(oo, o));
-            Err(())
+            Ok(channel)
         })
     }
 }

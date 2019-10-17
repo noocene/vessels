@@ -55,7 +55,7 @@ pub trait Target<'a, V: Value + Send + 'static>: Context<'a> + Sized {
     where
         V::DeconstructFuture: Send;
 
-    fn new() -> Self::Shim;
+    fn new_shim() -> Self::Shim;
 }
 
 pub trait Context<'de> {

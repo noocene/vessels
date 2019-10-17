@@ -133,7 +133,7 @@ where
 
     fn decode<U: Target<'de, V> + Send + 'static>(input: C) -> Self::Output {
         Box::new(lazy(|| {
-            let shim = U::new();
+            let shim = U::new_shim();
             let context = shim.context();
             let (sink, stream) = input.split();
             shim.complete(StreamSink(
