@@ -51,6 +51,7 @@ pub fn value(attr: proc_macro::TokenStream, i: proc_macro::TokenStream) -> proc_
         if let ImplItem::Type(ty) = item {
             if ty.ident.to_string() == "ConstructItem" {
                 let ty = &ty.ty;
+                let name = ty.into_token_stream().to_string();
                 let mut lock = REGISTERED.lock().unwrap();
                 let mut hasher = DefaultHasher::new();
                 ty.into_token_stream().to_string().hash(&mut hasher);

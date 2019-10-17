@@ -10,7 +10,7 @@ use serde::{
 
 use std::fmt;
 
-pub struct Item(u32, Box<dyn SerdeAny>);
+pub struct Item(u32, pub(crate) Box<dyn SerdeAny>);
 
 impl Serialize for Item {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

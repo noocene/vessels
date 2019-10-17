@@ -31,24 +31,31 @@ pub trait Channel<
     fn split_factory(&self) -> Self::Fork;
 }
 
-pub trait Target:
-    Stream<Item = <Self as Target>::Item> + Sink<SinkItem = <Self as Target>::Item>
+pub trait Shim<'a, T: Target<'a, V>, V: Value + Send + 'static>:
+    Context<'a, Item = <T as Context<'a>>::Item>
 {
-    type Error;
-    type Item;
+    fn complete<
+        C: Stream<Item = <T as Context<'a>>::Item>
+            + Sink<SinkItem = <T as Context<'a>>::Item>
+            + Send
+            + 'static,
+    >(
+        self,
+        input: C,
+    ) -> Box<dyn Future<Item = V, Error = <T as Target<'a, V>>::Error> + Send + 'static>;
+}
 
-    fn new_with<V: Value + Send + 'static>(
+pub trait Target<'a, V: Value + Send + 'static>: Context<'a> + Sized {
+    type Error: Send + 'static;
+    type Shim: Shim<'a, Self, V>;
+
+    fn new_with(
         value: V,
-    ) -> Box<dyn Future<Item = Self, Error = <Self as Target>::Error> + Send + 'static>
+    ) -> Box<dyn Future<Item = Self, Error = <Self as Target<'a, V>>::Error> + Send + 'static>
     where
         V::DeconstructFuture: Send;
 
-    fn new<
-        V: Value + Send + 'static,
-        C: Stream<Item = <Self as Target>::Item> + Sink<SinkItem = <Self as Target>::Item> + 'static,
-    >(
-        item: C,
-    ) -> Box<dyn Future<Item = V, Error = <Self as Target>::Error> + Send + 'static>;
+    fn new() -> Self::Shim;
 }
 
 pub trait Context<'de> {
@@ -59,18 +66,18 @@ pub trait Context<'de> {
 }
 
 pub trait IntoStream: Value {
-    fn into_stream<T: Target>(
+    fn into_stream<'a, T: Target<'a, Self>>(
         self,
-    ) -> Box<dyn Future<Item = T, Error = <T as Target>::Error> + Send + 'static>
+    ) -> Box<dyn Future<Item = T, Error = <T as Target<'a, Self>>::Error> + Send + 'static>
     where
         Self: Send + 'static,
         Self::DeconstructFuture: Send;
 }
 
 impl<V: Value> IntoStream for V {
-    fn into_stream<T: Target>(
+    fn into_stream<'a, T: Target<'a, Self>>(
         self,
-    ) -> Box<dyn Future<Item = T, Error = <T as Target>::Error> + Send + 'static>
+    ) -> Box<dyn Future<Item = T, Error = <T as Target<'a, Self>>::Error> + Send + 'static>
     where
         Self: Send + 'static,
         Self::DeconstructFuture: Send,

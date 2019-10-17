@@ -71,7 +71,7 @@ where
     ) -> Self::ConstructFuture {
         Box::new(channel.into_future().then(|v| match v {
             Ok(v) => Ok(match v.0.unwrap() {
-                FResult::Ok(r) => Future::<T, E>::from(v.1.get_fork::<T>(r).map_err(|_| panic!())),
+                FResult::Ok(r) => Future::<T, E>::from(v.1.get_fork::<T>(r).map_err(|e| panic!(e))),
                 FResult::Err(r) => {
                     Future::<T, E>::from(v.1.get_fork::<E>(r).then(|v| Err(v.unwrap())))
                 }

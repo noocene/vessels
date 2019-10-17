@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate erased_serde;
+#[macro_use]
+extern crate mopa;
 
 pub mod channel;
 pub use channel::IntoStream;
@@ -124,7 +126,7 @@ macro_rules! primitive_impl {
                 Box::new(
                     channel
                         .into_future()
-                        .map_err(|_| ())
+                        .map_err(|e| panic!(e))
                         .map(|v| v.0.unwrap()),
                 )
             }
@@ -134,8 +136,17 @@ macro_rules! primitive_impl {
 
 primitive_impl!(bool isize i8 i16 i32 i64 usize u8 u16 u32 u64 f32 f64 char CString String Ipv4Addr SocketAddrV4 SocketAddrV6 SocketAddr SystemTime OsString Ipv6Addr Duration NonZeroU8 NonZeroU16 NonZeroU32 NonZeroU64 NonZeroUsize NonZeroI8 NonZeroI16 NonZeroI32 NonZeroI64 NonZeroIsize);
 
-pub(crate) trait SerdeAny: erased_serde::Serialize + Any + Send {}
+pub(crate) trait SerdeAny: erased_serde::Serialize + mopa::Any + Send {
+    fn as_any(self) -> Box<dyn Any>
+    where
+        Self: Sized,
+    {
+        Box::new(self)
+    }
+}
+
+mopafy!(SerdeAny);
 
 serialize_trait_object!(SerdeAny);
 
-impl<T: ?Sized> SerdeAny for T where T: ErasedSerialize + Any + Send {}
+impl<T: ?Sized> SerdeAny for T where T: ErasedSerialize + mopa::Any + Send {}

@@ -13,14 +13,17 @@ pub mod bincode;
 #[cfg(feature = "bincode")]
 pub use bincode::Bincode;
 
-use futures::{Poll, Sink, StartSend, Stream};
+use futures::{lazy, Future, Poll, Sink, StartSend, Stream};
 
-use crate::channel::Context;
+use crate::{
+    channel::{Context, Shim, Target},
+    Value,
+};
 
 use serde::{de::DeserializeSeed, Serialize};
 
 #[doc(hidden)]
-pub struct StreamSink<T: Stream, U: Sink>(T, U);
+pub struct StreamSink<T: Stream, U: Sink>(pub(crate) T, pub(crate) U);
 
 impl<T: Stream, U: Sink> Sink for StreamSink<T, U> {
     type SinkItem = U::SinkItem;
@@ -76,28 +79,15 @@ where
     }
 }
 
-pub trait ApplyDecode<'de> {
-    fn decode<F: Format + Decode<'de, Self>>(self) -> <F as Decode<'de, Self>>::Output
-    where
-        Self: Sized + UniformStreamSink<<F as Format>::Representation> + Context<'de>;
-}
-
-impl<'de, T> ApplyDecode<'de> for T {
-    fn decode<F: Format + Decode<'de, Self>>(self) -> <F as Decode<'de, Self>>::Output
-    where
-        Self: Sized + UniformStreamSink<<F as Format>::Representation> + Context<'de>,
-    {
-        <F as Decode<_>>::decode(self)
-    }
-}
-
-pub trait Decode<'de, C: UniformStreamSink<<Self as Format>::Representation> + Context<'de>>:
-    Format
+pub trait Decode<
+    'de,
+    C: UniformStreamSink<<Self as Format>::Representation> + Send + 'static,
+    V: Value + Send + 'static,
+>: Format
 {
-    type Output: Stream<Item = <C as Context<'de>>::Item>
-        + Sink<SinkItem = <C as Context<'de>>::Item>;
+    type Output: Future<Item = V>;
 
-    fn decode(input: C) -> Self::Output;
+    fn decode<T: Target<'de, V> + Send + 'static>(input: C) -> Self::Output;
 }
 
 pub trait Encode<'de, C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de>>:
@@ -111,31 +101,31 @@ pub trait Encode<'de, C: UniformStreamSink<<C as Context<'de>>::Item> + Context<
 
 impl<
         'de,
+        C: UniformStreamSink<<Self as Format>::Representation> + Send + 'static,
         T: Format + 'static,
-        C: UniformStreamSink<<Self as Format>::Representation> + Context<'de> + 'static + Send,
-    > Decode<'de, C> for T
+        V: Value + Send + 'static,
+    > Decode<'de, C, V> for T
 where
     Self::Representation: Send,
 {
-    type Output = StreamSink<
-        Box<dyn Stream<Item = <C as Context<'de>>::Item, Error = ()> + Send>,
-        Box<dyn Sink<SinkItem = <C as Context<'de>>::Item, SinkError = ()> + Send>,
-    >;
+    type Output = Box<dyn Future<Item = V, Error = ()> + Send + 'de>;
 
-    fn decode(input: C) -> Self::Output {
-        let ctx = input.context();
-        let (sink, stream) = input.split();
-        StreamSink(
-            Box::new(
-                stream
-                    .map_err(|_| ())
-                    .map(move |data| <Self as Format>::deserialize(data, ctx.clone())),
-            ),
-            Box::new(
-                sink.sink_map_err(|_| ())
-                    .with(|data| Ok(<Self as Format>::serialize(data))),
-            ),
-        )
+    fn decode<U: Target<'de, V> + Send + 'static>(input: C) -> Self::Output {
+        Box::new(lazy(|| {
+            let shim = U::new();
+            let context = shim.context();
+            let (sink, stream) = input.split();
+            shim.complete(StreamSink(
+                stream.map(move |item| Self::deserialize(item, context.clone())),
+                sink.sink_map_err(|k: <C as Sink>::SinkError| {
+                    panic!();
+                    ()
+                })
+                .with(|item| Ok(Self::serialize(item)))
+                .sink_map_err(|_: ()| ()),
+            ))
+            .map_err(|e| panic!(e))
+        }))
     }
 }
 
