@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 
 use futures::Future as IFuture;
 
-use std::ops::Deref;
-
 use failure::Error;
 
 #[doc(hidden)]
@@ -18,35 +16,13 @@ pub enum FResult {
     Err(ForkHandle),
 }
 
-pub struct Future<T, E>(Box<dyn IFuture<Item = T, Error = E> + Send + 'static>)
-where
-    T: Value,
-    E: Value;
-
-impl<T: Value, E: Value> Deref for Future<T, E> {
-    type Target = Box<dyn IFuture<Item = T, Error = E> + Send + 'static>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<F> From<F> for Future<F::Item, F::Error>
-where
-    F: IFuture + Send + 'static,
-    F::Error: Value,
-    F::Item: Value,
-{
-    fn from(input: F) -> Self {
-        Future(Box::new(input))
-    }
-}
+pub type Future<T, E> = Box<dyn IFuture<Item = T, Error = E> + Send>;
 
 #[value]
-impl<T, E> Value for Future<T, E>
+impl<T, E> Value for Box<dyn IFuture<Item = T, Error = E> + Send>
 where
-    T: Value + Send + 'static,
-    E: Value + Send + 'static,
+    T: Value,
+    E: Value,
 {
     type ConstructItem = FResult;
     type ConstructFuture = Box<dyn IFuture<Item = Self, Error = Error> + Send>;
@@ -56,14 +32,20 @@ where
         self,
         channel: C,
     ) -> Self::DeconstructFuture {
-        Box::new(self.0.then(|v| {
+        Box::new(self.then(|v| {
             let fork_factory = channel.split_factory();
-            channel
-                .send(match v {
-                    Ok(v) => FResult::Ok(fork_factory.fork(v)),
-                    Err(v) => FResult::Err(fork_factory.fork(v)),
-                })
-                .then(|_| Ok(()))
+            match v {
+                Ok(v) => Box::new(
+                    fork_factory
+                        .fork(v)
+                        .and_then(|h| channel.send(FResult::Ok(h)).then(|_| Ok(()))),
+                ),
+                Err(v) => Box::new(
+                    fork_factory
+                        .fork(v)
+                        .and_then(|h| channel.send(FResult::Err(h)).then(|_| Ok(()))),
+                ) as Box<dyn IFuture<Item = (), Error = ()> + Send>,
+            }
         }))
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
@@ -71,10 +53,10 @@ where
     ) -> Self::ConstructFuture {
         Box::new(channel.into_future().then(|v| match v {
             Ok(v) => Ok(match v.0.unwrap() {
-                FResult::Ok(r) => Future::<T, E>::from(v.1.get_fork::<T>(r).map_err(|e| panic!(e))),
-                FResult::Err(r) => {
-                    Future::<T, E>::from(v.1.get_fork::<E>(r).then(|v| Err(v.unwrap())))
-                }
+                FResult::Ok(r) => Box::new(v.1.get_fork::<T>(r).map_err(|_| -> E { panic!() }))
+                    as Box<dyn IFuture<Item = T, Error = E> + Send>,
+                FResult::Err(r) => Box::new(v.1.get_fork::<E>(r).then(|v| Err(v.unwrap())))
+                    as Box<dyn IFuture<Item = T, Error = E> + Send>,
             }),
             _ => panic!("lol"),
         }))

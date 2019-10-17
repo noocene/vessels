@@ -11,11 +11,14 @@ use crate::Value;
 use futures::{Future, Sink, Stream};
 
 #[derive(Serialize, Deserialize)]
-pub struct ForkHandle(u64);
+pub struct ForkHandle(u32);
 
 pub trait Fork: Send + 'static {
-    fn fork<V: Value>(&self, value: V) -> ForkHandle;
-    fn get_fork<V: Value + Send + 'static>(
+    fn fork<V: Value>(
+        &self,
+        value: V,
+    ) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send + 'static>;
+    fn get_fork<V: Value>(
         &self,
         fork_ref: ForkHandle,
     ) -> Box<dyn Future<Item = V, Error = ()> + Send + 'static>;
@@ -31,7 +34,7 @@ pub trait Channel<
     fn split_factory(&self) -> Self::Fork;
 }
 
-pub trait Shim<'a, T: Target<'a, V>, V: Value + Send + 'static>:
+pub trait Shim<'a, T: Target<'a, V>, V: Value>:
     Context<'a, Item = <T as Context<'a>>::Item>
 {
     fn complete<
@@ -45,7 +48,7 @@ pub trait Shim<'a, T: Target<'a, V>, V: Value + Send + 'static>:
     ) -> Box<dyn Future<Item = V, Error = <T as Target<'a, V>>::Error> + Send + 'static>;
 }
 
-pub trait Target<'a, V: Value + Send + 'static>: Context<'a> + Sized {
+pub trait Target<'a, V: Value>: Context<'a> + Sized {
     type Error: Send + 'static;
     type Shim: Shim<'a, Self, V>;
 
@@ -65,8 +68,8 @@ pub trait Context<'de> {
     fn context(&self) -> Self::Target;
 }
 
-pub trait IntoStream: Value {
-    fn into_stream<'a, T: Target<'a, Self>>(
+pub trait OnTo: Value {
+    fn on_to<'a, T: Target<'a, Self>>(
         self,
     ) -> Box<dyn Future<Item = T, Error = <T as Target<'a, Self>>::Error> + Send + 'static>
     where
@@ -74,8 +77,8 @@ pub trait IntoStream: Value {
         Self::DeconstructFuture: Send;
 }
 
-impl<V: Value> IntoStream for V {
-    fn into_stream<'a, T: Target<'a, Self>>(
+impl<V: Value> OnTo for V {
+    fn on_to<'a, T: Target<'a, Self>>(
         self,
     ) -> Box<dyn Future<Item = T, Error = <T as Target<'a, Self>>::Error> + Send + 'static>
     where

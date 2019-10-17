@@ -79,7 +79,7 @@ where
     }
 }
 
-pub trait ApplyDecode<'de, V: Value + Send + 'static> {
+pub trait ApplyDecode<'de, V: Value> {
     fn decode<T: Target<'de, V> + Send + 'static, F: Format + 'static>(
         self,
     ) -> <F as Decode<'de, Self, V>>::Output
@@ -88,7 +88,7 @@ pub trait ApplyDecode<'de, V: Value + Send + 'static> {
         F::Representation: Send;
 }
 
-impl<'de, U, V: Value + Send + 'static> ApplyDecode<'de, V> for U {
+impl<'de, U, V: Value> ApplyDecode<'de, V> for U {
     fn decode<T: Target<'de, V> + Send + 'static, F: Format + 'static>(
         self,
     ) -> <F as Decode<'de, Self, V>>::Output
@@ -103,7 +103,7 @@ impl<'de, U, V: Value + Send + 'static> ApplyDecode<'de, V> for U {
 pub trait Decode<
     'de,
     C: UniformStreamSink<<Self as Format>::Representation> + Send + 'static,
-    V: Value + Send + 'static,
+    V: Value,
 >: Format
 {
     type Output: Future<Item = V>;
@@ -124,7 +124,7 @@ impl<
         'de,
         C: UniformStreamSink<<Self as Format>::Representation> + Send + 'static,
         T: Format + 'static,
-        V: Value + Send + 'static,
+        V: Value,
     > Decode<'de, C, V> for T
 where
     Self::Representation: Send,

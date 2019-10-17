@@ -4,7 +4,7 @@ extern crate erased_serde;
 extern crate mopa;
 
 pub mod channel;
-pub use channel::IntoStream;
+pub use channel::OnTo;
 use channel::{Channel, Target};
 pub mod format;
 pub mod value;
@@ -61,7 +61,7 @@ type DeserializeFn =
 
 inventory::collect!(ErasedDeserialize);
 
-pub trait Value: Sized {
+pub trait Value: Sized + Send + 'static {
     type ConstructItem: Serialize + DeserializeOwned + Send + 'static;
     type ConstructFuture: Future<Item = Self> + Send + 'static;
 

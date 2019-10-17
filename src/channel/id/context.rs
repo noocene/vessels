@@ -57,17 +57,26 @@ impl Context {
             .map(|c| *c)
     }
 
-    pub(crate) fn add(&self, construct: TypeId, deconstruct: TypeId) -> u32 {
+    pub(crate) fn create<V: Value>(&self) -> u32 {
         let mut state = self.state.write().unwrap();
+        let c = TypeId::of::<V::ConstructItem>();
+        let d = TypeId::of::<V::DeconstructItem>();
 
         if let Some(id) = state.unused_indices.pop() {
-            state.channel_types.insert(id, (construct, deconstruct));
+            state.channel_types.insert(id, (c, d));
             id
         } else {
             let id = state.next_index;
             state.next_index += 1;
-            state.channel_types.insert(id, (construct, deconstruct));
+            state.channel_types.insert(id, (c, d));
             id
         }
+    }
+
+    pub(crate) fn add<V: Value>(&self, handle: u32) {
+        let mut state = self.state.write().unwrap();
+        let c = TypeId::of::<V::ConstructItem>();
+        let d = TypeId::of::<V::DeconstructItem>();
+        state.channel_types.insert(handle, (c, d));
     }
 }
