@@ -49,7 +49,8 @@ pub fn value(attr: proc_macro::TokenStream, i: proc_macro::TokenStream) -> proc_
     };
     item.items.iter().for_each(|item| {
         if let ImplItem::Type(ty) = item {
-            if ty.ident.to_string() == "ConstructItem" {
+            let ty_name = ty.ident.to_string();
+            if ty_name == "ConstructItem" || ty_name == "DeconstructItem" {
                 let ty = &ty.ty;
                 let name = ty.into_token_stream().to_string();
                 let mut lock = REGISTERED.lock().unwrap();
