@@ -15,9 +15,11 @@ use futures::{
     future::{ok, FutureResult},
     Future,
 };
+use lazy_static::lazy_static;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     any::{Any, TypeId},
+    collections::HashMap,
     ffi::{CString, OsString},
     marker::PhantomData,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
@@ -25,8 +27,23 @@ use std::{
         NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
         NonZeroU64, NonZeroU8, NonZeroUsize,
     },
+    sync::{Arc, Mutex},
     time::{Duration, SystemTime},
 };
+
+lazy_static! {
+    static ref REGISTRY: HashMap<TypeId, DeserializeFn> = {
+        let mut map = HashMap::new();
+        inventory::iter::<ErasedDeserialize>
+            .into_iter()
+            .for_each(|func| {
+                if !map.contains_key(&func.ty) {
+                    map.insert(func.ty, func.func);
+                }
+            });
+        map
+    };
+}
 
 pub(crate) struct ErasedDeserialize {
     ty: TypeId,

@@ -1,6 +1,6 @@
 use super::Context;
 
-use crate::{ErasedDeserialize, SerdeAny};
+use crate::{SerdeAny, REGISTRY};
 
 use serde::de::{DeserializeSeed, Deserializer};
 
@@ -16,12 +16,7 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
         let ty = self.1.get(&self.0).unwrap();
         let deserializer = &mut erased_serde::Deserializer::erase(deserializer)
             as &mut dyn erased_serde::Deserializer;
-        (inventory::iter::<ErasedDeserialize>
-            .into_iter()
-            .find(|item| item.ty == ty.0)
-            .unwrap()
-            .func)(deserializer)
-        .map_err(|_| panic!())
+        (REGISTRY.get(&ty.0).unwrap())(deserializer).map_err(|_| panic!())
     }
 }
 
