@@ -15,10 +15,6 @@ use syn::{
     Ident, ImplItem, ItemImpl, Token, Type, Visibility,
 };
 
-lazy_static! {
-    static ref REGISTERED: Mutex<HashSet<u64>> = Mutex::new(HashSet::new());
-}
-
 #[proc_macro_attribute]
 pub fn value(attr: proc_macro::TokenStream, i: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let j = i.clone();
@@ -47,23 +43,18 @@ pub fn value(attr: proc_macro::TokenStream, i: proc_macro::TokenStream) -> proc_
         .into();
         item.items.push(parse_macro_input!(stream as ImplItem));
     };
-    item.items.iter().for_each(|item| {
-        if let ImplItem::Type(ty) = item {
+    item.items.iter().for_each(|i| {
+        if let ImplItem::Type(ty) = i {
             let ty_name = ty.ident.to_string();
-            if ty_name == "ConstructItem" || ty_name == "DeconstructItem" {
-                let ty = &ty.ty;
-                let name = ty.into_token_stream().to_string();
-                let mut lock = REGISTERED.lock().unwrap();
+            let is_ci = ty_name == "ConstructItem";
+            if is_ci || ty_name == "DeconstructItem" {
                 let mut hasher = DefaultHasher::new();
-                ty.into_token_stream().to_string().hash(&mut hasher);
-                let hash = hasher.finish();
-                if lock.contains(&hash) {
-                    return;
-                } else {
-                    lock.insert(hash);
-                }
+                (ty.into_token_stream().to_string(), format!("{:?}", ty.ident.span()), is_ci, item.clone().into_token_stream().to_string()).hash(&mut hasher);
+                let unique = format_ident!("_{}", hasher.finish());
+                let ty = &ty.ty;
                 stream.extend(quote! {
                     inventory::submit! {
+                        let #unique: () = ();
                         ErasedDeserialize::new({
                             ::std::any::TypeId::of::<#ty>()
                         }, |de| <#ty as ::serde::Deserialize>::deserialize(de).map(|v| Box::new(v) as Box<dyn SerdeAny>))
