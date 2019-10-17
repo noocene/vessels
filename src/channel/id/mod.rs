@@ -6,7 +6,6 @@ mod id;
 pub(crate) use id::Id;
 
 use futures::{
-    future::{empty, ok},
     lazy, stream,
     sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
     Async, AsyncSink, Future, Poll, Sink, StartSend, Stream,
@@ -17,14 +16,11 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
 
 use crate::{
-    channel::Fork,
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle},
-    format::StreamSink,
     SerdeAny, Target, Value,
 };
 
 use std::{
-    any::{Any, TypeId},
     marker::PhantomData,
     sync::{Arc, Mutex},
 };
@@ -121,13 +117,6 @@ impl<'a, V: Value> IContext<'a> for Shim<V> {
 }
 
 impl IdChannel {
-    fn new() -> Self {
-        IdChannel {
-            out_channel: Arc::new(Mutex::new(Box::new(stream::empty()))),
-            context: Context::new(),
-            in_channels: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
     fn clone(&self) -> Self {
         IdChannel {
             out_channel: self.out_channel.clone(),
@@ -249,7 +238,7 @@ impl<
     type Error = ();
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        self.i.poll().map_err(|e| ())
+        self.i.poll().map_err(|_| ())
     }
 }
 
@@ -276,7 +265,7 @@ impl<
                         i: oo,
                         channel,
                     })
-                    .map_err(|e| ()),
+                    .map_err(|_| ()),
             );
             Ok((sender, receiver))
         })
@@ -297,7 +286,7 @@ impl<
                 i: cin,
                 channel,
             })
-            .map_err(|e| ())
+            .map_err(|_| ())
         })
     }
 
@@ -335,7 +324,7 @@ impl<
                         i: oo,
                         channel: channel.clone(),
                     })
-                    .map_err(|e| ()),
+                    .map_err(|_| ()),
             );
             Ok(channel)
         })

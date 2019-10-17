@@ -138,9 +138,8 @@ where
             let (sink, stream) = input.split();
             shim.complete(StreamSink(
                 stream.map(move |item| Self::deserialize(item, context.clone())),
-                sink.sink_map_err(|k: <C as Sink>::SinkError| {
+                sink.sink_map_err(|_: <C as Sink>::SinkError| {
                     panic!();
-                    ()
                 })
                 .with(|item| Ok(Self::serialize(item)))
                 .sink_map_err(|_: ()| ()),

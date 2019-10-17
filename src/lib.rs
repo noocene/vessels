@@ -27,7 +27,6 @@ use std::{
         NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
         NonZeroU64, NonZeroU8, NonZeroUsize,
     },
-    sync::{Arc, Mutex},
     time::{Duration, SystemTime},
 };
 
