@@ -59,7 +59,7 @@ pub trait Context<'de> {
 }
 
 pub trait IntoStream: Value {
-    fn stream<T: Target>(
+    fn into_stream<T: Target>(
         self,
     ) -> Box<dyn Future<Item = T, Error = <T as Target>::Error> + Send + 'static>
     where
@@ -68,7 +68,7 @@ pub trait IntoStream: Value {
 }
 
 impl<V: Value> IntoStream for V {
-    fn stream<T: Target>(
+    fn into_stream<T: Target>(
         self,
     ) -> Box<dyn Future<Item = T, Error = <T as Target>::Error> + Send + 'static>
     where
