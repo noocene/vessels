@@ -97,11 +97,17 @@ impl<'a, V: Value> IShim<'a, IdChannel, V> for Shim<V> {
             let (receiver, sender) = channel.split();
             tokio::spawn(
                 sender
-                    .map_err(|_| ())
-                    .forward(sink.sink_map_err(|_| ()))
+                    .map_err(|_| panic!())
+                    .forward(sink.sink_map_err(|_| panic!()))
                     .then(|_| Ok(())),
             );
-            tokio::spawn(stream.map_err(|_| ()).forward(receiver).then(|_| Ok(())));
+            tokio::spawn(
+                stream
+                    .map_err(|_| panic!())
+                    .forward(receiver)
+                    .map_err(|_| panic!())
+                    .and_then(|_| Ok(())),
+            );
             fork
         }))
     }
@@ -126,6 +132,7 @@ impl IdChannel {
     }
     fn fork<V: Value>(&self, value: V) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
         let id = self.context.create::<V>();
+        let context = self.context.clone();
         let out_channel = self.out_channel.clone();
         let in_channels = self.in_channels.clone();
 
@@ -135,18 +142,22 @@ impl IdChannel {
                 let mut empty_stream =
                     Box::new(stream::empty()) as Box<dyn Stream<Item = Item, Error = ()> + Send>;
                 std::mem::swap(&mut (*out_channel), &mut empty_stream);
-                *out_channel = Box::new(
-                    empty_stream.select(receiver.map(move |item| Item(id, Box::new(item)))),
-                );
+                *out_channel = Box::new(empty_stream.select(
+                    receiver.map(move |item| Item::new(id, Box::new(item), context.clone())),
+                ));
                 let mut in_channels = in_channels.lock().unwrap();
                 in_channels.insert(
                     id,
-                    Box::new(sender.sink_map_err(|_| ()).with(|item: Box<dyn SerdeAny>| {
-                        Ok(*(item
-                            .downcast::<V::DeconstructItem>()
-                            .map_err(|_| ())
-                            .unwrap()))
-                    })),
+                    Box::new(
+                        sender
+                            .sink_map_err(|_| panic!())
+                            .with(|item: Box<dyn SerdeAny>| {
+                                Ok(*(item
+                                    .downcast::<V::DeconstructItem>()
+                                    .map_err(|_| panic!())
+                                    .unwrap()))
+                            }),
+                    ),
                 );
                 Ok(ForkHandle(id))
             }),
@@ -167,13 +178,19 @@ impl IdChannel {
             let isender = isender
                 .sink_map_err(|_: <UnboundedSender<V::ConstructItem> as Sink>::SinkError| panic!())
                 .with(move |item: Box<dyn SerdeAny>| {
-                    Ok(*(item.downcast::<V::ConstructItem>().map_err(|_| ()).unwrap()))
+                    Ok(*(item
+                        .downcast::<V::ConstructItem>()
+                        .map_err(|_| panic!())
+                        .unwrap()))
                 })
-                .sink_map_err(|_: ()| ());
+                .sink_map_err(|_: ()| panic!());
             in_channels.insert(fork_ref.0, Box::new(isender));
+            let ct = channel.context.clone();
             let ireceiver = ireceiver
-                .map(move |item: V::DeconstructItem| Item(fork_ref.0, Box::new(item)))
-                .map_err(|_| ());
+                .map(move |item: V::DeconstructItem| {
+                    Item::new(fork_ref.0, Box::new(item), ct.clone())
+                })
+                .map_err(|_| panic!());
             let mut empty_stream =
                 Box::new(stream::empty()) as Box<dyn Stream<Item = Item, Error = ()> + Send>;
             std::mem::swap(&mut (*out_channel), &mut empty_stream);
@@ -238,7 +255,7 @@ impl<
     type Error = ();
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        self.i.poll().map_err(|_| ())
+        self.i.poll().map_err(|_| panic!())
     }
 }
 
@@ -265,7 +282,7 @@ impl<
                         i: oo,
                         channel,
                     })
-                    .map_err(|_| ()),
+                    .map_err(|_| panic!()),
             );
             Ok((sender, receiver))
         })
@@ -286,7 +303,7 @@ impl<
                 i: cin,
                 channel,
             })
-            .map_err(|_| ())
+            .map_err(|_| panic!())
         })
     }
 
@@ -302,19 +319,26 @@ impl<
             let mut in_channels = HashMap::new();
             in_channels.insert(
                 0u32,
-                Box::new(sender.sink_map_err(|_| ()).with(|item: Box<dyn SerdeAny>| {
-                    Ok(*(item
-                        .downcast::<V::DeconstructItem>()
-                        .map_err(|_| ())
-                        .unwrap()))
-                }))
+                Box::new(
+                    sender
+                        .sink_map_err(|_| panic!())
+                        .with(|item: Box<dyn SerdeAny>| {
+                            Ok(*(item
+                                .downcast::<V::DeconstructItem>()
+                                .map_err(|_| panic!())
+                                .unwrap()))
+                        }),
+                )
                     as Box<dyn Sink<SinkItem = Box<dyn SerdeAny>, SinkError = ()> + Send>,
             );
+            let context = Context::new_with::<V>();
+            let ct = context.clone();
             let channel = IdChannel {
                 out_channel: Arc::new(Mutex::new(Box::new(
-                    receiver.map(move |v| Item::new(0, Box::new(v) as Box<dyn SerdeAny>)),
+                    receiver
+                        .map(move |v| Item::new(0, Box::new(v) as Box<dyn SerdeAny>, ct.clone())),
                 ))),
-                context: Context::new_with::<V>(),
+                context,
                 in_channels: Arc::new(Mutex::new(in_channels)),
             };
             tokio::spawn(
@@ -324,7 +348,7 @@ impl<
                         i: oo,
                         channel: channel.clone(),
                     })
-                    .map_err(|_| ()),
+                    .map_err(|_| panic!()),
             );
             Ok(channel)
         })

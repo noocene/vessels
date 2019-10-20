@@ -142,7 +142,7 @@ where
                     panic!();
                 })
                 .with(|item| Ok(Self::serialize(item)))
-                .sink_map_err(|_: ()| ()),
+                .sink_map_err(|_: ()| panic!()),
             ))
             .map_err(|e| panic!(e))
         }))
@@ -167,9 +167,13 @@ where
         let ctx = input.context();
         let (sink, stream) = input.split();
         StreamSink(
-            Box::new(stream.map_err(|_| ()).map(<Self as Format>::serialize)),
             Box::new(
-                sink.sink_map_err(|_| ())
+                stream
+                    .map_err(|_| panic!())
+                    .map(<Self as Format>::serialize),
+            ),
+            Box::new(
+                sink.sink_map_err(|_| panic!())
                     .with(move |data| Ok(<Self as Format>::deserialize(data, ctx.clone()))),
             ),
         )

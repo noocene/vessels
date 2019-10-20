@@ -79,4 +79,18 @@ impl Context {
         let d = TypeId::of::<V::DeconstructItem>();
         state.channel_types.insert(handle, (c, d));
     }
+
+    pub(crate) fn len(&self) -> usize {
+        self.state.read().unwrap().channel_types.len()
+    }
+
+    pub(crate) fn only(&self) -> Option<(u32, (TypeId, TypeId))> {
+        let state = self.state.read().unwrap();
+        if state.channel_types.len() == 1 {
+            let item = state.channel_types.iter().next().unwrap();
+            Some((*item.0, *item.1))
+        } else {
+            None
+        }
+    }
 }

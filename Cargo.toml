@@ -29,7 +29,3 @@ lazy_static = "1.4.0"
 [dependencies.derive]
 version = "0.1.0"
 path = "./derive"
-
-[[bin]]
-name = "main"
-path = "src/main.rs"

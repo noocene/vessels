@@ -1,6 +1,6 @@
-use crate::SerdeAny;
+use crate::{SerdeAny, REGISTRY};
 
-use super::{Context, Id, IdChannel};
+use super::{Context, Id};
 
 use serde::{
     de::{DeserializeSeed, Deserializer, MapAccess, Visitor},
@@ -10,14 +10,16 @@ use serde::{
 
 use std::fmt;
 
-pub struct Item(pub(crate) u32, pub(crate) Box<dyn SerdeAny>);
+pub struct Item(pub(crate) u32, pub(crate) Box<dyn SerdeAny>, Context);
 
 impl Serialize for Item {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        if serializer.is_human_readable() {
+        if self.2.len() == 1 {
+            self.1.serialize(serializer)
+        } else if serializer.is_human_readable() {
             let mut map = serializer.serialize_map(Some(2))?;
             map.serialize_entry("channel", &self.0)?;
             map.serialize_entry("data", self.1.as_ref())?;
@@ -32,8 +34,8 @@ impl Serialize for Item {
 }
 
 impl Item {
-    pub(crate) fn new(channel: u32, content: Box<dyn SerdeAny>) -> Self {
-        Item(channel, content)
+    pub(crate) fn new(channel: u32, content: Box<dyn SerdeAny>, context: Context) -> Self {
+        Item(channel, content, context)
     }
 }
 
@@ -77,7 +79,7 @@ impl<'de> Visitor<'de> for ItemVisitor {
         }
         let channel = channel.ok_or_else(|| serde::de::Error::missing_field("channel"))?;
         let data = data.ok_or_else(|| serde::de::Error::missing_field("data"))?;
-        Ok(Item(channel, data))
+        Ok(Item(channel, data, self.0))
     }
 }
 
@@ -88,50 +90,32 @@ impl<'de> DeserializeSeed<'de> for Context {
     where
         D: Deserializer<'de>,
     {
-        let human_readable = deserializer.is_human_readable();
         let deserializer = &mut erased_serde::Deserializer::erase(deserializer)
             as &mut dyn erased_serde::Deserializer;
-        if human_readable {
-            deserializer
-                .deserialize_map(ItemVisitor(self))
-                .map_err(|e| {
-                    println!("{:?}", e);
-                    panic!();
-                })
+        if let Some((idx, ty)) = self.only() {
+            Ok(Item::new(
+                idx,
+                (REGISTRY.get(&ty.0).unwrap())(deserializer).map_err(|_| panic!())?,
+                self.clone(),
+            ))
         } else {
-            deserializer
-                .deserialize_seq(ItemVisitor(self))
-                .map_err(|e| {
-                    println!("{:?}", e);
-                    panic!();
-                })
-        }
-    }
-}
+            let human_readable = deserializer.is_human_readable();
 
-impl<'de> DeserializeSeed<'de> for IdChannel {
-    type Value = Item;
-
-    fn deserialize<D>(self, deserializer: D) -> Result<Item, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let deserializer = &mut erased_serde::Deserializer::erase(deserializer)
-            as &mut dyn erased_serde::Deserializer;
-        if deserializer.is_human_readable() {
-            deserializer
-                .deserialize_map(ItemVisitor(self.context))
-                .map_err(|e| {
-                    println!("{:?}", e);
-                    panic!();
-                })
-        } else {
-            deserializer
-                .deserialize_seq(ItemVisitor(self.context))
-                .map_err(|e| {
-                    println!("{:?}", e);
-                    panic!();
-                })
+            if human_readable {
+                deserializer
+                    .deserialize_map(ItemVisitor(self))
+                    .map_err(|e| {
+                        println!("{:?}", e);
+                        panic!();
+                    })
+            } else {
+                deserializer
+                    .deserialize_seq(ItemVisitor(self))
+                    .map_err(|e| {
+                        println!("{:?}", e);
+                        panic!();
+                    })
+            }
         }
     }
 }
