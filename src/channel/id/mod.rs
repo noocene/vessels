@@ -99,7 +99,8 @@ impl<'a, V: Value> IShim<'a, IdChannel, V> for Shim<V> {
                 sender
                     .map_err(|_| panic!())
                     .forward(sink.sink_map_err(|_| panic!()))
-                    .then(|_| Ok(())),
+                    .map_err(|_| panic!())
+                    .and_then(|_| Ok(())),
             );
             tokio::spawn(
                 stream
@@ -137,30 +138,29 @@ impl IdChannel {
         let in_channels = self.in_channels.clone();
 
         Box::new(
-            IdChannelFork::new(value, self).and_then(move |(sender, receiver)| {
-                let mut out_channel = out_channel.lock().unwrap();
-                let mut empty_stream =
-                    Box::new(stream::empty()) as Box<dyn Stream<Item = Item, Error = ()> + Send>;
-                std::mem::swap(&mut (*out_channel), &mut empty_stream);
-                *out_channel = Box::new(empty_stream.select(
-                    receiver.map(move |item| Item::new(id, Box::new(item), context.clone())),
-                ));
-                let mut in_channels = in_channels.lock().unwrap();
-                in_channels.insert(
-                    id,
-                    Box::new(
-                        sender
-                            .sink_map_err(|_| panic!())
-                            .with(|item: Box<dyn SerdeAny>| {
+            IdChannelFork::<UnboundedReceiver<_>, UnboundedSender<_>, _, _>::new(value, self)
+                .and_then(move |(sender, receiver)| {
+                    let mut out_channel = out_channel.lock().unwrap();
+                    let mut empty_stream = Box::new(stream::empty())
+                        as Box<dyn Stream<Item = Item, Error = ()> + Send>;
+                    std::mem::swap(&mut (*out_channel), &mut empty_stream);
+                    *out_channel = Box::new(empty_stream.select(
+                        receiver.map(move |item| Item::new(id, Box::new(item), context.clone())),
+                    ));
+                    let mut in_channels = in_channels.lock().unwrap();
+                    in_channels.insert(
+                        id,
+                        Box::new(sender.sink_map_err(|_| panic!()).with(
+                            |item: Box<dyn SerdeAny>| {
                                 Ok(*(item
                                     .downcast::<V::DeconstructItem>()
                                     .map_err(|_| panic!())
                                     .unwrap()))
-                            }),
-                    ),
-                );
-                Ok(ForkHandle(id))
-            }),
+                            },
+                        )),
+                    );
+                    Ok(ForkHandle(id))
+                }),
         )
     }
 
@@ -210,7 +210,12 @@ impl<'a, V: Value> Target<'a, V> for IdChannel {
     where
         V::DeconstructFuture: Send,
     {
-        Box::new(IdChannelFork::new_root(value))
+        Box::new(IdChannelFork::<
+            UnboundedReceiver<_>,
+            UnboundedSender<_>,
+            _,
+            _,
+        >::new_root(value))
     }
 
     fn new_shim() -> Self::Shim {
@@ -222,9 +227,14 @@ impl<'a, V: Value> Target<'a, V> for IdChannel {
 }
 
 impl<
+        T: Stream<Item = I> + Send + 'static,
+        U: Sink<SinkItem = O> + Send + 'static,
         I: Serialize + DeserializeOwned + Send + 'static,
         O: Serialize + DeserializeOwned + Send + 'static,
-    > IFork for IdChannelFork<I, O>
+    > IFork for IdChannelFork<T, U, I, O>
+where
+    T::Error: Send + 'static,
+    U::SinkError: Send + 'static,
 {
     fn fork<V: Value>(&self, value: V) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
         self.channel.fork(value)
@@ -238,18 +248,28 @@ impl<
 }
 
 pub(crate) struct IdChannelFork<
+    T: Stream<Item = I> + Send + 'static,
+    U: Sink<SinkItem = O> + Send + 'static,
     I: Serialize + DeserializeOwned + Send + 'static,
     O: Serialize + DeserializeOwned + Send + 'static,
-> {
-    i: UnboundedReceiver<I>,
-    o: UnboundedSender<O>,
+> where
+    T::Error: Send + 'static,
+    U::SinkError: Send + 'static,
+{
+    i: T,
+    o: U,
     channel: IdChannel,
 }
 
 impl<
+        T: Stream<Item = I> + Send + 'static,
+        U: Sink<SinkItem = O> + Send + 'static,
         I: Serialize + DeserializeOwned + Send + 'static,
         O: Serialize + DeserializeOwned + Send + 'static,
-    > Stream for IdChannelFork<I, O>
+    > Stream for IdChannelFork<T, U, I, O>
+where
+    T::Error: Send + 'static,
+    U::SinkError: Send + 'static,
 {
     type Item = I;
     type Error = ();
@@ -260,9 +280,14 @@ impl<
 }
 
 impl<
+        T: Stream<Item = I> + Send + 'static,
+        U: Sink<SinkItem = O> + Send + 'static,
         I: Serialize + DeserializeOwned + Send + 'static,
         O: Serialize + DeserializeOwned + Send + 'static,
-    > IdChannelFork<I, O>
+    > IdChannelFork<T, U, I, O>
+where
+    T::Error: Send + 'static,
+    U::SinkError: Send + 'static,
 {
     fn new<V: Value<DeconstructItem = I, ConstructItem = O>>(
         value: V,
@@ -289,8 +314,8 @@ impl<
     }
 
     fn construct<V: Value<DeconstructItem = O, ConstructItem = I>>(
-        cout: UnboundedSender<O>,
-        cin: UnboundedReceiver<I>,
+        cout: U,
+        cin: T,
         channel: &'_ IdChannel,
     ) -> impl Future<Item = V, Error = ()>
     where
@@ -298,7 +323,7 @@ impl<
     {
         let channel = channel.clone();
         lazy(move || {
-            V::construct(IdChannelFork::<I, O> {
+            V::construct(IdChannelFork {
                 o: cout,
                 i: cin,
                 channel,
@@ -356,9 +381,14 @@ impl<
 }
 
 impl<
+        T: Stream<Item = I> + Send + 'static,
+        U: Sink<SinkItem = O> + Send + 'static,
         I: Serialize + DeserializeOwned + Send + 'static,
         O: Serialize + DeserializeOwned + Send + 'static,
-    > Sink for IdChannelFork<I, O>
+    > Sink for IdChannelFork<T, U, I, O>
+where
+    T::Error: Send + 'static,
+    U::SinkError: Send + 'static,
 {
     type SinkItem = O;
     type SinkError = ();
@@ -388,9 +418,14 @@ pub struct IdFork {
 }
 
 impl<
+        T: Stream<Item = I> + Send + 'static,
+        U: Sink<SinkItem = O> + Send + 'static,
         I: Serialize + DeserializeOwned + Send + 'static,
         O: Serialize + DeserializeOwned + Send + 'static,
-    > Channel<I, O> for IdChannelFork<I, O>
+    > Channel<I, O> for IdChannelFork<T, U, I, O>
+where
+    T::Error: Send + 'static,
+    U::SinkError: Send + 'static,
 {
     type Fork = IdFork;
 

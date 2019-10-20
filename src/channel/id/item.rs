@@ -3,7 +3,7 @@ use crate::{SerdeAny, REGISTRY};
 use super::{Context, Id};
 
 use serde::{
-    de::{DeserializeSeed, Deserializer, MapAccess, Visitor},
+    de::{DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor},
     ser::{SerializeMap, SerializeSeq, Serializer},
     Serialize,
 };
@@ -48,11 +48,16 @@ impl<'de> Visitor<'de> for ItemVisitor {
         write!(formatter, "a channel item")
     }
 
-    /*fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+    fn visit_seq<A>(mut self, mut seq: A) -> Result<Self::Value, A::Error>
     where
         A: SeqAccess<'de>,
     {
-    }*/
+        let channel = seq.next_element()?.unwrap();
+        let data = seq
+            .next_element_seed(Id::new(channel, &mut self.0))?
+            .unwrap();
+        Ok(Item(channel, data, self.0))
+    }
 
     fn visit_map<A>(mut self, mut map: A) -> Result<Self::Value, A::Error>
     where
