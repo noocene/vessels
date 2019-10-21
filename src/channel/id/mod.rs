@@ -62,7 +62,21 @@ impl Sink for IdChannel {
         }
     }
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        Ok(Async::Ready(()))
+        if let Some(result) = self
+            .in_channels
+            .lock()
+            .unwrap()
+            .values_mut()
+            .map(|value| value.poll_complete())
+            .find(|poll| match poll {
+                Ok(Async::Ready(())) => false,
+                _ => true,
+            })
+        {
+            result
+        } else {
+            Ok(Async::Ready(()))
+        }
     }
 }
 
