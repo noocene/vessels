@@ -17,18 +17,20 @@ impl Serialize for Item {
     where
         S: Serializer,
     {
-        if self.2.len() == 1 {
-            self.1.serialize(serializer)
-        } else if serializer.is_human_readable() {
+        if serializer.is_human_readable() {
             let mut map = serializer.serialize_map(Some(2))?;
             map.serialize_entry("channel", &self.0)?;
             map.serialize_entry("data", self.1.as_ref())?;
             map.end()
         } else {
-            let mut seq = serializer.serialize_seq(Some(2))?;
-            seq.serialize_element(&self.0)?;
-            seq.serialize_element(self.1.as_ref())?;
-            seq.end()
+            if self.2.len() == 1 {
+                self.1.serialize(serializer)
+            } else {
+                let mut seq = serializer.serialize_seq(Some(2))?;
+                seq.serialize_element(&self.0)?;
+                seq.serialize_element(self.1.as_ref())?;
+                seq.end()
+            }
         }
     }
 }
@@ -95,24 +97,23 @@ impl<'de> DeserializeSeed<'de> for Context {
     where
         D: Deserializer<'de>,
     {
+        let human_readable = deserializer.is_human_readable();
         let deserializer = &mut erased_serde::Deserializer::erase(deserializer)
             as &mut dyn erased_serde::Deserializer;
-        if let Some((idx, ty)) = self.only() {
-            Ok(Item::new(
-                idx,
-                (REGISTRY.get(&ty.0).unwrap())(deserializer).map_err(|_| panic!())?,
-                self.clone(),
-            ))
+        if human_readable {
+            deserializer
+                .deserialize_map(ItemVisitor(self))
+                .map_err(|e| {
+                    println!("{:?}", e);
+                    panic!();
+                })
         } else {
-            let human_readable = deserializer.is_human_readable();
-
-            if human_readable {
-                deserializer
-                    .deserialize_map(ItemVisitor(self))
-                    .map_err(|e| {
-                        println!("{:?}", e);
-                        panic!();
-                    })
+            if let Some((idx, ty)) = self.only() {
+                Ok(Item::new(
+                    idx,
+                    (REGISTRY.get(&ty.0).unwrap())(deserializer).map_err(|_| panic!())?,
+                    self.clone(),
+                ))
             } else {
                 deserializer
                     .deserialize_seq(ItemVisitor(self))

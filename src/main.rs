@@ -1,23 +1,24 @@
 use valuedev::{
     channel::IdChannel,
     format::{Decode, Encode, Json},
-    OnTo,
+    value, OnTo,
 };
 
-use futures::{Future, Stream};
+use futures::{future::ok, Future, Stream};
 
 fn main() {
     tokio::run(
-        "test"
-            .to_owned()
+        (Box::new(ok(true)) as Box<dyn Future<Item = bool, Error = ()> + Send>)
             .on_to::<IdChannel>()
             .map(Json::encode)
             .map(|c| c.inspect(|item| println!("{}", item)))
             .map(Json::decode::<IdChannel>)
             .flatten()
-            .and_then(|item: String| {
-                println!("{}", item);
-                Ok(())
+            .and_then(|item: value::Future<bool, ()>| {
+                item.and_then(|item| {
+                    println!("{}", item);
+                    Ok(())
+                })
             }),
     )
 }
