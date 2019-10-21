@@ -19,7 +19,7 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
         ))?;
         let deserializer = &mut erased_serde::Deserializer::erase(deserializer)
             as &mut dyn erased_serde::Deserializer;
-        (REGISTRY.get(&ty.0).unwrap())(deserializer).map_err(|_| panic!())
+        (REGISTRY.get(&ty.0).unwrap())(deserializer).map_err(de::Error::custom)
     }
 }
 

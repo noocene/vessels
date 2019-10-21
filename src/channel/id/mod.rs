@@ -223,9 +223,7 @@ impl<'a, V: Value> Target<'a, V> for IdChannel {
     type Error = ();
     type Shim = Shim<V>;
 
-    fn new_with(
-        value: V,
-    ) -> Box<dyn Future<Item = Self, Error = <Self as Target<'a, V>>::Error> + Send + 'static>
+    fn new_with(value: V) -> Box<dyn Future<Item = Self, Error = Self::Error> + Send + 'static>
     where
         V::DeconstructFuture: Send,
     {

@@ -87,8 +87,11 @@ impl Context {
     pub(crate) fn only(&self) -> Option<(u32, (TypeId, TypeId))> {
         let state = self.state.read().unwrap();
         if state.channel_types.len() == 1 {
-            let item = state.channel_types.iter().next().unwrap();
-            Some((*item.0, *item.1))
+            state
+                .channel_types
+                .iter()
+                .next()
+                .map(|item| (*item.0, *item.1))
         } else {
             None
         }

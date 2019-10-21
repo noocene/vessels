@@ -3,7 +3,7 @@ use crate::{SerdeAny, REGISTRY};
 use super::{Context, Id};
 
 use serde::{
-    de::{DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor},
+    de::{self, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor},
     ser::{SerializeMap, SerializeSeq, Serializer},
     Serialize,
 };
@@ -54,10 +54,12 @@ impl<'de> Visitor<'de> for ItemVisitor {
     where
         A: SeqAccess<'de>,
     {
-        let channel = seq.next_element()?.unwrap();
+        let channel = seq
+            .next_element()?
+            .ok_or(de::Error::invalid_length(0, &"two elements"))?;
         let data = seq
             .next_element_seed(Id::new(channel, &mut self.0))?
-            .unwrap();
+            .ok_or(de::Error::invalid_length(1, &"two elements"))?;
         Ok(Item(channel, data, self.0))
     }
 
@@ -65,7 +67,7 @@ impl<'de> Visitor<'de> for ItemVisitor {
     where
         A: MapAccess<'de>,
     {
-        let mut channel: Option<u32> = None;
+        let mut channel = None;
         let mut data = None;
         while let Some(key) = map.next_key::<String>()? {
             match key.as_ref() {
@@ -81,7 +83,9 @@ impl<'de> Visitor<'de> for ItemVisitor {
                     }
                     data = Some(map.next_value_seed(Id::new(channel.unwrap(), &mut self.0))?);
                 }
-                _ => panic!(),
+                name => {
+                    return Err(de::Error::unknown_field(name, &["data", "channel"]));
+                }
             }
         }
         let channel = channel.ok_or_else(|| serde::de::Error::missing_field("channel"))?;
@@ -98,29 +102,19 @@ impl<'de> DeserializeSeed<'de> for Context {
         D: Deserializer<'de>,
     {
         let human_readable = deserializer.is_human_readable();
-        let deserializer = &mut erased_serde::Deserializer::erase(deserializer)
-            as &mut dyn erased_serde::Deserializer;
         if human_readable {
-            deserializer
-                .deserialize_map(ItemVisitor(self))
-                .map_err(|e| {
-                    println!("{:?}", e);
-                    panic!();
-                })
+            Ok(deserializer.deserialize_map(ItemVisitor(self))?)
         } else {
             if let Some((idx, ty)) = self.only() {
+                let deserializer = &mut erased_serde::Deserializer::erase(deserializer)
+                    as &mut dyn erased_serde::Deserializer;
                 Ok(Item::new(
                     idx,
-                    (REGISTRY.get(&ty.0).unwrap())(deserializer).map_err(|_| panic!())?,
+                    (REGISTRY.get(&ty.0).unwrap())(deserializer).map_err(de::Error::custom)?,
                     self.clone(),
                 ))
             } else {
-                deserializer
-                    .deserialize_seq(ItemVisitor(self))
-                    .map_err(|e| {
-                        println!("{:?}", e);
-                        panic!();
-                    })
+                Ok(deserializer.deserialize_seq(ItemVisitor(self))?)
             }
         }
     }
