@@ -195,7 +195,12 @@ impl IdChannel {
                 Box::new(stream::empty()) as Box<dyn Stream<Item = Item, Error = ()> + Send>;
             std::mem::swap(&mut (*out_channel), &mut empty_stream);
             *out_channel = Box::new(empty_stream.select(ireceiver));
-            IdChannelFork::construct(sender, receiver, &channel)
+            V::construct(IdChannelFork {
+                o: sender,
+                i: receiver,
+                channel: channel.clone(),
+            })
+            .map_err(|_| panic!())
         }))
     }
 }
@@ -310,25 +315,6 @@ where
                     .map_err(|_| panic!()),
             );
             Ok((sender, receiver))
-        })
-    }
-
-    fn construct<V: Value<DeconstructItem = O, ConstructItem = I>>(
-        cout: U,
-        cin: T,
-        channel: &'_ IdChannel,
-    ) -> impl Future<Item = V, Error = ()>
-    where
-        V::DeconstructFuture: Send + 'static,
-    {
-        let channel = channel.clone();
-        lazy(move || {
-            V::construct(IdChannelFork {
-                o: cout,
-                i: cin,
-                channel,
-            })
-            .map_err(|_| panic!())
         })
     }
 
