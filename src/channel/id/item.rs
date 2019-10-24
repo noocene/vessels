@@ -23,14 +23,10 @@ impl Serialize for Item {
             map.serialize_entry("data", self.1.as_ref())?;
             map.end()
         } else {
-            if self.2.len() == 1 {
-                self.1.serialize(serializer)
-            } else {
-                let mut seq = serializer.serialize_seq(Some(2))?;
-                seq.serialize_element(&self.0)?;
-                seq.serialize_element(self.1.as_ref())?;
-                seq.end()
-            }
+            let mut seq = serializer.serialize_seq(Some(2))?;
+            seq.serialize_element(&self.0)?;
+            seq.serialize_element(self.1.as_ref())?;
+            seq.end()
         }
     }
 }
@@ -105,17 +101,7 @@ impl<'de> DeserializeSeed<'de> for Context {
         if human_readable {
             Ok(deserializer.deserialize_map(ItemVisitor(self))?)
         } else {
-            if let Some((idx, ty)) = self.only() {
-                let deserializer = &mut erased_serde::Deserializer::erase(deserializer)
-                    as &mut dyn erased_serde::Deserializer;
-                Ok(Item::new(
-                    idx,
-                    (REGISTRY.get(&ty.0).unwrap())(deserializer).map_err(de::Error::custom)?,
-                    self.clone(),
-                ))
-            } else {
-                Ok(deserializer.deserialize_seq(ItemVisitor(self))?)
-            }
+            Ok(deserializer.deserialize_seq(ItemVisitor(self))?)
         }
     }
 }
