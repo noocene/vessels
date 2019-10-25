@@ -1,6 +1,7 @@
 mod context;
 pub(crate) use context::Context;
 mod item;
+use item::Content;
 pub use item::Item;
 mod id;
 pub(crate) use id::Id;
@@ -17,7 +18,7 @@ use std::collections::HashMap;
 
 use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle},
-    SerdeAny, Target, Value,
+    Target, Value,
 };
 
 use std::{
@@ -30,9 +31,7 @@ use super::Shim as IShim;
 pub struct IdChannel {
     out_channel: Arc<Mutex<Box<dyn Stream<Item = Item, Error = ()> + Send>>>,
     context: Context,
-    in_channels: Arc<
-        Mutex<HashMap<u32, Box<dyn Sink<SinkItem = Box<dyn SerdeAny>, SinkError = ()> + Send>>>,
-    >,
+    in_channels: Arc<Mutex<HashMap<u32, Box<dyn Sink<SinkItem = Content, SinkError = ()> + Send>>>>,
 }
 
 impl Stream for IdChannel {
@@ -158,18 +157,22 @@ impl IdChannel {
                     let mut empty_stream = Box::new(stream::empty())
                         as Box<dyn Stream<Item = Item, Error = ()> + Send>;
                     std::mem::swap(&mut (*out_channel), &mut empty_stream);
-                    *out_channel = Box::new(empty_stream.select(
-                        receiver.map(move |item| Item::new(id, Box::new(item), context.clone())),
-                    ));
+                    *out_channel = Box::new(empty_stream.select(receiver.map(move |item| {
+                        Item::new(id, Content::Concrete(Box::new(item)), context.clone())
+                    })));
                     let mut in_channels = in_channels.lock().unwrap();
                     in_channels.insert(
                         id,
-                        Box::new(sender.sink_map_err(|_| panic!()).with(
-                            |item: Box<dyn SerdeAny>| {
-                                Ok(*(item
-                                    .downcast::<V::DeconstructItem>()
-                                    .map_err(|_| panic!())
-                                    .unwrap()))
+                        Box::new(sender.sink_map_err(|_| panic!()).with_flat_map(
+                            |item: Content| {
+                                item.unwrap_eventual()
+                                    .and_then(|item| {
+                                        Ok(*(item
+                                            .downcast::<V::DeconstructItem>()
+                                            .map_err(|_| panic!())
+                                            .unwrap()))
+                                    })
+                                    .into_stream()
                             },
                         )),
                     );
@@ -191,18 +194,22 @@ impl IdChannel {
             let (isender, receiver): (UnboundedSender<V::ConstructItem>, _) = unbounded();
             let isender = isender
                 .sink_map_err(|_: <UnboundedSender<V::ConstructItem> as Sink>::SinkError| panic!())
-                .with(move |item: Box<dyn SerdeAny>| {
-                    Ok(*(item
-                        .downcast::<V::ConstructItem>()
-                        .map_err(|_| panic!())
-                        .unwrap()))
+                .with_flat_map(|item: Content| {
+                    item.unwrap_eventual()
+                        .and_then(|item| {
+                            Ok(*(item
+                                .downcast::<V::ConstructItem>()
+                                .map_err(|_| panic!())
+                                .unwrap()))
+                        })
+                        .into_stream()
                 })
                 .sink_map_err(|_: ()| panic!());
             in_channels.insert(fork_ref.0, Box::new(isender));
             let ct = channel.context.clone();
             let ireceiver = ireceiver
                 .map(move |item: V::DeconstructItem| {
-                    Item::new(fork_ref.0, Box::new(item), ct.clone())
+                    Item::new(fork_ref.0, Content::Concrete(Box::new(item)), ct.clone())
                 })
                 .map_err(|_| panic!());
             let mut empty_stream =
@@ -345,21 +352,23 @@ where
                 Box::new(
                     sender
                         .sink_map_err(|_| panic!())
-                        .with(|item: Box<dyn SerdeAny>| {
-                            Ok(*(item
-                                .downcast::<V::DeconstructItem>()
-                                .map_err(|_| panic!())
-                                .unwrap()))
+                        .with_flat_map(|item: Content| {
+                            item.unwrap_eventual()
+                                .and_then(|item| {
+                                    Ok(*(item
+                                        .downcast::<V::DeconstructItem>()
+                                        .map_err(|_| panic!())
+                                        .unwrap()))
+                                })
+                                .into_stream()
                         }),
-                )
-                    as Box<dyn Sink<SinkItem = Box<dyn SerdeAny>, SinkError = ()> + Send>,
+                ) as Box<dyn Sink<SinkItem = Content, SinkError = ()> + Send>,
             );
             let context = Context::new_with::<V>();
             let ct = context.clone();
             let channel = IdChannel {
                 out_channel: Arc::new(Mutex::new(Box::new(
-                    receiver
-                        .map(move |v| Item::new(0, Box::new(v) as Box<dyn SerdeAny>, ct.clone())),
+                    receiver.map(move |v| Item::new(0, Content::Concrete(Box::new(v)), ct.clone())),
                 ))),
                 context,
                 in_channels: Arc::new(Mutex::new(in_channels)),

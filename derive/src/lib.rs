@@ -1,23 +1,15 @@
 extern crate proc_macro;
-use lazy_static::lazy_static;
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use std::collections::hash_map::DefaultHasher;
-use std::{
-    collections::HashSet,
-    hash::{Hash, Hasher},
-    sync::Mutex,
-};
-use syn::{
-    parse::{Parse, ParseStream, Result},
-    parse_macro_input,
-    spanned::Spanned,
-    Ident, ImplItem, ItemImpl, Token, Type, Visibility,
-};
+use std::hash::{Hash, Hasher};
+use syn::{parse_macro_input, ImplItem, ItemImpl};
 
 #[proc_macro_attribute]
-pub fn value(attr: proc_macro::TokenStream, i: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let j = i.clone();
+pub fn value(
+    _attr: proc_macro::TokenStream,
+    i: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let mut item = parse_macro_input!(i as ItemImpl);
     let mut stream = TokenStream::new();
     if item

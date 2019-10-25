@@ -11,7 +11,7 @@ use crate::Value;
 use futures::{Future, Sink, Stream};
 
 #[derive(Serialize, Deserialize)]
-pub struct ForkHandle(u32);
+pub struct ForkHandle(pub(crate) u32);
 
 pub trait Fork: Send + 'static {
     fn fork<V: Value>(

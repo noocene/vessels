@@ -1,4 +1,4 @@
-use crate::{SerdeAny, REGISTRY};
+use crate::SerdeAny;
 
 use super::{Context, Id};
 
@@ -8,9 +8,42 @@ use serde::{
     Serialize,
 };
 
+use futures::{future::ok, Future};
 use std::fmt;
 
-pub struct Item(pub(crate) u32, pub(crate) Box<dyn SerdeAny>, Context);
+pub(crate) enum Content {
+    Concrete(Box<dyn SerdeAny>),
+    Eventual(Box<dyn Future<Item = Box<dyn SerdeAny>, Error = ()> + Send>),
+}
+
+impl Content {
+    fn unwrap_concrete_ref(&self) -> &dyn SerdeAny {
+        if let Content::Concrete(item) = self {
+            item
+        } else {
+            panic!("Unwrapped eventual content as concrete")
+        }
+    }
+    pub(crate) fn unwrap_eventual(
+        self,
+    ) -> Box<dyn Future<Item = Box<dyn SerdeAny>, Error = ()> + Send> {
+        match self {
+            Content::Concrete(item) => Box::new(ok::<_, ()>(item)),
+            Content::Eventual(item) => item,
+        }
+    }
+}
+
+impl Serialize for Content {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.unwrap_concrete_ref().serialize(serializer)
+    }
+}
+
+pub struct Item(pub(crate) u32, pub(crate) Content, Context);
 
 impl Serialize for Item {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -20,19 +53,19 @@ impl Serialize for Item {
         if serializer.is_human_readable() {
             let mut map = serializer.serialize_map(Some(2))?;
             map.serialize_entry("channel", &self.0)?;
-            map.serialize_entry("data", self.1.as_ref())?;
+            map.serialize_entry("data", &self.1)?;
             map.end()
         } else {
             let mut seq = serializer.serialize_seq(Some(2))?;
             seq.serialize_element(&self.0)?;
-            seq.serialize_element(self.1.as_ref())?;
+            seq.serialize_element(&self.1)?;
             seq.end()
         }
     }
 }
 
 impl Item {
-    pub(crate) fn new(channel: u32, content: Box<dyn SerdeAny>, context: Context) -> Self {
+    pub(crate) fn new(channel: u32, content: Content, context: Context) -> Self {
         Item(channel, content, context)
     }
 }
