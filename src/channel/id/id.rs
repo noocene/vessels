@@ -1,10 +1,12 @@
 use super::Context;
 
-use crate::REGISTRY;
+use crate::{channel::DeserializeSeed, REGISTRY};
 
 use super::item::Content;
 
-use serde::de::{self, DeserializeSeed, Deserializer};
+use serde::de::{self, Deserializer};
+
+use futures::Future;
 
 pub(crate) struct Id<'a>(u32, &'a mut Context);
 
@@ -19,19 +21,16 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
         self.1
             .get(&self.0)
             .map(|ty| {
-                let deserializer = &mut deserializer as &mut dyn erased_serde::Deserializer;
-                (REGISTRY.get(&ty.0).unwrap())(deserializer)
+                (REGISTRY.get(&ty.0).unwrap())(&mut deserializer)
                     .map_err(de::Error::custom)
                     .map(|item| Content::Concrete(item))
             })
             .unwrap()
         /*.unwrap_or_else(move || {
-            let deserializer =
-                &mut deserializer as &mut (dyn erased_serde::Deserializer + Send);
             Ok(Content::Eventual(Box::new(
-                self.1
-                    .wait_for(self.0)
-                    .and_then(|ty| Ok((REGISTRY.get(&ty.0).unwrap())(deserializer).unwrap())),
+                self.1.wait_for(self.0).and_then(|ty| {
+                    Ok((REGISTRY.get(&ty.0).unwrap())(&mut deserializer).unwrap())
+                }),
             )))
         })*/
     }

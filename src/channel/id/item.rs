@@ -3,10 +3,12 @@ use crate::SerdeAny;
 use super::{Context, Id};
 
 use serde::{
-    de::{self, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor},
+    de::{self, Deserializer, MapAccess, SeqAccess, Visitor},
     ser::{SerializeMap, SerializeSeq, Serializer},
     Serialize,
 };
+
+use crate::channel::DeserializeSeed;
 
 use futures::{future::ok, Future};
 use std::fmt;
