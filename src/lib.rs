@@ -60,7 +60,7 @@ type DeserializeFn =
 
 inventory::collect!(ErasedDeserialize);
 
-pub trait Entity: Sized + Send + 'static {
+pub trait Kind: Sized + Send + 'static {
     type ConstructItem: Serialize + DeserializeOwned + Send + 'static;
     type ConstructFuture: Future<Item = Self> + Send + 'static;
 
@@ -81,7 +81,7 @@ pub trait Entity: Sized + Send + 'static {
 }
 
 #[value]
-impl Entity for () {
+impl Kind for () {
     type ConstructItem = ();
     type DeconstructItem = ();
     type ConstructFuture = FutureResult<(), ()>;
@@ -101,7 +101,7 @@ impl Entity for () {
 }
 
 #[value]
-impl<T: Send + 'static> Entity for PhantomData<T> {
+impl<T: Send + 'static> Kind for PhantomData<T> {
     type ConstructItem = ();
     type ConstructFuture = FutureResult<PhantomData<T>, ()>;
     type DeconstructItem = ();
@@ -123,7 +123,7 @@ impl<T: Send + 'static> Entity for PhantomData<T> {
 macro_rules! primitive_impl {
     ($($ty:ident)+) => {$(
         #[value]
-        impl Entity for $ty {
+        impl Kind for $ty {
             type ConstructItem = $ty;
             type ConstructFuture = Box<dyn Future<Item = $ty, Error = ()> + Send + 'static>;
             type DeconstructItem = ();

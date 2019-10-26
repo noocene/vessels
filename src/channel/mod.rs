@@ -6,7 +6,7 @@ use serde::{
     Deserialize, Serialize,
 };
 
-use crate::Entity;
+use crate::Kind;
 
 use futures::{Future, Sink, Stream};
 
@@ -14,11 +14,11 @@ use futures::{Future, Sink, Stream};
 pub struct ForkHandle(pub(crate) u32);
 
 pub trait Fork: Send + 'static {
-    fn fork<V: Entity>(
+    fn fork<V: Kind>(
         &self,
         value: V,
     ) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send + 'static>;
-    fn get_fork<V: Entity>(
+    fn get_fork<V: Kind>(
         &self,
         fork_ref: ForkHandle,
     ) -> Box<dyn Future<Item = V, Error = ()> + Send + 'static>;
@@ -34,7 +34,7 @@ pub trait Channel<
     fn split_factory(&self) -> Self::Fork;
 }
 
-pub trait Shim<'a, T: Target<'a, V>, V: Entity>:
+pub trait Shim<'a, T: Target<'a, V>, V: Kind>:
     Context<'a, Item = <T as Context<'a>>::Item>
 {
     fn complete<
@@ -48,7 +48,7 @@ pub trait Shim<'a, T: Target<'a, V>, V: Entity>:
     ) -> Box<dyn Future<Item = V, Error = <T as Target<'a, V>>::Error> + Send + 'static>;
 }
 
-pub trait Target<'a, V: Entity>: Context<'a> + Sized {
+pub trait Target<'a, V: Kind>: Context<'a> + Sized {
     type Error: Send + 'static;
     type Shim: Shim<'a, Self, V>;
 
@@ -68,7 +68,7 @@ pub trait Context<'de> {
     fn context(&self) -> Self::Target;
 }
 
-pub trait OnTo: Entity {
+pub trait OnTo: Kind {
     fn on_to<'a, T: Target<'a, Self>>(
         self,
     ) -> Box<dyn Future<Item = T, Error = <T as Target<'a, Self>>::Error> + Send + 'static>
@@ -77,7 +77,7 @@ pub trait OnTo: Entity {
         Self::DeconstructFuture: Send;
 }
 
-impl<V: Entity> OnTo for V {
+impl<V: Kind> OnTo for V {
     fn on_to<'a, T: Target<'a, Self>>(
         self,
     ) -> Box<dyn Future<Item = T, Error = <T as Target<'a, Self>>::Error> + Send + 'static>

@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle},
-    Entity, SerdeAny, Target,
+    Kind, SerdeAny, Target,
 };
 
 use std::{
@@ -89,12 +89,12 @@ impl<'de> IContext<'de> for IdChannel {
     }
 }
 
-pub struct Shim<V: Entity> {
+pub struct Shim<V: Kind> {
     context: Context,
     _marker: PhantomData<V>,
 }
 
-impl<'a, V: Entity> IShim<'a, IdChannel, V> for Shim<V> {
+impl<'a, V: Kind> IShim<'a, IdChannel, V> for Shim<V> {
     fn complete<C: Stream<Item = Item> + Sink<SinkItem = Item> + Send + 'static>(
         self,
         input: C,
@@ -128,7 +128,7 @@ impl<'a, V: Entity> IShim<'a, IdChannel, V> for Shim<V> {
     }
 }
 
-impl<'a, V: Entity> IContext<'a> for Shim<V> {
+impl<'a, V: Kind> IContext<'a> for Shim<V> {
     type Item = Item;
     type Target = Context;
 
@@ -145,7 +145,7 @@ impl IdChannel {
             in_channels: self.in_channels.clone(),
         }
     }
-    fn fork<V: Entity>(&self, value: V) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
+    fn fork<V: Kind>(&self, value: V) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
         let id = self.context.create::<V>();
         let context = self.context.clone();
         let out_channel = self.out_channel.clone();
@@ -178,7 +178,7 @@ impl IdChannel {
         )
     }
 
-    fn get_fork<V: Entity>(
+    fn get_fork<V: Kind>(
         &self,
         fork_ref: ForkHandle,
     ) -> Box<dyn Future<Item = V, Error = ()> + Send + 'static> {
@@ -219,7 +219,7 @@ impl IdChannel {
     }
 }
 
-impl<'a, V: Entity> Target<'a, V> for IdChannel {
+impl<'a, V: Kind> Target<'a, V> for IdChannel {
     type Error = ();
     type Shim = Shim<V>;
 
@@ -253,10 +253,10 @@ where
     T::Error: Send + 'static,
     U::SinkError: Send + 'static,
 {
-    fn fork<V: Entity>(&self, value: V) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
+    fn fork<V: Kind>(&self, value: V) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
         self.channel.fork(value)
     }
-    fn get_fork<V: Entity>(
+    fn get_fork<V: Kind>(
         &self,
         fork_ref: ForkHandle,
     ) -> Box<dyn Future<Item = V, Error = ()> + Send + 'static> {
@@ -306,7 +306,7 @@ where
     T::Error: Send + 'static,
     U::SinkError: Send + 'static,
 {
-    fn new<V: Entity<DeconstructItem = I, ConstructItem = O>>(
+    fn new<V: Kind<DeconstructItem = I, ConstructItem = O>>(
         value: V,
         channel: &'_ IdChannel,
     ) -> impl Future<Item = (UnboundedSender<I>, UnboundedReceiver<O>), Error = ()>
@@ -330,7 +330,7 @@ where
         })
     }
 
-    fn new_root<V: Entity<DeconstructItem = I, ConstructItem = O>>(
+    fn new_root<V: Kind<DeconstructItem = I, ConstructItem = O>>(
         value: V,
     ) -> impl Future<Item = IdChannel, Error = ()>
     where
@@ -399,11 +399,11 @@ where
 }
 
 impl IFork for IdFork {
-    fn fork<V: Entity>(&self, value: V) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
+    fn fork<V: Kind>(&self, value: V) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
         self.channel.fork(value)
     }
 
-    fn get_fork<V: Entity>(
+    fn get_fork<V: Kind>(
         &self,
         fork_ref: ForkHandle,
     ) -> Box<dyn Future<Item = V, Error = ()> + Send + 'static> {

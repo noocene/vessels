@@ -17,7 +17,7 @@ use futures::{lazy, Future, Poll, Sink, StartSend, Stream};
 
 use crate::{
     channel::{Context, Shim, Target},
-    Entity,
+    Kind,
 };
 
 use serde::{de::DeserializeSeed, Serialize};
@@ -81,7 +81,7 @@ where
     }
 }
 
-pub trait ApplyDecode<'de, V: Entity> {
+pub trait ApplyDecode<'de, V: Kind> {
     fn decode<T: Target<'de, V> + Send + 'static, F: Format + 'static>(
         self,
     ) -> <F as Decode<'de, Self, V>>::Output
@@ -91,7 +91,7 @@ pub trait ApplyDecode<'de, V: Entity> {
         T::Item: Send + 'static;
 }
 
-impl<'de, U, V: Entity> ApplyDecode<'de, V> for U {
+impl<'de, U, V: Kind> ApplyDecode<'de, V> for U {
     fn decode<T: Target<'de, V> + Send + 'static, F: Format + 'static>(
         self,
     ) -> <F as Decode<'de, Self, V>>::Output
@@ -107,7 +107,7 @@ impl<'de, U, V: Entity> ApplyDecode<'de, V> for U {
 pub trait Decode<
     'de,
     C: UniformStreamSink<<Self as Format>::Representation> + Send + 'static,
-    V: Entity,
+    V: Kind,
 >: Format
 {
     type Output: Future<Item = V>;
@@ -130,7 +130,7 @@ impl<
         'de,
         C: UniformStreamSink<<Self as Format>::Representation> + Send + 'static,
         T: Format + 'static,
-        V: Entity,
+        V: Kind,
     > Decode<'de, C, V> for T
 where
     Self::Representation: Send,

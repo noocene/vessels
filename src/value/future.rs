@@ -1,6 +1,6 @@
 use crate::{
     channel::{Channel, Fork, ForkHandle},
-    value, Entity, ErasedDeserialize, SerdeAny,
+    value, ErasedDeserialize, Kind, SerdeAny,
 };
 
 use serde::{Deserialize, Serialize};
@@ -19,10 +19,10 @@ pub enum VResult {
 pub type Future<T, E> = Box<dyn IFuture<Item = T, Error = E> + Send>;
 
 #[value]
-impl<T, E> Entity for Box<dyn IFuture<Item = T, Error = E> + Send>
+impl<T, E> Kind for Box<dyn IFuture<Item = T, Error = E> + Send>
 where
-    T: Entity,
-    E: Entity,
+    T: Kind,
+    E: Kind,
 {
     type ConstructItem = VResult;
     type ConstructFuture = Box<dyn IFuture<Item = Self, Error = Error> + Send>;
