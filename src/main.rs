@@ -1,10 +1,10 @@
 use valuedev::{
     channel::IdChannel,
     format::{Decode, Encode, Json},
-    value, OnTo,
+    OnTo,
 };
 
-use futures::{future::ok, Future, Stream};
+use futures::{Future, Stream};
 
 fn main() {
     tokio::run(
