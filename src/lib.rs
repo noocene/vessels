@@ -7,9 +7,9 @@ pub mod channel;
 pub use channel::OnTo;
 use channel::{Channel, Target};
 pub mod format;
-pub mod value;
+pub mod kind;
 
-pub use derive::value;
+pub use derive::kind;
 use erased_serde::Serialize as ErasedSerialize;
 use futures::{
     future::{ok, FutureResult},
@@ -80,7 +80,7 @@ pub trait Kind: Sized + Send + 'static {
     const DO_NOT_IMPLEMENT_THIS_TRAIT_MANUALLY: ();
 }
 
-#[value]
+#[kind]
 impl Kind for () {
     type ConstructItem = ();
     type DeconstructItem = ();
@@ -100,7 +100,7 @@ impl Kind for () {
     }
 }
 
-#[value]
+#[kind]
 impl<T: Send + 'static> Kind for PhantomData<T> {
     type ConstructItem = ();
     type ConstructFuture = FutureResult<PhantomData<T>, ()>;
@@ -122,7 +122,7 @@ impl<T: Send + 'static> Kind for PhantomData<T> {
 
 macro_rules! primitive_impl {
     ($($ty:ident)+) => {$(
-        #[value]
+        #[kind]
         impl Kind for $ty {
             type ConstructItem = $ty;
             type ConstructFuture = Box<dyn Future<Item = $ty, Error = ()> + Send + 'static>;

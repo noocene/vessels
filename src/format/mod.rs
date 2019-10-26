@@ -81,38 +81,38 @@ where
     }
 }
 
-pub trait ApplyDecode<'de, V: Kind> {
-    fn decode<T: Target<'de, V> + Send + 'static, F: Format + 'static>(
+pub trait ApplyDecode<'de, K: Kind> {
+    fn decode<T: Target<'de, K> + Send + 'static, F: Format + 'static>(
         self,
-    ) -> <F as Decode<'de, Self, V>>::Output
+    ) -> <F as Decode<'de, Self, K>>::Output
     where
         Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
         F::Representation: Send + 'static,
         T::Item: Send + 'static;
 }
 
-impl<'de, U, V: Kind> ApplyDecode<'de, V> for U {
-    fn decode<T: Target<'de, V> + Send + 'static, F: Format + 'static>(
+impl<'de, U, K: Kind> ApplyDecode<'de, K> for U {
+    fn decode<T: Target<'de, K> + Send + 'static, F: Format + 'static>(
         self,
-    ) -> <F as Decode<'de, Self, V>>::Output
+    ) -> <F as Decode<'de, Self, K>>::Output
     where
         Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
         F::Representation: Send,
         T::Item: Send,
     {
-        <F as Decode<'de, Self, V>>::decode::<T>(self)
+        <F as Decode<'de, Self, K>>::decode::<T>(self)
     }
 }
 
 pub trait Decode<
     'de,
     C: UniformStreamSink<<Self as Format>::Representation> + Send + 'static,
-    V: Kind,
+    K: Kind,
 >: Format
 {
-    type Output: Future<Item = V>;
+    type Output: Future<Item = K>;
 
-    fn decode<T: Target<'de, V> + Send + 'static>(input: C) -> Self::Output
+    fn decode<T: Target<'de, K> + Send + 'static>(input: C) -> Self::Output
     where
         T::Item: Send;
 }
@@ -130,14 +130,14 @@ impl<
         'de,
         C: UniformStreamSink<<Self as Format>::Representation> + Send + 'static,
         T: Format + 'static,
-        V: Kind,
-    > Decode<'de, C, V> for T
+        K: Kind,
+    > Decode<'de, C, K> for T
 where
     Self::Representation: Send,
 {
-    type Output = Box<dyn Future<Item = V, Error = ()> + Send + 'de>;
+    type Output = Box<dyn Future<Item = K, Error = ()> + Send + 'de>;
 
-    fn decode<U: Target<'de, V> + Send + 'static>(input: C) -> Self::Output
+    fn decode<U: Target<'de, K> + Send + 'static>(input: C) -> Self::Output
     where
         U::Item: Send,
     {

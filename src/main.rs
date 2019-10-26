@@ -1,4 +1,4 @@
-use valuedev::{
+use kinddev::{
     channel::IdChannel,
     format::{Decode, Encode, Json},
     OnTo,

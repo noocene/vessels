@@ -1,5 +1,5 @@
 [package]
-name = "valuedev"
+name = "kinddev"
 version = "0.1.0"
 authors = ["Izzy Swart <zenerboson@gmail.com>"]
 edition = "2018"

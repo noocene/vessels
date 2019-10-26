@@ -6,10 +6,7 @@ use std::hash::{Hash, Hasher};
 use syn::{parse_macro_input, ImplItem, ItemImpl};
 
 #[proc_macro_attribute]
-pub fn value(
-    _attr: proc_macro::TokenStream,
-    i: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
+pub fn kind(_attr: proc_macro::TokenStream, i: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let mut item = parse_macro_input!(i as ItemImpl);
     let mut stream = TokenStream::new();
     if item

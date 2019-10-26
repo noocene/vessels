@@ -7,16 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'valuedev'",
+            "name": "Debug unit tests in library 'kinddev'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=valuedev"
+                    "--package=kinddev"
                 ],
                 "filter": {
-                    "name": "valuedev",
+                    "name": "kinddev",
                     "kind": "lib"
                 }
             },
@@ -26,15 +26,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'valuedev'",
+            "name": "Debug executable 'kinddev'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=valuedev",
-                    "--package=valuedev",
+                    "--bin=kinddev",
+                    "--package=kinddev",
                 ],
                 "filter": {
-                    "name": "valuedev",
+                    "name": "kinddev",
                     "kind": "bin"
                 }
             },
@@ -44,16 +44,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'valuedev'",
+            "name": "Debug unit tests in executable 'kinddev'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=valuedev",
-                    "--package=valuedev"
+                    "--bin=kinddev",
+                    "--package=kinddev"
                 ],
                 "filter": {
-                    "name": "valuedev",
+                    "name": "kinddev",
                     "kind": "bin"
                 }
             },

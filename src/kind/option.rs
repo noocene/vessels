@@ -1,6 +1,6 @@
 use crate::{
     channel::{Channel, Fork, ForkHandle},
-    value, ErasedDeserialize, Kind, SerdeAny,
+    kind, ErasedDeserialize, Kind, SerdeAny,
 };
 
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ pub enum VOption {
     None,
 }
 
-#[value]
+#[kind]
 impl<T> Kind for Option<T>
 where
     T: Kind,

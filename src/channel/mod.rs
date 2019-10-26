@@ -14,14 +14,14 @@ use futures::{Future, Sink, Stream};
 pub struct ForkHandle(pub(crate) u32);
 
 pub trait Fork: Send + 'static {
-    fn fork<V: Kind>(
+    fn fork<K: Kind>(
         &self,
-        value: V,
+        kind: K,
     ) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send + 'static>;
-    fn get_fork<V: Kind>(
+    fn get_fork<K: Kind>(
         &self,
         fork_ref: ForkHandle,
-    ) -> Box<dyn Future<Item = V, Error = ()> + Send + 'static>;
+    ) -> Box<dyn Future<Item = K, Error = ()> + Send + 'static>;
 }
 
 pub trait Channel<
@@ -34,7 +34,7 @@ pub trait Channel<
     fn split_factory(&self) -> Self::Fork;
 }
 
-pub trait Shim<'a, T: Target<'a, V>, V: Kind>:
+pub trait Shim<'a, T: Target<'a, K>, K: Kind>:
     Context<'a, Item = <T as Context<'a>>::Item>
 {
     fn complete<
@@ -45,18 +45,18 @@ pub trait Shim<'a, T: Target<'a, V>, V: Kind>:
     >(
         self,
         input: C,
-    ) -> Box<dyn Future<Item = V, Error = <T as Target<'a, V>>::Error> + Send + 'static>;
+    ) -> Box<dyn Future<Item = K, Error = <T as Target<'a, K>>::Error> + Send + 'static>;
 }
 
-pub trait Target<'a, V: Kind>: Context<'a> + Sized {
+pub trait Target<'a, K: Kind>: Context<'a> + Sized {
     type Error: Send + 'static;
-    type Shim: Shim<'a, Self, V>;
+    type Shim: Shim<'a, Self, K>;
 
     fn new_with(
-        value: V,
-    ) -> Box<dyn Future<Item = Self, Error = <Self as Target<'a, V>>::Error> + Send + 'static>
+        kind: K,
+    ) -> Box<dyn Future<Item = Self, Error = <Self as Target<'a, K>>::Error> + Send + 'static>
     where
-        V::DeconstructFuture: Send;
+        K::DeconstructFuture: Send;
 
     fn new_shim() -> Self::Shim;
 }
@@ -77,7 +77,7 @@ pub trait OnTo: Kind {
         Self::DeconstructFuture: Send;
 }
 
-impl<V: Kind> OnTo for V {
+impl<K: Kind> OnTo for K {
     fn on_to<'a, T: Target<'a, Self>>(
         self,
     ) -> Box<dyn Future<Item = T, Error = <T as Target<'a, Self>>::Error> + Send + 'static>

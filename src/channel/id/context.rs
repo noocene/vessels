@@ -67,14 +67,14 @@ impl Context {
         tasks.remove(&id);
     }
 
-    pub(crate) fn new_with<V: Kind>() -> Self {
+    pub(crate) fn new_with<K: Kind>() -> Self {
         let mut channel_types = HashMap::new();
 
         channel_types.insert(
             0,
             (
-                TypeId::of::<V::ConstructItem>(),
-                TypeId::of::<V::DeconstructItem>(),
+                TypeId::of::<K::ConstructItem>(),
+                TypeId::of::<K::DeconstructItem>(),
             ),
         );
 
@@ -108,10 +108,10 @@ impl Context {
             .map(|c| *c)
     }
 
-    pub(crate) fn create<V: Kind>(&self) -> u32 {
+    pub(crate) fn create<K: Kind>(&self) -> u32 {
         let mut state = self.state.write().unwrap();
-        let c = TypeId::of::<V::ConstructItem>();
-        let d = TypeId::of::<V::DeconstructItem>();
+        let c = TypeId::of::<K::ConstructItem>();
+        let d = TypeId::of::<K::DeconstructItem>();
 
         let id = if let Some(id) = state.unused_indices.pop() {
             state.channel_types.insert(id, (c, d));
@@ -130,10 +130,10 @@ impl Context {
         id
     }
 
-    pub(crate) fn add<V: Kind>(&self, handle: u32) {
+    pub(crate) fn add<K: Kind>(&self, handle: u32) {
         let mut state = self.state.write().unwrap();
-        let c = TypeId::of::<V::ConstructItem>();
-        let d = TypeId::of::<V::DeconstructItem>();
+        let c = TypeId::of::<K::ConstructItem>();
+        let d = TypeId::of::<K::DeconstructItem>();
         state.channel_types.insert(handle, (c, d));
         self.tasks
             .lock()

@@ -67,7 +67,7 @@ impl Sink for IdChannel {
             .lock()
             .unwrap()
             .values_mut()
-            .map(|value| value.poll_complete())
+            .map(|item| item.poll_complete())
             .find(|poll| match poll {
                 Ok(Async::Ready(())) => false,
                 _ => true,
@@ -89,25 +89,25 @@ impl<'de> IContext<'de> for IdChannel {
     }
 }
 
-pub struct Shim<V: Kind> {
+pub struct Shim<K: Kind> {
     context: Context,
-    _marker: PhantomData<V>,
+    _marker: PhantomData<K>,
 }
 
-impl<'a, V: Kind> IShim<'a, IdChannel, V> for Shim<V> {
+impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
     fn complete<C: Stream<Item = Item> + Sink<SinkItem = Item> + Send + 'static>(
         self,
         input: C,
-    ) -> Box<dyn Future<Item = V, Error = <IdChannel as Target<'a, V>>::Error> + Send + 'static>
+    ) -> Box<dyn Future<Item = K, Error = <IdChannel as Target<'a, K>>::Error> + Send + 'static>
     {
         Box::new(lazy(|| {
             let (sink, stream) = input.split();
             let channel = IdChannel {
                 out_channel: Arc::new(Mutex::new(Box::new(stream::empty()))),
-                context: Context::new(),
+                context: self.context,
                 in_channels: Arc::new(Mutex::new(HashMap::new())),
             };
-            let fork = channel.get_fork::<V>(ForkHandle(0));
+            let fork = channel.get_fork::<K>(ForkHandle(0));
             let (receiver, sender) = channel.split();
             tokio::spawn(
                 sender
@@ -128,7 +128,7 @@ impl<'a, V: Kind> IShim<'a, IdChannel, V> for Shim<V> {
     }
 }
 
-impl<'a, V: Kind> IContext<'a> for Shim<V> {
+impl<'a, K: Kind> IContext<'a> for Shim<K> {
     type Item = Item;
     type Target = Context;
 
@@ -145,14 +145,14 @@ impl IdChannel {
             in_channels: self.in_channels.clone(),
         }
     }
-    fn fork<V: Kind>(&self, value: V) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
-        let id = self.context.create::<V>();
+    fn fork<K: Kind>(&self, kind: K) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
+        let id = self.context.create::<K>();
         let context = self.context.clone();
         let out_channel = self.out_channel.clone();
         let in_channels = self.in_channels.clone();
 
         Box::new(
-            IdChannelFork::<UnboundedReceiver<_>, UnboundedSender<_>, _, _>::new(value, self)
+            IdChannelFork::<UnboundedReceiver<_>, UnboundedSender<_>, _, _>::new(kind, self)
                 .and_then(move |(sender, receiver)| {
                     let mut out_channel = out_channel.lock().unwrap();
                     let mut empty_stream = Box::new(stream::empty())
@@ -167,7 +167,7 @@ impl IdChannel {
                         Box::new(sender.sink_map_err(|_| panic!()).with(
                             |item: Box<dyn SerdeAny>| {
                                 Ok(*(item
-                                    .downcast::<V::DeconstructItem>()
+                                    .downcast::<K::DeconstructItem>()
                                     .map_err(|_| panic!())
                                     .unwrap()))
                             },
@@ -178,22 +178,22 @@ impl IdChannel {
         )
     }
 
-    fn get_fork<V: Kind>(
+    fn get_fork<K: Kind>(
         &self,
         fork_ref: ForkHandle,
-    ) -> Box<dyn Future<Item = V, Error = ()> + Send + 'static> {
+    ) -> Box<dyn Future<Item = K, Error = ()> + Send + 'static> {
         let channel = self.clone();
         Box::new(lazy(move || {
             let mut in_channels = channel.in_channels.lock().unwrap();
             let mut out_channel = channel.out_channel.lock().unwrap();
-            channel.context.add::<V>(fork_ref.0);
-            let (sender, ireceiver): (UnboundedSender<V::DeconstructItem>, _) = unbounded();
-            let (isender, receiver): (UnboundedSender<V::ConstructItem>, _) = unbounded();
+            channel.context.add::<K>(fork_ref.0);
+            let (sender, ireceiver): (UnboundedSender<K::DeconstructItem>, _) = unbounded();
+            let (isender, receiver): (UnboundedSender<K::ConstructItem>, _) = unbounded();
             let isender = isender
-                .sink_map_err(|_: <UnboundedSender<V::ConstructItem> as Sink>::SinkError| panic!())
+                .sink_map_err(|_: <UnboundedSender<K::ConstructItem> as Sink>::SinkError| panic!())
                 .with(|item: Box<dyn SerdeAny>| {
                     Ok(*(item
-                        .downcast::<V::ConstructItem>()
+                        .downcast::<K::ConstructItem>()
                         .map_err(|_| panic!())
                         .unwrap()))
                 })
@@ -201,7 +201,7 @@ impl IdChannel {
             in_channels.insert(fork_ref.0, Box::new(isender));
             let ct = channel.context.clone();
             let ireceiver = ireceiver
-                .map(move |item: V::DeconstructItem| {
+                .map(move |item: K::DeconstructItem| {
                     Item::new(fork_ref.0, Box::new(item), ct.clone())
                 })
                 .map_err(|_| panic!());
@@ -209,7 +209,7 @@ impl IdChannel {
                 Box::new(stream::empty()) as Box<dyn Stream<Item = Item, Error = ()> + Send>;
             std::mem::swap(&mut (*out_channel), &mut empty_stream);
             *out_channel = Box::new(empty_stream.select(ireceiver));
-            V::construct(IdChannelFork {
+            K::construct(IdChannelFork {
                 o: sender,
                 i: receiver,
                 channel: channel.clone(),
@@ -219,25 +219,25 @@ impl IdChannel {
     }
 }
 
-impl<'a, V: Kind> Target<'a, V> for IdChannel {
+impl<'a, K: Kind> Target<'a, K> for IdChannel {
     type Error = ();
-    type Shim = Shim<V>;
+    type Shim = Shim<K>;
 
-    fn new_with(value: V) -> Box<dyn Future<Item = Self, Error = Self::Error> + Send + 'static>
+    fn new_with(kind: K) -> Box<dyn Future<Item = Self, Error = Self::Error> + Send + 'static>
     where
-        V::DeconstructFuture: Send,
+        K::DeconstructFuture: Send,
     {
         Box::new(IdChannelFork::<
             UnboundedReceiver<_>,
             UnboundedSender<_>,
             _,
             _,
-        >::new_root(value))
+        >::new_root(kind))
     }
 
     fn new_shim() -> Self::Shim {
         Shim {
-            context: Context::new_with::<V>(),
+            context: Context::new_with::<K>(),
             _marker: PhantomData,
         }
     }
@@ -253,13 +253,13 @@ where
     T::Error: Send + 'static,
     U::SinkError: Send + 'static,
 {
-    fn fork<V: Kind>(&self, value: V) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
-        self.channel.fork(value)
+    fn fork<K: Kind>(&self, kind: K) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
+        self.channel.fork(kind)
     }
-    fn get_fork<V: Kind>(
+    fn get_fork<K: Kind>(
         &self,
         fork_ref: ForkHandle,
-    ) -> Box<dyn Future<Item = V, Error = ()> + Send + 'static> {
+    ) -> Box<dyn Future<Item = K, Error = ()> + Send + 'static> {
         self.channel.get_fork(fork_ref)
     }
 }
@@ -306,35 +306,34 @@ where
     T::Error: Send + 'static,
     U::SinkError: Send + 'static,
 {
-    fn new<V: Kind<DeconstructItem = I, ConstructItem = O>>(
-        value: V,
+    fn new<K: Kind<DeconstructItem = I, ConstructItem = O>>(
+        kind: K,
         channel: &'_ IdChannel,
     ) -> impl Future<Item = (UnboundedSender<I>, UnboundedReceiver<O>), Error = ()>
     where
-        V::DeconstructFuture: Send + 'static,
+        K::DeconstructFuture: Send + 'static,
     {
         let channel = channel.clone();
         lazy(move || {
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
             let (oi, receiver): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
             tokio::spawn(
-                value
-                    .deconstruct(IdChannelFork {
-                        o: oi,
-                        i: oo,
-                        channel,
-                    })
-                    .map_err(|_| panic!()),
+                kind.deconstruct(IdChannelFork {
+                    o: oi,
+                    i: oo,
+                    channel,
+                })
+                .map_err(|_| panic!()),
             );
             Ok((sender, receiver))
         })
     }
 
-    fn new_root<V: Kind<DeconstructItem = I, ConstructItem = O>>(
-        value: V,
+    fn new_root<K: Kind<DeconstructItem = I, ConstructItem = O>>(
+        kind: K,
     ) -> impl Future<Item = IdChannel, Error = ()>
     where
-        V::DeconstructFuture: Send + 'static,
+        K::DeconstructFuture: Send + 'static,
     {
         lazy(move || {
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
@@ -347,14 +346,14 @@ where
                         .sink_map_err(|_| panic!())
                         .with(|item: Box<dyn SerdeAny>| {
                             Ok(*(item
-                                .downcast::<V::DeconstructItem>()
+                                .downcast::<K::DeconstructItem>()
                                 .map_err(|_| panic!())
                                 .unwrap()))
                         }),
                 )
                     as Box<dyn Sink<SinkItem = Box<dyn SerdeAny>, SinkError = ()> + Send>,
             );
-            let context = Context::new_with::<V>();
+            let context = Context::new_with::<K>();
             let ct = context.clone();
             let channel = IdChannel {
                 out_channel: Arc::new(Mutex::new(Box::new(
@@ -364,13 +363,12 @@ where
                 in_channels: Arc::new(Mutex::new(in_channels)),
             };
             tokio::spawn(
-                value
-                    .deconstruct(IdChannelFork {
-                        o: oi,
-                        i: oo,
-                        channel: channel.clone(),
-                    })
-                    .map_err(|_| panic!()),
+                kind.deconstruct(IdChannelFork {
+                    o: oi,
+                    i: oo,
+                    channel: channel.clone(),
+                })
+                .map_err(|_| panic!()),
             );
             Ok(channel)
         })
@@ -399,14 +397,14 @@ where
 }
 
 impl IFork for IdFork {
-    fn fork<V: Kind>(&self, value: V) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
-        self.channel.fork(value)
+    fn fork<K: Kind>(&self, kind: K) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
+        self.channel.fork(kind)
     }
 
-    fn get_fork<V: Kind>(
+    fn get_fork<K: Kind>(
         &self,
         fork_ref: ForkHandle,
-    ) -> Box<dyn Future<Item = V, Error = ()> + Send + 'static> {
+    ) -> Box<dyn Future<Item = K, Error = ()> + Send + 'static> {
         self.channel.get_fork(fork_ref)
     }
 }
