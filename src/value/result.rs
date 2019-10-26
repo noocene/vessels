@@ -1,6 +1,6 @@
 use crate::{
     channel::{Channel, Fork, ForkHandle},
-    value, ErasedDeserialize, SerdeAny, Value,
+    value, Entity, ErasedDeserialize, SerdeAny,
 };
 
 use serde::{Deserialize, Serialize};
@@ -15,10 +15,10 @@ pub enum VResult {
 }
 
 #[value]
-impl<T, E> Value for Result<T, E>
+impl<T, E> Entity for Result<T, E>
 where
-    T: Value,
-    E: Value,
+    T: Entity,
+    E: Entity,
 {
     type ConstructItem = VResult;
     type ConstructFuture = Box<dyn Future<Item = Self, Error = ()> + Send>;

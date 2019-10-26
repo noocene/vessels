@@ -15,6 +15,7 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
     where
         D: Deserializer<'de>,
     {
+        self.1.wait_for::<()>(self.0).wait().unwrap();
         let mut deserializer = erased_serde::Deserializer::erase(deserializer);
         self.1
             .get(&self.0)

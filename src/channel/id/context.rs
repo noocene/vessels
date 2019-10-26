@@ -7,7 +7,7 @@ use std::{
 
 use futures::{task::AtomicTask, Async, Future, Poll};
 
-use crate::Value;
+use crate::Entity;
 
 struct ContextState {
     channel_types: HashMap<u32, (TypeId, TypeId)>,
@@ -67,7 +67,7 @@ impl Context {
         tasks.remove(&id);
     }
 
-    pub(crate) fn new_with<V: Value>() -> Self {
+    pub(crate) fn new_with<V: Entity>() -> Self {
         let mut channel_types = HashMap::new();
 
         channel_types.insert(
@@ -108,7 +108,7 @@ impl Context {
             .map(|c| *c)
     }
 
-    pub(crate) fn create<V: Value>(&self) -> u32 {
+    pub(crate) fn create<V: Entity>(&self) -> u32 {
         let mut state = self.state.write().unwrap();
         let c = TypeId::of::<V::ConstructItem>();
         let d = TypeId::of::<V::DeconstructItem>();
@@ -130,7 +130,7 @@ impl Context {
         id
     }
 
-    pub(crate) fn add<V: Value>(&self, handle: u32) {
+    pub(crate) fn add<V: Entity>(&self, handle: u32) {
         let mut state = self.state.write().unwrap();
         let c = TypeId::of::<V::ConstructItem>();
         let d = TypeId::of::<V::DeconstructItem>();

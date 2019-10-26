@@ -8,7 +8,7 @@ use futures::{Future, Stream};
 
 fn main() {
     tokio::run(
-        None::<bool>
+        Some(true)
             .on_to::<IdChannel>()
             .map(Json::encode)
             .map(|c| c.inspect(|item| println!("{}", item)))

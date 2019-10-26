@@ -17,7 +17,7 @@ use futures::{lazy, Future, Poll, Sink, StartSend, Stream};
 
 use crate::{
     channel::{Context, Shim, Target},
-    Value,
+    Entity,
 };
 
 use serde::{de::DeserializeSeed, Serialize};
@@ -59,9 +59,11 @@ pub trait Format {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> T::Value
+    ) -> Box<dyn Future<Item = T::Value, Error = ()> + Send>
     where
-        Self: Sized;
+        Self: Sized,
+        T::Value: Send + 'static,
+        T: Send + 'static;
 }
 
 pub trait ApplyEncode<'de>:
@@ -79,22 +81,24 @@ where
     }
 }
 
-pub trait ApplyDecode<'de, V: Value> {
+pub trait ApplyDecode<'de, V: Entity> {
     fn decode<T: Target<'de, V> + Send + 'static, F: Format + 'static>(
         self,
     ) -> <F as Decode<'de, Self, V>>::Output
     where
         Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
-        F::Representation: Send;
+        F::Representation: Send + 'static,
+        T::Item: Send + 'static;
 }
 
-impl<'de, U, V: Value> ApplyDecode<'de, V> for U {
+impl<'de, U, V: Entity> ApplyDecode<'de, V> for U {
     fn decode<T: Target<'de, V> + Send + 'static, F: Format + 'static>(
         self,
     ) -> <F as Decode<'de, Self, V>>::Output
     where
         Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
         F::Representation: Send,
+        T::Item: Send,
     {
         <F as Decode<'de, Self, V>>::decode::<T>(self)
     }
@@ -103,12 +107,14 @@ impl<'de, U, V: Value> ApplyDecode<'de, V> for U {
 pub trait Decode<
     'de,
     C: UniformStreamSink<<Self as Format>::Representation> + Send + 'static,
-    V: Value,
+    V: Entity,
 >: Format
 {
     type Output: Future<Item = V>;
 
-    fn decode<T: Target<'de, V> + Send + 'static>(input: C) -> Self::Output;
+    fn decode<T: Target<'de, V> + Send + 'static>(input: C) -> Self::Output
+    where
+        T::Item: Send;
 }
 
 pub trait Encode<'de, C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de>>:
@@ -124,20 +130,26 @@ impl<
         'de,
         C: UniformStreamSink<<Self as Format>::Representation> + Send + 'static,
         T: Format + 'static,
-        V: Value,
+        V: Entity,
     > Decode<'de, C, V> for T
 where
     Self::Representation: Send,
 {
     type Output = Box<dyn Future<Item = V, Error = ()> + Send + 'de>;
 
-    fn decode<U: Target<'de, V> + Send + 'static>(input: C) -> Self::Output {
+    fn decode<U: Target<'de, V> + Send + 'static>(input: C) -> Self::Output
+    where
+        U::Item: Send,
+    {
         Box::new(lazy(|| {
             let shim = U::new_shim();
             let context = shim.context();
             let (sink, stream) = input.split();
             shim.complete(StreamSink(
-                stream.map(move |item| Self::deserialize(item, context.clone())),
+                stream
+                    .map_err(|_| panic!())
+                    .map(move |item| Self::deserialize(item, context.clone()).into_stream())
+                    .flatten(),
                 sink.sink_map_err(|_: <C as Sink>::SinkError| {
                     panic!();
                 })
@@ -172,10 +184,9 @@ where
                     .map_err(|_| panic!())
                     .map(<Self as Format>::serialize),
             ),
-            Box::new(
-                sink.sink_map_err(|_| panic!())
-                    .with(move |data| Ok(<Self as Format>::deserialize(data, ctx.clone()))),
-            ),
+            Box::new(sink.sink_map_err(|_| panic!()).with_flat_map(move |data| {
+                <Self as Format>::deserialize(data, ctx.clone()).into_stream()
+            })),
         )
     }
 }
