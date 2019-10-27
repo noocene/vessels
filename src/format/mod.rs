@@ -20,6 +20,10 @@ use crate::{
 
 use serde::{de::DeserializeSeed, Serialize};
 
+use std::fmt::{Debug, Display, Formatter};
+
+use failure::Fail;
+
 #[doc(hidden)]
 pub struct StreamSink<T: Stream, U: Sink>(pub(crate) T, pub(crate) U);
 
@@ -50,6 +54,7 @@ impl<T, U> UniformStreamSink<T> for U where U: Sink<SinkItem = T> + Stream<Item 
 
 pub trait Format {
     type Representation;
+    type Error;
 
     fn serialize<T: Serialize>(item: T) -> Self::Representation
     where
@@ -57,7 +62,7 @@ pub trait Format {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> Box<dyn Future<Item = T::Value, Error = ()> + Send>
+    ) -> Box<dyn Future<Item = T::Value, Error = Self::Error> + Send>
     where
         Self: Sized,
         T::Value: Send + 'static,
@@ -159,6 +164,59 @@ where
     }
 }
 
+pub enum EncodeError<T: Format, S: Sink> {
+    Format(T::Error),
+    Sink(S::SinkError),
+}
+
+impl<T: Format + 'static, S: Sink + 'static> Fail for EncodeError<T, S>
+where
+    T::Error: Send + Sync + Display + Debug,
+    S::SinkError: Send + Sync + Display + Debug,
+{
+}
+
+impl<T: Format, S: Sink> Display for EncodeError<T, S>
+where
+    T::Error: Display,
+    S::SinkError: Display,
+{
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match *self {
+            EncodeError::Format(ref err) => {
+                write!(f, "Error occurred in deserialization `{}`", err)
+            }
+            EncodeError::Sink(ref err) => write!(f, "Error occurred in underlying sink `{}`", err),
+        }
+    }
+}
+
+impl<T: Format, S: Sink> Debug for EncodeError<T, S>
+where
+    T::Error: Debug,
+    S::SinkError: Debug,
+{
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match *self {
+            EncodeError::Format(ref err) => {
+                write!(f, "Error occurred in deserialization `{:?}`", err)
+            }
+            EncodeError::Sink(ref err) => {
+                write!(f, "Error occurred in underlying sink `{:?}`", err)
+            }
+        }
+    }
+}
+
+impl<T: Format, S: Sink> EncodeError<T, S> {
+    fn from_sink_error(err: S::SinkError) -> Self {
+        EncodeError::Sink(err)
+    }
+    fn from_format_error(err: T::Error) -> Self {
+        EncodeError::Format(err)
+    }
+}
+
 impl<
         'de,
         T: Format + 'static,
@@ -169,22 +227,26 @@ where
     <C as Context<'de>>::Item: Send,
 {
     type Output = StreamSink<
-        Box<dyn Stream<Item = <Self as Format>::Representation, Error = ()> + Send>,
-        Box<dyn Sink<SinkItem = <Self as Format>::Representation, SinkError = ()> + Send>,
+        Box<dyn Stream<Item = <Self as Format>::Representation, Error = C::Error> + Send>,
+        Box<
+            dyn Sink<SinkItem = <Self as Format>::Representation, SinkError = EncodeError<T, C>>
+                + Send,
+        >,
     >;
 
     fn encode(input: C) -> Self::Output {
         let ctx = input.context();
         let (sink, stream) = input.split();
         StreamSink(
+            Box::new(stream.map(<Self as Format>::serialize)),
             Box::new(
-                stream
-                    .map_err(|_| panic!())
-                    .map(<Self as Format>::serialize),
+                sink.sink_map_err(EncodeError::from_sink_error)
+                    .with_flat_map(move |data| {
+                        <Self as Format>::deserialize(data, ctx.clone())
+                            .into_stream()
+                            .map_err(EncodeError::from_format_error)
+                    }),
             ),
-            Box::new(sink.sink_map_err(|_| panic!()).with_flat_map(move |data| {
-                <Self as Format>::deserialize(data, ctx.clone()).into_stream()
-            })),
         )
     }
 }
