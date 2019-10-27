@@ -1,18 +1,44 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
-use proc_macro_error::*;
-use syn::{Item, Meta, Type};
-mod kind;
+use quote::{format_ident, quote, ToTokens};
+use syn::{parse2, parse_str, Path, Type};
 use synstructure::{decl_derive, Structure};
 
 decl_derive!([Kind, attributes(kind)] => kind_derive);
 
-fn kind_derive(_: Structure) -> TokenStream {
-    TokenStream::new()
-}
+fn kind_derive(s: Structure) -> TokenStream {
+    let kind_attr = parse_str::<Path>("kind").unwrap();
+    let ref ast = s.ast();
+    let ty = ast
+        .attrs
+        .iter()
+        .filter(move |attr| attr.path == kind_attr)
+        .flat_map(|attr| parse2::<Type>(attr.tokens.clone()))
+        .next()
+        .unwrap();
+    let ref ident = ast.ident;
+    let hygiene = format_ident!("_IMPLEMENT_KIND_FOR_{}", ident);
+    (quote! {
+        #[allow(non_upper_case_globals)]
+        const #hygiene: () = {
+            impl Kind for #ident {
+                type ConstructItem = <<#ident as AsKind<#ty>>::Kind as Kind>::ConstructItem;
+                type ConstructFuture = <#ident as AsKind<#ty>>::ConstructFuture;
+                type DeconstructItem = <<#ident as AsKind<#ty>>::Kind as Kind>::DeconstructItem;
+                type DeconstructFuture = <<#ident as AsKind<#ty>>::Kind as Kind>::DeconstructFuture;
 
-#[proc_macro_attribute]
-#[proc_macro_error]
-pub fn kind(attr: TokenStream, item: TokenStream) -> proc_macro::TokenStream {
-    kind::kind(attr.into(), item.into()).into()
+                fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
+                    self,
+                    channel: C,
+                ) -> Self::DeconstructFuture {
+                    self.into_kind().deconstruct(channel)
+                }
+                fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
+                    channel: C,
+                ) -> Self::ConstructFuture {
+                    <#ident as AsKind<#ty>>::from_kind(<<#ident as AsKind<#ty>>::Kind as Kind>::construct(channel))
+                }
+            }
+        };
+    }).into()
 }

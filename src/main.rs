@@ -1,7 +1,6 @@
 use kinddev::{
     channel::{Channel, IdChannel},
     format::{Decode, Encode, Json},
-    kind,
     kind::{using, AsKind},
     Kind, OnTo,
 };
@@ -16,8 +15,8 @@ enum TestEnum {
     No(String),
 }
 
+#[derive(Serialize, Deserialize, Debug, Kind)]
 #[kind(using::Serde)]
-#[derive(Serialize, Deserialize, Debug)]
 struct Test {
     e: u32,
     st: Option<String>,
