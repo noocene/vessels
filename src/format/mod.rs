@@ -1,5 +1,3 @@
-pub mod as_bytes;
-pub use as_bytes::AsBytes;
 #[cfg(feature = "json")]
 pub mod json;
 #[cfg(feature = "json")]
