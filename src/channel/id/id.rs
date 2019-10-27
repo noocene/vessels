@@ -55,11 +55,9 @@ impl Registry {
                 <T as ::serde::Deserialize>::deserialize(de)
                     .map(|v| Box::new(v) as Box<dyn SerdeAny>)
             });
-            self.tasks
-                .lock()
-                .unwrap()
-                .get(&TypeId::of::<T>())
-                .map(|task| task.notify());
+            if let Some(task) = self.tasks.lock().unwrap().get(&TypeId::of::<T>()) {
+                task.notify()
+            }
         }
     }
 
