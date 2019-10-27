@@ -3,6 +3,7 @@ pub use future::Future;
 mod option;
 mod result;
 pub mod serde;
+pub mod using;
 pub use self::serde::Serde;
 
 use futures::{
@@ -23,8 +24,18 @@ use std::{
 
 use crate::{channel::Channel, Kind};
 
-pub trait IntoKind<K: Kind> {
-    fn into_kind(self) -> K;
+pub trait AsKindMarker {}
+
+pub trait AsKind<M: AsKindMarker>: Sized {
+    type Kind: Kind;
+
+    type ConstructFuture: IFuture<
+            Item = Self,
+            Error = <<Self::Kind as Kind>::ConstructFuture as IFuture>::Error,
+        > + Send;
+
+    fn into_kind(self) -> Self::Kind;
+    fn from_kind(future: <Self::Kind as Kind>::ConstructFuture) -> Self::ConstructFuture;
 }
 
 impl Kind for () {

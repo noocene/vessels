@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 
 use futures::{Future as IFuture, Poll};
 
-use super::IntoKind;
-
 use failure::Error;
 
 #[doc(hidden)]
@@ -32,16 +30,6 @@ impl<T: Kind, E: Kind> IFuture for Future<T, E> {
 impl<T: Kind, E: Kind> Future<T, E> {
     pub fn new<F: IFuture<Item = T, Error = E> + Send + 'static>(future: F) -> Self {
         Future(Box::new(future))
-    }
-}
-
-impl<F: IFuture + Send + 'static> IntoKind<Future<F::Item, F::Error>> for F
-where
-    F::Item: Kind,
-    F::Error: Kind,
-{
-    fn into_kind(self) -> Future<F::Item, F::Error> {
-        Future::new(self)
     }
 }
 

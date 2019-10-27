@@ -1,22 +1,44 @@
 use kinddev::{
-    channel::IdChannel,
+    channel::{Channel, IdChannel},
     format::{Decode, Encode, Json},
-    OnTo,
+    kind,
+    kind::{using, AsKind},
+    Kind, OnTo,
 };
+
+use serde::{Deserialize, Serialize};
 
 use futures::{Future, Stream};
 
+#[derive(Serialize, Deserialize, Debug)]
+enum TestEnum {
+    Yes(u32),
+    No(String),
+}
+
+#[kind(using::Serde)]
+#[derive(Serialize, Deserialize, Debug)]
+struct Test {
+    e: u32,
+    st: Option<String>,
+    other: TestEnum,
+}
+
 fn main() {
     tokio::run(
-        Some(true)
-            .on_to::<IdChannel>()
-            .map(Json::encode)
-            .map(|c| c.inspect(|item| println!("{}", item)))
-            .map(Json::decode::<IdChannel>)
-            .flatten()
-            .and_then(|item: Option<bool>| {
-                println!("{:?}", item);
-                Ok(())
-            }),
+        Test {
+            e: 20,
+            st: Some("test".to_owned()),
+            other: TestEnum::Yes(500),
+        }
+        .on_to::<IdChannel>()
+        .map(Json::encode)
+        .map(|c| c.inspect(|item| println!("{}", item)))
+        .map(Json::decode::<IdChannel>)
+        .flatten()
+        .and_then(|item: Test| {
+            println!("{:?}", item);
+            Ok(())
+        }),
     )
 }

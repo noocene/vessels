@@ -4,7 +4,7 @@ use futures::Future;
 
 use crate::{channel::Channel, Kind};
 
-use super::IntoKind;
+use super::{using, AsKind};
 
 use std::ops::Deref;
 
@@ -30,9 +30,23 @@ impl<T: Serialize + DeserializeOwned + Send + 'static> From<T> for Serde<T> {
     }
 }
 
-impl<T: Serialize + DeserializeOwned + Send + 'static> IntoKind<Serde<T>> for T {
+impl<T: Serialize + DeserializeOwned + Send + 'static> AsKind<using::Serde> for T {
+    type Kind = Serde<T>;
+    type ConstructFuture = Box<
+        dyn Future<Item = Self, Error = <<Serde<T> as Kind>::ConstructFuture as Future>::Error>
+            + Send,
+    >;
+
     fn into_kind(self) -> Serde<T> {
         Serde(self)
+    }
+    fn from_kind(
+        future: <Serde<T> as Kind>::ConstructFuture,
+    ) -> Box<
+        dyn Future<Item = Self, Error = <<Serde<T> as Kind>::ConstructFuture as Future>::Error>
+            + Send,
+    > {
+        Box::new(future.map(|item| item.0))
     }
 }
 

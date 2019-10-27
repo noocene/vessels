@@ -14,6 +14,8 @@ use futures::Future;
 use serde::{de::DeserializeOwned, Serialize};
 use std::any::Any;
 
+pub use derive::{kind, Kind};
+
 pub trait Kind: Sized + Send + 'static {
     type ConstructItem: Serialize + DeserializeOwned + Send + 'static;
     type ConstructFuture: Future<Item = Self> + Send + 'static;

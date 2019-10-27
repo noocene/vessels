@@ -5,7 +5,7 @@ authors = ["Izzy Swart <zenerboson@gmail.com>"]
 edition = "2018"
 
 [workspace]
-members = ["."]
+members = [".", "./derive"]
 
 [features]
 cbor = ["serde_cbor"]
@@ -25,3 +25,6 @@ serde_bincode = {version = "1.2.0", optional = true, package = "bincode" }
 mopa = "0.2.2"
 lazy_static = "1.4.0"
 weak-table = "0.2.3"
+
+[dependencies.derive]
+path = "./derive"
