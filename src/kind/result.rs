@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use futures::Future;
 
 #[doc(hidden)]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum VResult {
     Ok(ForkHandle),
     Err(ForkHandle),
@@ -47,19 +47,12 @@ where
         Box::new(channel.into_future().then(|v| {
             match v {
                 Ok(v) => match v.0.unwrap() {
-                    VResult::Ok(r) => Box::new(
-                        v.1.get_fork::<T>(r)
-                            .map(Result::<T, E>::Ok)
-                            .map_err(|_| panic!()),
-                    )
+                    VResult::Ok(r) => Box::new(v.1.get_fork::<T>(r).map(Ok).map_err(|_| panic!()))
                         as Box<dyn Future<Item = Result<T, E>, Error = ()> + Send>,
-                    VResult::Err(r) => Box::new(v.1.get_fork::<E>(r).then(|item| {
-                        Ok(if let Ok(e) = item {
-                            Result::<T, E>::Err(e)
-                        } else {
-                            panic!()
-                        })
-                    }))
+                    VResult::Err(r) => Box::new(
+                        v.1.get_fork::<E>(r)
+                            .then(|item| Ok(if let Ok(e) = item { Err(e) } else { panic!() })),
+                    )
                         as Box<dyn Future<Item = Result<T, E>, Error = ()> + Send>,
                 },
                 _ => panic!("lol"),

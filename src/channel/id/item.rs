@@ -44,7 +44,7 @@ struct ItemVisitor(Context);
 impl<'de> Visitor<'de> for ItemVisitor {
     type Value = Item;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "a channel item")
     }
 

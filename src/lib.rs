@@ -56,7 +56,7 @@ impl ErasedDeserialize {
 }
 
 type DeserializeFn =
-    fn(&mut dyn erased_serde::Deserializer) -> erased_serde::Result<Box<dyn SerdeAny>>;
+    fn(&mut dyn erased_serde::Deserializer<'_>) -> erased_serde::Result<Box<dyn SerdeAny>>;
 
 inventory::collect!(ErasedDeserialize);
 

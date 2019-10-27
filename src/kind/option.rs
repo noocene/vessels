@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use futures::{future::ok, Future};
 
 #[doc(hidden)]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum VOption {
     Some(ForkHandle),
     None,

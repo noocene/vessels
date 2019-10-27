@@ -10,7 +10,7 @@ use futures::Future as IFuture;
 use failure::Error;
 
 #[doc(hidden)]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum VResult {
     Ok(ForkHandle),
     Err(ForkHandle),

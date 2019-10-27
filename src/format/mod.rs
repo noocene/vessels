@@ -181,7 +181,7 @@ where
     T::Error: Display,
     S::SinkError: Display,
 {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match *self {
             EncodeError::Format(ref err) => {
                 write!(f, "Error occurred in deserialization `{}`", err)
@@ -196,7 +196,7 @@ where
     T::Error: Debug,
     S::SinkError: Debug,
 {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match *self {
             EncodeError::Format(ref err) => {
                 write!(f, "Error occurred in deserialization `{:?}`", err)
