@@ -9,17 +9,14 @@ use channel::{Channel, Target};
 pub mod format;
 pub mod kind;
 
-pub use derive::kind;
 use erased_serde::Serialize as ErasedSerialize;
 use futures::{
     future::{ok, FutureResult},
     Future,
 };
-use lazy_static::lazy_static;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
+    any::Any,
     ffi::{CString, OsString},
     marker::PhantomData,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
@@ -29,36 +26,6 @@ use std::{
     },
     time::{Duration, SystemTime},
 };
-
-lazy_static! {
-    static ref REGISTRY: HashMap<TypeId, DeserializeFn> = {
-        let mut map = HashMap::new();
-        inventory::iter::<ErasedDeserialize>
-            .into_iter()
-            .for_each(|func| {
-                if !map.contains_key(&func.ty) {
-                    map.insert(func.ty, func.func);
-                }
-            });
-        map
-    };
-}
-
-pub(crate) struct ErasedDeserialize {
-    ty: TypeId,
-    func: DeserializeFn,
-}
-
-impl ErasedDeserialize {
-    fn new(ty: TypeId, func: DeserializeFn) -> Self {
-        ErasedDeserialize { ty, func }
-    }
-}
-
-type DeserializeFn =
-    fn(&mut dyn erased_serde::Deserializer<'_>) -> erased_serde::Result<Box<dyn SerdeAny>>;
-
-inventory::collect!(ErasedDeserialize);
 
 pub trait Kind: Sized + Send + 'static {
     type ConstructItem: Serialize + DeserializeOwned + Send + 'static;
@@ -75,12 +42,8 @@ pub trait Kind: Sized + Send + 'static {
         self,
         channel: C,
     ) -> Self::DeconstructFuture;
-
-    #[doc(hidden)]
-    const DO_NOT_IMPLEMENT_THIS_TRAIT_MANUALLY: ();
 }
 
-#[kind]
 impl Kind for () {
     type ConstructItem = ();
     type DeconstructItem = ();
@@ -100,7 +63,6 @@ impl Kind for () {
     }
 }
 
-#[kind]
 impl<T: Send + 'static> Kind for PhantomData<T> {
     type ConstructItem = ();
     type ConstructFuture = FutureResult<PhantomData<T>, ()>;
@@ -122,7 +84,6 @@ impl<T: Send + 'static> Kind for PhantomData<T> {
 
 macro_rules! primitive_impl {
     ($($ty:ident)+) => {$(
-        #[kind]
         impl Kind for $ty {
             type ConstructItem = $ty;
             type ConstructFuture = Box<dyn Future<Item = $ty, Error = ()> + Send + 'static>;

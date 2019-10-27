@@ -1,6 +1,6 @@
 use crate::{
     channel::{Channel, ForkHandle},
-    kind, ErasedDeserialize, Kind, SerdeAny,
+    Kind,
 };
 
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,6 @@ pub enum KResult {
     Err(ForkHandle),
 }
 
-#[kind]
 impl<T, E> Kind for Result<T, E>
 where
     T: Kind,

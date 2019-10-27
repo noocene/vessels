@@ -4,6 +4,7 @@ mod item;
 pub use item::Item;
 mod id;
 pub(crate) use id::Id;
+use id::REGISTRY;
 
 use futures::{
     lazy, stream,
@@ -146,6 +147,7 @@ impl IdChannel {
     }
     fn fork<K: Kind>(&self, kind: K) -> Box<dyn Future<Item = ForkHandle, Error = ()> + Send> {
         let id = self.context.create::<K>();
+        REGISTRY.add::<K::DeconstructItem>();
         let context = self.context.clone();
         let out_channel = self.out_channel.clone();
         let in_channels = self.in_channels.clone();
@@ -186,6 +188,7 @@ impl IdChannel {
             let mut in_channels = channel.in_channels.lock().unwrap();
             let mut out_channel = channel.out_channel.lock().unwrap();
             channel.context.add::<K>(fork_ref.0);
+            REGISTRY.add::<K::ConstructItem>();
             let (sender, ireceiver): (UnboundedSender<K::DeconstructItem>, _) = unbounded();
             let (isender, receiver): (UnboundedSender<K::ConstructItem>, _) = unbounded();
             let isender = isender
@@ -337,6 +340,7 @@ where
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
             let (oi, receiver): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
             let mut in_channels = HashMap::new();
+            REGISTRY.add::<K::ConstructItem>();
             in_channels.insert(
                 0u32,
                 Box::new(

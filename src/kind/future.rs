@@ -1,6 +1,6 @@
 use crate::{
     channel::{Channel, Fork, ForkHandle},
-    kind, ErasedDeserialize, Kind, SerdeAny,
+    Kind,
 };
 
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,6 @@ pub enum KResult {
 
 pub type Future<T, E> = Box<dyn IFuture<Item = T, Error = E> + Send>;
 
-#[kind]
 impl<T, E> Kind for Box<dyn IFuture<Item = T, Error = E> + Send>
 where
     T: Kind,

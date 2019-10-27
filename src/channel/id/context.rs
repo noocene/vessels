@@ -36,10 +36,7 @@ impl Future for WaitFor {
                 self.task.register();
                 Async::NotReady
             },
-            |item| {
-                self.context.complete(self.id);
-                Async::Ready(item)
-            },
+            Async::Ready,
         ))
     }
 }
@@ -57,11 +54,6 @@ impl Context {
             context: self.clone(),
             id,
         }
-    }
-
-    fn complete(&self, id: u32) {
-        let mut tasks = self.tasks.lock().unwrap();
-        tasks.remove(&id);
     }
 
     pub(crate) fn new_with<K: Kind>() -> Self {
