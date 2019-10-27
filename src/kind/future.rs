@@ -5,7 +5,9 @@ use crate::{
 
 use serde::{Deserialize, Serialize};
 
-use futures::Future as IFuture;
+use futures::{Future as IFuture, Poll};
+
+use super::IntoKind;
 
 use failure::Error;
 
@@ -16,9 +18,34 @@ pub enum KResult {
     Err(ForkHandle),
 }
 
-pub type Future<T, E> = Box<dyn IFuture<Item = T, Error = E> + Send>;
+pub struct Future<T: Kind, E: Kind>(Box<dyn IFuture<Item = T, Error = E> + Send>);
 
-impl<T, E> Kind for Box<dyn IFuture<Item = T, Error = E> + Send>
+impl<T: Kind, E: Kind> IFuture for Future<T, E> {
+    type Item = T;
+    type Error = E;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        self.0.poll()
+    }
+}
+
+impl<T: Kind, E: Kind> Future<T, E> {
+    pub fn new<F: IFuture<Item = T, Error = E> + Send + 'static>(future: F) -> Self {
+        Future(Box::new(future))
+    }
+}
+
+impl<F: IFuture + Send + 'static> IntoKind<Future<F::Item, F::Error>> for F
+where
+    F::Item: Kind,
+    F::Error: Kind,
+{
+    fn into_kind(self) -> Future<F::Item, F::Error> {
+        Future::new(self)
+    }
+}
+
+impl<T, E> Kind for Future<T, E>
 where
     T: Kind,
     E: Kind,
@@ -52,10 +79,12 @@ where
     ) -> Self::ConstructFuture {
         Box::new(channel.into_future().then(|v| match v {
             Ok(v) => Ok(match v.0.unwrap() {
-                KResult::Ok(r) => Box::new(v.1.get_fork::<T>(r).map_err(|_| -> E { panic!() }))
-                    as Box<dyn IFuture<Item = T, Error = E> + Send>,
-                KResult::Err(r) => Box::new(v.1.get_fork::<E>(r).then(|v| Err(v.unwrap())))
-                    as Box<dyn IFuture<Item = T, Error = E> + Send>,
+                KResult::Ok(r) => Future(Box::new(
+                    v.1.get_fork::<T>(r).map_err(|_| -> E { panic!() }),
+                )
+                    as Box<dyn IFuture<Item = T, Error = E> + Send>),
+                KResult::Err(r) => Future(Box::new(v.1.get_fork::<E>(r).then(|v| Err(v.unwrap())))
+                    as Box<dyn IFuture<Item = T, Error = E> + Send>),
             }),
             _ => panic!("lol"),
         }))

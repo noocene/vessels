@@ -23,6 +23,10 @@ use std::{
 
 use crate::{channel::Channel, Kind};
 
+pub trait IntoKind<K: Kind> {
+    fn into_kind(self) -> K;
+}
+
 impl Kind for () {
     type ConstructItem = ();
     type DeconstructItem = ();

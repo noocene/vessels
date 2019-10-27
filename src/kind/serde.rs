@@ -4,6 +4,8 @@ use futures::Future;
 
 use crate::{channel::Channel, Kind};
 
+use super::IntoKind;
+
 use std::ops::Deref;
 
 pub struct Serde<T: Serialize + DeserializeOwned + Send + 'static>(pub T);
@@ -25,6 +27,12 @@ impl<T: Serialize + DeserializeOwned + Send + 'static> Deref for Serde<T> {
 impl<T: Serialize + DeserializeOwned + Send + 'static> From<T> for Serde<T> {
     fn from(item: T) -> Self {
         Serde(item)
+    }
+}
+
+impl<T: Serialize + DeserializeOwned + Send + 'static> IntoKind<Serde<T>> for T {
+    fn into_kind(self) -> Serde<T> {
+        Serde(self)
     }
 }
 
