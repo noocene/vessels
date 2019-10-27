@@ -1,7 +1,6 @@
 use std::{
     any::TypeId,
     collections::HashMap,
-    marker::PhantomData,
     sync::{Arc, Mutex, RwLock},
 };
 
@@ -21,16 +20,15 @@ pub struct Context {
     tasks: Arc<Mutex<HashMap<u32, Arc<AtomicTask>>>>,
 }
 
-pub(crate) struct WaitFor<E> {
+pub(crate) struct WaitFor {
     task: Arc<AtomicTask>,
     context: Context,
     id: u32,
-    _marker: PhantomData<E>,
 }
 
-impl<E> Future for WaitFor<E> {
+impl Future for WaitFor {
     type Item = (TypeId, TypeId);
-    type Error = E;
+    type Error = ();
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         Ok(self.context.get(&self.id).map_or_else(
@@ -47,7 +45,7 @@ impl<E> Future for WaitFor<E> {
 }
 
 impl Context {
-    pub(crate) fn wait_for<E>(&self, id: u32) -> WaitFor<E> {
+    pub(crate) fn wait_for(&self, id: u32) -> WaitFor {
         let mut tasks = self.tasks.lock().unwrap();
         let task = tasks.get(&id).map(Clone::clone).unwrap_or_else(|| {
             let task = Arc::new(AtomicTask::new());
@@ -58,7 +56,6 @@ impl Context {
             task,
             context: self.clone(),
             id,
-            _marker: PhantomData,
         }
     }
 

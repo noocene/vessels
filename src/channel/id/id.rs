@@ -15,19 +15,9 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
     where
         D: Deserializer<'de>,
     {
-        self.1.wait_for::<()>(self.0).wait().unwrap();
+        let ty = self.1.wait_for(self.0).wait().unwrap();
         let mut deserializer = erased_serde::Deserializer::erase(deserializer);
-        self.1
-            .get(&self.0)
-            .map(|ty| (REGISTRY.get(&ty.0).unwrap())(&mut deserializer).map_err(de::Error::custom))
-            .unwrap()
-        /*.unwrap_or_else(move || {
-            Ok(Content::Eventual(Box::new(
-                self.1.wait_for(self.0).and_then(|ty| {
-                    Ok((REGISTRY.get(&ty.0).unwrap())(&mut deserializer).unwrap())
-                }),
-            )))
-        })*/
+        (REGISTRY.get(&ty.0).unwrap())(&mut deserializer).map_err(de::Error::custom)
     }
 }
 
