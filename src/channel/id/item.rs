@@ -10,7 +10,6 @@ use serde::{
 
 use crate::channel::DeserializeSeed;
 
-use futures::{future::ok, Future};
 use std::fmt;
 
 pub struct Item(pub(crate) u32, pub(crate) Box<dyn SerdeAny>, Context);

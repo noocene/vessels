@@ -45,16 +45,13 @@ pub trait Shim<'a, T: Target<'a, K>, K: Kind>:
     >(
         self,
         input: C,
-    ) -> Box<dyn Future<Item = K, Error = <T as Target<'a, K>>::Error> + Send + 'static>;
+    ) -> Box<dyn Future<Item = K, Error = ()> + Send + 'static>;
 }
 
 pub trait Target<'a, K: Kind>: Context<'a> + Sized {
-    type Error: Send + 'static;
     type Shim: Shim<'a, Self, K>;
 
-    fn new_with(
-        kind: K,
-    ) -> Box<dyn Future<Item = Self, Error = <Self as Target<'a, K>>::Error> + Send + 'static>
+    fn new_with(kind: K) -> Box<dyn Future<Item = Self, Error = ()> + Send + 'static>
     where
         K::DeconstructFuture: Send;
 
@@ -71,7 +68,7 @@ pub trait Context<'de> {
 pub trait OnTo: Kind {
     fn on_to<'a, T: Target<'a, Self>>(
         self,
-    ) -> Box<dyn Future<Item = T, Error = <T as Target<'a, Self>>::Error> + Send + 'static>
+    ) -> Box<dyn Future<Item = T, Error = ()> + Send + 'static>
     where
         Self: Send + 'static,
         Self::DeconstructFuture: Send;
@@ -80,7 +77,7 @@ pub trait OnTo: Kind {
 impl<K: Kind> OnTo for K {
     fn on_to<'a, T: Target<'a, Self>>(
         self,
-    ) -> Box<dyn Future<Item = T, Error = <T as Target<'a, Self>>::Error> + Send + 'static>
+    ) -> Box<dyn Future<Item = T, Error = ()> + Send + 'static>
     where
         Self: Send + 'static,
         Self::DeconstructFuture: Send,

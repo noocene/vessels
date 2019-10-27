@@ -1,5 +1,5 @@
 use crate::{
-    channel::{Channel, Fork, ForkHandle},
+    channel::{Channel, ForkHandle},
     kind, ErasedDeserialize, Kind, SerdeAny,
 };
 

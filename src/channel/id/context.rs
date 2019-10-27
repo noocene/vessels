@@ -88,17 +88,6 @@ impl Context {
         }
     }
 
-    pub(crate) fn new() -> Self {
-        Context {
-            state: Arc::new(RwLock::new(ContextState {
-                channel_types: HashMap::new(),
-                next_index: 1,
-                unused_indices: vec![],
-            })),
-            tasks: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
     pub(crate) fn get(&self, channel: &'_ u32) -> Option<(TypeId, TypeId)> {
         self.state
             .read()

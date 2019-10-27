@@ -98,8 +98,7 @@ impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
     fn complete<C: Stream<Item = Item> + Sink<SinkItem = Item> + Send + 'static>(
         self,
         input: C,
-    ) -> Box<dyn Future<Item = K, Error = <IdChannel as Target<'a, K>>::Error> + Send + 'static>
-    {
+    ) -> Box<dyn Future<Item = K, Error = ()> + Send + 'static> {
         Box::new(lazy(|| {
             let (sink, stream) = input.split();
             let channel = IdChannel {
@@ -220,10 +219,9 @@ impl IdChannel {
 }
 
 impl<'a, K: Kind> Target<'a, K> for IdChannel {
-    type Error = ();
     type Shim = Shim<K>;
 
-    fn new_with(kind: K) -> Box<dyn Future<Item = Self, Error = Self::Error> + Send + 'static>
+    fn new_with(kind: K) -> Box<dyn Future<Item = Self, Error = ()> + Send + 'static>
     where
         K::DeconstructFuture: Send,
     {
