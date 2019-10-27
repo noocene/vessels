@@ -49,7 +49,7 @@ where
                 Ok(v) => match v.0.unwrap() {
                     VResult::Ok(r) => Box::new(
                         v.1.get_fork::<T>(r)
-                            .map(|item| Result::<T, E>::Ok(item))
+                            .map(Result::<T, E>::Ok)
                             .map_err(|_| panic!()),
                     )
                         as Box<dyn Future<Item = Result<T, E>, Error = ()> + Send>,

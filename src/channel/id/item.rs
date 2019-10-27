@@ -54,10 +54,10 @@ impl<'de> Visitor<'de> for ItemVisitor {
     {
         let channel = seq
             .next_element()?
-            .ok_or(de::Error::invalid_length(0, &"two elements"))?;
+            .ok_or_else(|| de::Error::invalid_length(0, &"two elements"))?;
         let data = seq
             .next_element_seed(Id::new(channel, &mut self.0))?
-            .ok_or(de::Error::invalid_length(1, &"two elements"))?;
+            .ok_or_else(|| de::Error::invalid_length(1, &"two elements"))?;
         Ok(Item(channel, data, self.0))
     }
 

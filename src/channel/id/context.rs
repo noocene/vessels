@@ -31,7 +31,7 @@ impl Future for WaitFor {
     type Error = ();
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        Ok(self.context.get(&self.id).map_or_else(
+        Ok(self.context.get(self.id).map_or_else(
             || {
                 self.task.register();
                 Async::NotReady
@@ -85,13 +85,13 @@ impl Context {
         }
     }
 
-    pub(crate) fn get(&self, channel: &'_ u32) -> Option<(TypeId, TypeId)> {
+    pub(crate) fn get(&self, channel: u32) -> Option<(TypeId, TypeId)> {
         self.state
             .read()
             .unwrap()
             .channel_types
-            .get(channel)
-            .map(|c| *c)
+            .get(&channel)
+            .copied()
     }
 
     pub(crate) fn create<K: Kind>(&self) -> u32 {
@@ -108,11 +108,9 @@ impl Context {
             state.channel_types.insert(id, (c, d));
             id
         };
-        self.tasks
-            .lock()
-            .unwrap()
-            .get(&id)
-            .map(|task| task.notify());
+        if let Some(task) = self.tasks.lock().unwrap().get(&id) {
+            task.notify()
+        }
         id
     }
 
@@ -121,11 +119,9 @@ impl Context {
         let c = TypeId::of::<K::ConstructItem>();
         let d = TypeId::of::<K::DeconstructItem>();
         state.channel_types.insert(handle, (c, d));
-        self.tasks
-            .lock()
-            .unwrap()
-            .get(&handle)
-            .map(|task| task.notify());
+        if let Some(task) = self.tasks.lock().unwrap().get(&handle) {
+            task.notify()
+        }
     }
 
     pub(crate) fn len(&self) -> usize {
