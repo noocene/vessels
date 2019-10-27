@@ -1,8 +1,10 @@
 use std::{
     any::TypeId,
     collections::HashMap,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock, Weak},
 };
+
+use weak_table::WeakValueHashMap;
 
 use futures::{task::AtomicTask, Async, Future, Poll};
 
@@ -17,7 +19,7 @@ struct ContextState {
 #[derive(Clone)]
 pub struct Context {
     state: Arc<RwLock<ContextState>>,
-    tasks: Arc<Mutex<HashMap<u32, Arc<AtomicTask>>>>,
+    tasks: Arc<Mutex<WeakValueHashMap<u32, Weak<AtomicTask>>>>,
 }
 
 pub(crate) struct WaitFor {
@@ -44,7 +46,7 @@ impl Future for WaitFor {
 impl Context {
     pub(crate) fn wait_for(&self, id: u32) -> WaitFor {
         let mut tasks = self.tasks.lock().unwrap();
-        let task = tasks.get(&id).map(Clone::clone).unwrap_or_else(|| {
+        let task = tasks.get(&id).unwrap_or_else(|| {
             let task = Arc::new(AtomicTask::new());
             tasks.insert(id, task.clone());
             task
@@ -73,7 +75,7 @@ impl Context {
                 next_index: 1,
                 unused_indices: vec![],
             })),
-            tasks: Arc::new(Mutex::new(HashMap::new())),
+            tasks: Arc::new(Mutex::new(WeakValueHashMap::new())),
         }
     }
 

@@ -10,10 +10,12 @@ use serde::{
 use std::{
     any::TypeId,
     collections::HashMap,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock, Weak},
 };
 
 use futures::{future::ok, task::AtomicTask, Async, Future, Poll};
+
+use weak_table::WeakValueHashMap;
 
 use lazy_static::lazy_static;
 
@@ -22,7 +24,7 @@ type DeserializeFn =
 
 pub(crate) struct Registry {
     items: RwLock<HashMap<TypeId, DeserializeFn>>,
-    tasks: Mutex<HashMap<TypeId, Arc<AtomicTask>>>,
+    tasks: Mutex<WeakValueHashMap<TypeId, Weak<AtomicTask>>>,
 }
 
 pub(crate) struct WaitFor {
@@ -93,7 +95,7 @@ impl Registry {
 lazy_static! {
     pub(crate) static ref REGISTRY: Registry = Registry {
         items: RwLock::new(HashMap::new()),
-        tasks: Mutex::new(HashMap::new()),
+        tasks: Mutex::new(WeakValueHashMap::new()),
     };
 }
 
