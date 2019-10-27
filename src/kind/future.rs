@@ -11,7 +11,7 @@ use failure::Error;
 
 #[doc(hidden)]
 #[derive(Serialize, Deserialize, Debug)]
-pub enum VResult {
+pub enum KResult {
     Ok(ForkHandle),
     Err(ForkHandle),
 }
@@ -24,7 +24,7 @@ where
     T: Kind,
     E: Kind,
 {
-    type ConstructItem = VResult;
+    type ConstructItem = KResult;
     type ConstructFuture = Box<dyn IFuture<Item = Self, Error = Error> + Send>;
     type DeconstructItem = ();
     type DeconstructFuture = Box<dyn IFuture<Item = (), Error = ()> + Send>;
@@ -38,12 +38,12 @@ where
                 Ok(v) => Box::new(
                     fork_factory
                         .fork(v)
-                        .and_then(|h| channel.send(VResult::Ok(h)).then(|_| Ok(()))),
+                        .and_then(|h| channel.send(KResult::Ok(h)).then(|_| Ok(()))),
                 ),
                 Err(v) => Box::new(
                     fork_factory
                         .fork(v)
-                        .and_then(|h| channel.send(VResult::Err(h)).then(|_| Ok(()))),
+                        .and_then(|h| channel.send(KResult::Err(h)).then(|_| Ok(()))),
                 ) as Box<dyn IFuture<Item = (), Error = ()> + Send>,
             }
         }))
@@ -53,9 +53,9 @@ where
     ) -> Self::ConstructFuture {
         Box::new(channel.into_future().then(|v| match v {
             Ok(v) => Ok(match v.0.unwrap() {
-                VResult::Ok(r) => Box::new(v.1.get_fork::<T>(r).map_err(|_| -> E { panic!() }))
+                KResult::Ok(r) => Box::new(v.1.get_fork::<T>(r).map_err(|_| -> E { panic!() }))
                     as Box<dyn IFuture<Item = T, Error = E> + Send>,
-                VResult::Err(r) => Box::new(v.1.get_fork::<E>(r).then(|v| Err(v.unwrap())))
+                KResult::Err(r) => Box::new(v.1.get_fork::<E>(r).then(|v| Err(v.unwrap())))
                     as Box<dyn IFuture<Item = T, Error = E> + Send>,
             }),
             _ => panic!("lol"),

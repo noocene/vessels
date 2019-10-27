@@ -9,7 +9,7 @@ use futures::{future::ok, Future};
 
 #[doc(hidden)]
 #[derive(Serialize, Deserialize, Debug)]
-pub enum VOption {
+pub enum KOption {
     Some(ForkHandle),
     None,
 }
@@ -19,7 +19,7 @@ impl<T> Kind for Option<T>
 where
     T: Kind,
 {
-    type ConstructItem = VOption;
+    type ConstructItem = KOption;
     type ConstructFuture = Box<dyn Future<Item = Self, Error = ()> + Send>;
     type DeconstructItem = ();
     type DeconstructFuture = Box<dyn Future<Item = (), Error = ()> + Send>;
@@ -31,9 +31,9 @@ where
             Some(v) => Box::new(
                 channel
                     .fork(v)
-                    .and_then(|h| channel.send(VOption::Some(h)).then(|_| Ok(()))),
+                    .and_then(|h| channel.send(KOption::Some(h)).then(|_| Ok(()))),
             ),
-            None => Box::new(channel.send(VOption::None).then(|_| Ok(())))
+            None => Box::new(channel.send(KOption::None).then(|_| Ok(())))
                 as Box<dyn Future<Item = (), Error = ()> + Send>,
         }
     }
@@ -42,9 +42,9 @@ where
     ) -> Self::ConstructFuture {
         Box::new(channel.into_future().then(|v| match v {
             Ok(v) => match v.0.unwrap() {
-                VOption::Some(r) => Box::new(v.1.get_fork::<T>(r).map(Some).map_err(|_| panic!()))
+                KOption::Some(r) => Box::new(v.1.get_fork::<T>(r).map(Some).map_err(|_| panic!()))
                     as Box<dyn Future<Item = Option<T>, Error = ()> + Send>,
-                VOption::None => {
+                KOption::None => {
                     Box::new(ok(None)) as Box<dyn Future<Item = Option<T>, Error = ()> + Send>
                 }
             },
