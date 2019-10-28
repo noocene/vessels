@@ -1,3 +1,4 @@
+mod collections;
 pub mod future;
 pub use future::Future;
 mod option;
@@ -7,7 +8,6 @@ mod result;
 pub mod serde;
 mod unit;
 pub mod using;
-mod vec;
 pub use self::serde::Serde;
 
 use futures::Future as IFuture;
