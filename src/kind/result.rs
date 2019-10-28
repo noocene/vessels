@@ -43,19 +43,22 @@ where
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         channel: C,
     ) -> Self::ConstructFuture {
-        Box::new(channel.into_future().then(|v| {
-            match v {
-                Ok(v) => match v.0.unwrap() {
-                    KResult::Ok(r) => Box::new(v.1.get_fork::<T>(r).map(Ok).map_err(|_| panic!()))
-                        as Box<dyn Future<Item = Result<T, E>, Error = ()> + Send>,
+        Box::new(
+            channel
+                .into_future()
+                .map_err(|_| panic!("lol"))
+                .and_then(|(result, channel)| match result.unwrap() {
+                    KResult::Ok(r) => {
+                        Box::new(channel.get_fork::<T>(r).map(Ok).map_err(|_| panic!()))
+                            as Box<dyn Future<Item = Result<T, E>, Error = ()> + Send>
+                    }
                     KResult::Err(r) => Box::new(
-                        v.1.get_fork::<E>(r)
+                        channel
+                            .get_fork::<E>(r)
                             .then(|item| Ok(if let Ok(e) = item { Err(e) } else { panic!() })),
                     )
                         as Box<dyn Future<Item = Result<T, E>, Error = ()> + Send>,
-                },
-                _ => panic!("lol"),
-            }
-        }))
+                }),
+        )
     }
 }

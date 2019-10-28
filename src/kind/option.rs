@@ -39,15 +39,19 @@ where
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         channel: C,
     ) -> Self::ConstructFuture {
-        Box::new(channel.into_future().then(|v| match v {
-            Ok(v) => match v.0.unwrap() {
-                KOption::Some(r) => Box::new(v.1.get_fork::<T>(r).map(Some).map_err(|_| panic!()))
-                    as Box<dyn Future<Item = Option<T>, Error = ()> + Send>,
-                KOption::None => {
-                    Box::new(ok(None)) as Box<dyn Future<Item = Option<T>, Error = ()> + Send>
-                }
-            },
-            _ => panic!("lol"),
-        }))
+        Box::new(
+            channel
+                .into_future()
+                .map_err(|_| panic!("lol"))
+                .and_then(|(item, channel)| match item.unwrap() {
+                    KOption::Some(r) => {
+                        Box::new(channel.get_fork::<T>(r).map(Some).map_err(|_| panic!()))
+                            as Box<dyn Future<Item = Option<T>, Error = ()> + Send>
+                    }
+                    KOption::None => {
+                        Box::new(ok(None)) as Box<dyn Future<Item = Option<T>, Error = ()> + Send>
+                    }
+                }),
+        )
     }
 }
