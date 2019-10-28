@@ -1,3 +1,4 @@
+mod arr;
 mod collections;
 pub mod future;
 pub use future::Future;
