@@ -51,12 +51,15 @@ impl Future for WaitFor {
 impl Registry {
     pub(crate) fn add<T: Serialize + DeserializeOwned + Send + 'static>(&self) {
         if !self.items.read().unwrap().contains_key(&TypeId::of::<T>()) {
-            self.items.write().unwrap().insert(TypeId::of::<T>(), |de| {
-                <T as ::serde::Deserialize>::deserialize(de)
-                    .map(|v| Box::new(v) as Box<dyn SerdeAny>)
-            });
-            if let Some(task) = self.tasks.lock().unwrap().get(&TypeId::of::<T>()) {
-                task.notify()
+            let mut items = self.items.write().unwrap();
+            if !items.contains_key(&TypeId::of::<T>()) {
+                items.insert(TypeId::of::<T>(), |de| {
+                    <T as ::serde::Deserialize>::deserialize(de)
+                        .map(|v| Box::new(v) as Box<dyn SerdeAny>)
+                });
+                if let Some(task) = self.tasks.lock().unwrap().get(&TypeId::of::<T>()) {
+                    task.notify()
+                }
             }
         }
     }
