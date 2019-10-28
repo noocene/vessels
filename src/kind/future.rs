@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 
 use futures::{Future as IFuture, Poll};
 
-use failure::Error;
-
 #[doc(hidden)]
 #[derive(Serialize, Deserialize, Debug)]
 pub enum KResult {
