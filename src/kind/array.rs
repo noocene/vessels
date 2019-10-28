@@ -7,7 +7,7 @@ use futures::{future::join_all, Future};
 
 use std::{mem::MaybeUninit, ptr};
 
-macro_rules! arr_impls {
+macro_rules! array_impl {
     ($($len:expr => ($($n:tt $nn:ident)+))+) => {$(
         impl<T> Kind for [T; $len]
         where
@@ -65,7 +65,7 @@ macro_rules! arr_impls {
     }
 }
 
-arr_impls! {
+array_impl! {
     1 => (0 a)
     2 => (0 a 1 b)
     3 => (0 a 1 b 2 c)
