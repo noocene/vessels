@@ -151,8 +151,8 @@ where
             shim.complete(StreamSink(
                 stream
                     .map_err(|_| panic!())
-                    .map(move |item| Self::deserialize(item, context.clone()).into_stream())
-                    .flatten(),
+                    .map(move |item| Self::deserialize(item, context.clone()))
+                    .buffer_unordered(std::usize::MAX),
                 sink.sink_map_err(|_: <C as Sink>::SinkError| {
                     panic!();
                 })
