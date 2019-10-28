@@ -1,10 +1,10 @@
+mod collections;
 pub mod future;
 pub use future::Future;
 mod option;
 mod result;
 pub mod serde;
 pub mod using;
-mod vec;
 pub use self::serde::Serde;
 
 use futures::{
