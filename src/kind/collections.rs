@@ -2,12 +2,16 @@ use crate::{
     channel::{Channel, ForkHandle},
     Kind,
 };
+use std::collections::{BTreeSet, BinaryHeap, HashSet, LinkedList, VecDeque};
+use std::hash::Hash;
 
 use futures::{future::join_all, Future};
 
-impl<T> Kind for Vec<T>
+macro_rules! iterator_impl {
+    ($($ty:ident $(where $first_bound:tt $(+ $more_bounds:tt)*)?),+) => {$(
+        impl<T> Kind for $ty<T>
 where
-    T: Kind,
+    T: Kind $(+ $first_bound $(+ $more_bounds)*)?
 {
     type ConstructItem = Vec<ForkHandle>;
     type ConstructFuture = Box<dyn Future<Item = Self, Error = ()> + Send>;
@@ -46,7 +50,12 @@ where
                             .map(|entry| channel.get_fork::<T>(entry))
                             .collect::<Vec<Box<dyn Future<Item = T, Error = ()> + Send>>>(),
                     )
+                    .map(|collection_as_vec| collection_as_vec.into_iter().collect())
                 }),
         )
     }
 }
+    )+};
+}
+
+iterator_impl!(BinaryHeap where Ord, BTreeSet where Ord, HashSet where Hash + Eq, LinkedList, Vec, VecDeque);
