@@ -3,16 +3,16 @@ use crate::SerdeAny;
 use super::{Context, Id};
 
 use serde::{
-    de::{self, Deserializer, MapAccess, SeqAccess, Visitor},
+    de::{self, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor},
     ser::{SerializeMap, SerializeSeq, Serializer},
     Serialize,
 };
 
-use crate::channel::DeserializeSeed;
+use crate::channel::ForkHandle;
 
 use std::fmt;
 
-pub struct Item(pub(crate) u32, pub(crate) Box<dyn SerdeAny>, Context);
+pub struct Item(pub(crate) ForkHandle, pub(crate) Box<dyn SerdeAny>, Context);
 
 impl Serialize for Item {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -34,7 +34,7 @@ impl Serialize for Item {
 }
 
 impl Item {
-    pub(crate) fn new(channel: u32, content: Box<dyn SerdeAny>, context: Context) -> Self {
+    pub(crate) fn new(channel: ForkHandle, content: Box<dyn SerdeAny>, context: Context) -> Self {
         Item(channel, content, context)
     }
 }

@@ -32,7 +32,9 @@ pub struct IdChannel {
     out_channel: Arc<Mutex<Box<dyn Stream<Item = Item, Error = ()> + Send>>>,
     context: Context,
     in_channels: Arc<
-        Mutex<HashMap<u32, Box<dyn Sink<SinkItem = Box<dyn SerdeAny>, SinkError = ()> + Send>>>,
+        Mutex<
+            HashMap<ForkHandle, Box<dyn Sink<SinkItem = Box<dyn SerdeAny>, SinkError = ()> + Send>>,
+        >,
     >,
 }
 
@@ -174,7 +176,7 @@ impl IdChannel {
                             },
                         )),
                     );
-                    Ok(ForkHandle(id))
+                    Ok(id)
                 }),
         )
     }
@@ -187,7 +189,7 @@ impl IdChannel {
         Box::new(lazy(move || {
             let mut in_channels = channel.in_channels.lock().unwrap();
             let mut out_channel = channel.out_channel.lock().unwrap();
-            channel.context.add::<K>(fork_ref.0);
+            channel.context.add::<K>(fork_ref);
             REGISTRY.add::<K::ConstructItem>();
             let (sender, ireceiver): (UnboundedSender<K::DeconstructItem>, _) = unbounded();
             let (isender, receiver): (UnboundedSender<K::ConstructItem>, _) = unbounded();
@@ -200,11 +202,11 @@ impl IdChannel {
                         .unwrap()))
                 })
                 .sink_map_err(|_: ()| panic!());
-            in_channels.insert(fork_ref.0, Box::new(isender));
+            in_channels.insert(fork_ref, Box::new(isender));
             let ct = channel.context.clone();
             let ireceiver = ireceiver
                 .map(move |item: K::DeconstructItem| {
-                    Item::new(fork_ref.0, Box::new(item), ct.clone())
+                    Item::new(fork_ref, Box::new(item), ct.clone())
                 })
                 .map_err(|_| panic!());
             let mut empty_stream =
@@ -342,7 +344,7 @@ where
             let mut in_channels = HashMap::new();
             REGISTRY.add::<K::ConstructItem>();
             in_channels.insert(
-                0u32,
+                ForkHandle(0),
                 Box::new(
                     sender
                         .sink_map_err(|_| panic!())
@@ -359,7 +361,7 @@ where
             let ct = context.clone();
             let channel = IdChannel {
                 out_channel: Arc::new(Mutex::new(Box::new(
-                    receiver.map(move |v| Item::new(0, Box::new(v), ct.clone())),
+                    receiver.map(move |v| Item::new(ForkHandle(0), Box::new(v), ct.clone())),
                 ))),
                 context,
                 in_channels: Arc::new(Mutex::new(in_channels)),

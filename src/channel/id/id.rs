@@ -1,9 +1,9 @@
 use super::Context;
 
-use crate::{channel::DeserializeSeed, SerdeAny};
+use crate::{channel::ForkHandle, SerdeAny};
 
 use serde::{
-    de::{self, DeserializeOwned, Deserializer},
+    de::{self, DeserializeOwned, DeserializeSeed, Deserializer},
     Serialize,
 };
 
@@ -97,7 +97,7 @@ lazy_static! {
     };
 }
 
-pub(crate) struct Id<'a>(u32, &'a mut Context);
+pub(crate) struct Id<'a>(ForkHandle, &'a mut Context);
 
 impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
     type Value = Box<dyn SerdeAny>;
@@ -113,7 +113,7 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
 }
 
 impl<'a> Id<'a> {
-    pub(crate) fn new(channel: u32, context: &'a mut Context) -> Self {
+    pub(crate) fn new(channel: ForkHandle, context: &'a mut Context) -> Self {
         Id(channel, context)
     }
 }

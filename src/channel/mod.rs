@@ -10,7 +10,8 @@ use crate::Kind;
 
 use futures::{Future, Sink, Stream};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, Copy)]
+#[repr(transparent)]
 pub struct ForkHandle(pub(crate) u32);
 
 pub trait Fork: Send + 'static {
