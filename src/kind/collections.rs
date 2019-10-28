@@ -10,7 +10,7 @@ use futures::{future::join_all, Future};
 macro_rules! iterator_impl {
     ($($ty:ident < T $(: $tbound1:ident $(+ $tbound2:ident)*)* $(, $typaram:ident : $bound:ident)* >),+) => {$(
         impl<T $(, $typaram)*> Kind for $ty<T $(, $typaram)*>
-            where T: Kind + Send + 'static $(+ $tbound1 $(+ $tbound2)*)*, $($typaram: $bound,)*
+            where T: Kind $(+ $tbound1 $(+ $tbound2)*)*, $($typaram: $bound,)*
         {
             type ConstructItem = Vec<ForkHandle>;
             type ConstructFuture = Box<dyn Future<Item = Self, Error = ()> + Send>;
