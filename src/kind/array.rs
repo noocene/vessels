@@ -48,8 +48,9 @@ macro_rules! arr_impls {
                             join_all(
                                 item.unwrap().into_iter().map(move |item| channel.get_fork::<T>(item))
                             ).map(|items| -> [T; $len] {
-                                if items.len() > $len {
-                                    panic!("received data is longer than array size")
+                                let len = items.len();
+                                if len != $len {
+                                    panic!("expected data with {} elements, got {}", $len, len)
                                 }
                                 let mut arr: MaybeUninit<[T; $len]> = MaybeUninit::uninit();
                                 for (i, item) in items.into_iter().enumerate() {
