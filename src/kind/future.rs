@@ -49,16 +49,18 @@ where
         Box::new(self.then(|v| {
             let fork_factory = channel.split_factory();
             match v {
-                Ok(v) => Box::new(
-                    fork_factory
-                        .fork(v)
-                        .and_then(|h| channel.send(KResult::Ok(h)).then(|_| Ok(()))),
-                ),
-                Err(v) => Box::new(
-                    fork_factory
-                        .fork(v)
-                        .and_then(|h| channel.send(KResult::Err(h)).then(|_| Ok(()))),
-                ) as Box<dyn IFuture<Item = (), Error = ()> + Send>,
+                Ok(v) => Box::new(fork_factory.fork(v).and_then(|h| {
+                    channel
+                        .send(KResult::Ok(h))
+                        .and_then(|_| Ok(()))
+                        .map_err(|_| panic!())
+                })),
+                Err(v) => Box::new(fork_factory.fork(v).and_then(|h| {
+                    channel
+                        .send(KResult::Err(h))
+                        .and_then(|_| Ok(()))
+                        .map_err(|_| panic!())
+                })) as Box<dyn IFuture<Item = (), Error = ()> + Send>,
             }
         }))
     }

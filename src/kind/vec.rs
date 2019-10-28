@@ -24,7 +24,12 @@ where
                     .collect::<Vec<Box<dyn Future<Item = ForkHandle, Error = ()> + Send>>>(),
             )
             .map_err(|_| panic!("lol"))
-            .and_then(|handles| channel.send(handles).then(|_| Ok(()))),
+            .and_then(|handles| {
+                channel
+                    .send(handles)
+                    .and_then(|_| Ok(()))
+                    .map_err(|_| panic!())
+            }),
         )
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
