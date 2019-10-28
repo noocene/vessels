@@ -17,19 +17,20 @@ enum TestEnum {
 }
 
 fn main() {
+    let meme: [TestEnum; 3] = [
+        TestEnum::No("ok this is epic".to_owned()),
+        TestEnum::No("ok this is unepic".to_owned()),
+        TestEnum::Yes(69),
+    ];
     tokio::run(
-        vec![
-            TestEnum::No("ok this is epic".to_owned()),
-            TestEnum::No("ok this is epic".to_owned()),
-        ]
-        .on_to::<IdChannel>()
-        .map(Json::encode)
-        .map(|c| c.inspect(|item| println!("{}", item)))
-        .map(Json::decode::<IdChannel>)
-        .flatten()
-        .and_then(|item: Vec<TestEnum>| {
-            println!("{:?}", item);
-            Ok(())
-        }),
+        meme.on_to::<IdChannel>()
+            .map(Json::encode)
+            .map(|c| c.inspect(|item| println!("{}", item)))
+            .map(Json::decode::<IdChannel>)
+            .flatten()
+            .and_then(|item: [TestEnum; 3]| {
+                println!("{:?}", item);
+                Ok(())
+            }),
     )
 }
