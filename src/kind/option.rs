@@ -27,13 +27,18 @@ where
         channel: C,
     ) -> Self::DeconstructFuture {
         match self {
-            Some(v) => Box::new(
+            Some(v) => Box::new(channel.fork(v).and_then(|h| {
                 channel
-                    .fork(v)
-                    .and_then(|h| channel.send(KOption::Some(h)).then(|_| Ok(()))),
-            ),
-            None => Box::new(channel.send(KOption::None).then(|_| Ok(())))
-                as Box<dyn Future<Item = (), Error = ()> + Send>,
+                    .send(KOption::Some(h))
+                    .and_then(|_| Ok(()))
+                    .map_err(|_| panic!())
+            })),
+            None => Box::new(
+                channel
+                    .send(KOption::None)
+                    .and_then(|_| Ok(()))
+                    .map_err(|_| panic!()),
+            ) as Box<dyn Future<Item = (), Error = ()> + Send>,
         }
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

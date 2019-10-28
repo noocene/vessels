@@ -89,7 +89,7 @@ macro_rules! primitive_impl {
                 self,
                 channel: C,
             ) -> Self::DeconstructFuture {
-                Box::new(channel.send(self).then(|_| Ok(())))
+                Box::new(channel.send(self).and_then(|_| Ok(())).map_err(|_| panic!()))
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
                 channel: C,
