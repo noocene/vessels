@@ -7,7 +7,7 @@ use kinddev::{
 
 use serde::{Deserialize, Serialize};
 
-use futures::{Future, Stream};
+use futures::{executor::ThreadPool, future::ready, FutureExt, StreamExt, TryFutureExt};
 
 #[derive(Serialize, Deserialize, Debug, Kind)]
 #[kind(using::Serde)]
@@ -22,15 +22,16 @@ fn main() {
         TestEnum::No("ok this is unepic".to_owned()),
         TestEnum::Yes(69),
     ];
-    tokio::run(
+    ThreadPool::new().unwrap().run(
         meme.on_to::<IdChannel>()
             .map(Json::encode)
             .map(|c| c.inspect(|item| println!("{}", item)))
             .map(Json::decode::<IdChannel>)
             .flatten()
-            .and_then(|item: [TestEnum; 3]| {
+            .unwrap_or_else(|e| panic!(e))
+            .then(|item: [TestEnum; 3]| {
                 println!("{:?}", item);
-                Ok(())
+                ready(())
             }),
     )
 }

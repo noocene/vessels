@@ -1,11 +1,18 @@
 use crate::{
     channel::{Channel, ForkHandle},
-    Kind,
+    ConstructResult, Kind,
 };
-use std::collections::{BTreeSet, BinaryHeap, HashSet, LinkedList, VecDeque};
-use std::hash::Hash;
 
-use futures::{future::join_all, Future};
+use std::{
+    collections::{BTreeSet, BinaryHeap, HashSet, LinkedList, VecDeque},
+    hash::Hash,
+};
+
+use futures::{
+    future::{join_all, ok, BoxFuture},
+    stream::once,
+    FutureExt, SinkExt, StreamExt, TryFutureExt,
+};
 
 macro_rules! iterator_impl {
     ($($ty:ident < T $(: $tbound1:ident $(+ $tbound2:ident)*)* $(, $typaram:ident : $bound:ident)* >),+) => {$(
@@ -13,43 +20,43 @@ macro_rules! iterator_impl {
             where T: Kind $(+ $tbound1 $(+ $tbound2)*)*, $($typaram: $bound,)*
         {
             type ConstructItem = Vec<ForkHandle>;
-            type ConstructFuture = Box<dyn Future<Item = Self, Error = ()> + Send>;
+            type Error = ();
+            type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructFuture = Box<dyn Future<Item = (), Error = ()> + Send>;
+            type DeconstructFuture = BoxFuture<'static, ()>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
                 channel: C,
             ) -> Self::DeconstructFuture {
-                Box::new(
+                Box::pin(
                     join_all(
                         self.into_iter()
                             .map(|entry| channel.fork::<T>(entry))
-                            .collect::<Vec<Box<dyn Future<Item = ForkHandle, Error = ()> + Send>>>(),
+                            .collect::<Vec<_>>(),
                     )
-                    .map_err(|_| panic!("lol"))
-                    .and_then(|handles| {
-                        channel
-                            .send(handles)
-                            .and_then(|_| Ok(()))
-                            .map_err(|_| panic!())
+                    .then(move |handles| {
+                        let channel = channel.sink_map_err(|_| panic!());
+                        Box::pin(
+                            once(ok(handles))
+                                .forward(channel)
+                                .unwrap_or_else(|_| panic!()),
+                        )
                     }),
                 )
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
                 channel: C,
             ) -> Self::ConstructFuture {
-                Box::new(
+                Box::pin(
                     channel
-                        .into_future()
-                        .map_err(|_| panic!("lol"))
-                        .and_then(|(item, channel)| {
+                        .into_future().then(move |(item, channel)| {
                             join_all(
                                 item.unwrap()
                                     .into_iter()
-                                    .map(|entry| channel.get_fork::<T>(entry))
-                                    .collect::<Vec<Box<dyn Future<Item = T, Error = ()> + Send>>>(),
+                                    .map(|entry| channel.get_fork::<T>(entry).unwrap_or_else(|_| panic!()))
+                                    .collect::<Vec<_>>(),
                             )
-                            .map(|collection_as_vec| collection_as_vec.into_iter().collect())
+                            .map(|vec| vec.into_iter().collect()).unit_error()
                         }),
                 )
             }

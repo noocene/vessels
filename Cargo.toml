@@ -14,10 +14,9 @@ bincode = ["serde_bincode"]
 default = ["cbor", "json", "bincode"]
 
 [dependencies]
-futures = "0.1.29"
+futures-preview = "=0.3.0-alpha.19"
 serde = { version = "1.0.101", features = ["derive"] }
 failure = "0.1.5"
-tokio = "0.1.22"
 erased-serde = "0.3.9"
 serde_json = { version = "1.0.41", optional = true }
 serde_cbor = { version = "0.10.2", optional = true }
