@@ -4,7 +4,7 @@ use crate::{
 };
 
 use futures::{
-    future::{join_all, ok, ready, BoxFuture, Ready},
+    future::{join_all, ok, ready, try_join_all, BoxFuture, Ready},
     stream::once,
     FutureExt, SinkExt, StreamExt, TryFutureExt,
 };
@@ -37,7 +37,7 @@ macro_rules! array_impl {
             where T: Kind
         {
             type ConstructItem = Vec<ForkHandle>;
-            type Error = ();
+            type Error = T::Error;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
             type DeconstructFuture = BoxFuture<'static, ()>;
@@ -69,9 +69,9 @@ macro_rules! array_impl {
                     channel
                         .into_future()
                         .then(move |(item, channel)| {
-                            join_all(
-                                item.unwrap().into_iter().map(move |item| channel.get_fork::<T>(item).unwrap_or_else(|_| panic!()))
-                            ).map(|items| {
+                            try_join_all(
+                                item.unwrap().into_iter().map(move |item| channel.get_fork::<T>(item))
+                            ).map_ok(|items| {
                                 let len = items.len();
                                 if len != $len {
                                     panic!("expected data with {} elements, got {}", $len, len)
@@ -83,7 +83,6 @@ macro_rules! array_impl {
                                 unsafe { arr.assume_init() }
                             })
                         })
-                        .unit_error()
                 )
             }
         })+
