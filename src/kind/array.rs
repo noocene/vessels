@@ -70,7 +70,9 @@ macro_rules! array_impl {
                         .into_future()
                         .then(move |(item, channel)| {
                             try_join_all(
-                                item.unwrap().into_iter().map(move |item| channel.get_fork::<T>(item))
+                                item.unwrap()
+                                    .into_iter()
+                                    .map(move |item| channel.get_fork::<T>(item)),
                             ).map_ok(|items| {
                                 let len = items.len();
                                 if len != $len {
