@@ -6,7 +6,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 use futures::{
-    future::{ok, BoxFuture},
+    future::{ok, BoxFuture, ready},
     stream::once,
     task::Context,
     Future as IFuture, FutureExt, Poll, SinkExt, StreamExt, TryFutureExt,
@@ -42,7 +42,7 @@ where
     T: Kind,
 {
     type ConstructItem = ForkHandle;
-    type Error = ();
+    type Error = T::Error;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructFuture = BoxFuture<'static, ()>;
@@ -67,14 +67,11 @@ where
         Box::pin(
             channel
                 .into_future()
-                .map(move |(item, channel)| {
-                    Future::new(
-                        channel
+                .then(move |(item, channel)| {
+                       channel
                             .get_fork::<T>(item.unwrap())
-                            .unwrap_or_else(|_| panic!()),
-                    )
+                            .map_ok(|t| Future::new(ready(t)))
                 })
-                .unit_error(),
         )
     }
 }
