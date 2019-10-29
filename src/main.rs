@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use futures::{executor::ThreadPool, future::ready, FutureExt, StreamExt, TryFutureExt};
 
-#[derive(Serialize, Deserialize, Debug, Kind)]
+#[derive(Serialize, Deserialize, Debug, Kind, Clone)]
 #[kind(using::Serde)]
 enum TestEnum {
     Yes(u32),
@@ -17,12 +17,7 @@ enum TestEnum {
 }
 
 fn main() {
-    let meme: (TestEnum, i64, f64, String) = (
-        TestEnum::No("ok this is epic".to_owned()),
-        5021,
-        420.69,
-        "gamer".to_owned(),
-    );
+    let meme: Vec<TestEnum> = vec![TestEnum::No("ok this is epic".to_owned()); 1000];
     ThreadPool::new().unwrap().run(
         meme.on_to::<IdChannel>()
             .map(Json::encode)
@@ -30,7 +25,7 @@ fn main() {
             .map(Json::decode::<IdChannel>)
             .flatten()
             .unwrap_or_else(|e| panic!(e))
-            .then(|item: (TestEnum, i64, f64, String)| {
+            .then(|item: Vec<TestEnum>| {
                 println!("{:?}", item);
                 ready(())
             }),
