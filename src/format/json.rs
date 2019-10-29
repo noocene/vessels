@@ -4,8 +4,7 @@ use serde::{de::DeserializeSeed, Serialize};
 
 use futures::{
     channel::oneshot::{channel, Receiver},
-    executor::LocalPool,
-    future::{lazy, BoxFuture},
+    future::BoxFuture,
     TryFutureExt,
 };
 
