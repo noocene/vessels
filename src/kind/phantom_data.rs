@@ -2,19 +2,20 @@ use std::marker::PhantomData;
 
 use crate::{channel::Channel, Kind};
 
-use futures::future::{ok, FutureResult};
+use futures::future::{ok, ready, Ready};
 
 impl<T: Send + 'static> Kind for PhantomData<T> {
     type ConstructItem = ();
-    type ConstructFuture = FutureResult<PhantomData<T>, ()>;
+    type Error = ();
+    type ConstructFuture = Ready<Result<PhantomData<T>, ()>>;
     type DeconstructItem = ();
-    type DeconstructFuture = FutureResult<(), ()>;
+    type DeconstructFuture = Ready<()>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         _: C,
     ) -> Self::DeconstructFuture {
-        ok(())
+        ready(())
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         _: C,

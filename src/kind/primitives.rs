@@ -10,31 +10,41 @@ use std::{
 
 use crate::{channel::Channel, Kind};
 
-use futures::Future;
+use futures::{
+    future::{ok, BoxFuture},
+    stream::once,
+    FutureExt, SinkExt, StreamExt, TryFutureExt,
+};
 
 macro_rules! primitive_impl {
     ($($ty:ident)+) => {$(
         impl Kind for $ty {
             type ConstructItem = $ty;
-            type ConstructFuture = Box<dyn Future<Item = $ty, Error = ()> + Send + 'static>;
+            type Error = ();
+            type ConstructFuture = BoxFuture<'static, Result<$ty, Self::Error>>;
             type DeconstructItem = ();
-            type DeconstructFuture = Box<dyn Future<Item = (), Error = ()> + Send + 'static>;
+            type DeconstructFuture = BoxFuture<'static, ()>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
                 channel: C,
             ) -> Self::DeconstructFuture {
-                Box::new(channel.send(self).and_then(|_| Ok(())).map_err(|_| panic!()))
+                let channel = channel.sink_map_err(|_| panic!());
+                Box::pin(
+                    once(ok(self))
+                        .forward(channel)
+                        .unwrap_or_else(|_| panic!()),
+                )
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
                 channel: C,
             ) -> Self::ConstructFuture
             {
-                Box::new(
+                Box::pin(
                     channel
                         .into_future()
-                        .map_err(|e| panic!(e))
-                        .map(|v| v.0.unwrap()),
+                        .map(|v| v.0.unwrap())
+                        .unit_error(),
                 )
             }
         }

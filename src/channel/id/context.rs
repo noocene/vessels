@@ -1,12 +1,16 @@
 use std::{
     any::TypeId,
     collections::HashMap,
+    pin::Pin,
     sync::{Arc, Mutex, RwLock, Weak},
 };
 
 use weak_table::WeakValueHashMap;
 
-use futures::{task::AtomicTask, Async, Future, Poll};
+use futures::{
+    task::{AtomicWaker, Context as FContext},
+    Future, Poll,
+};
 
 use crate::{channel::ForkHandle, Kind};
 
@@ -19,27 +23,26 @@ struct ContextState {
 #[derive(Clone)]
 pub struct Context {
     state: Arc<RwLock<ContextState>>,
-    tasks: Arc<Mutex<WeakValueHashMap<ForkHandle, Weak<AtomicTask>>>>,
+    tasks: Arc<Mutex<WeakValueHashMap<ForkHandle, Weak<AtomicWaker>>>>,
 }
 
 pub(crate) struct WaitFor {
-    task: Arc<AtomicTask>,
+    task: Arc<AtomicWaker>,
     context: Context,
     id: ForkHandle,
 }
 
 impl Future for WaitFor {
-    type Item = (TypeId, TypeId);
-    type Error = ();
+    type Output = (TypeId, TypeId);
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        Ok(self.context.get(self.id).map_or_else(
+    fn poll(self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Self::Output> {
+        self.context.get(self.id).map_or_else(
             || {
-                self.task.register();
-                Async::NotReady
+                self.task.register(cx.waker());
+                Poll::Pending
             },
-            Async::Ready,
-        ))
+            Poll::Ready,
+        )
     }
 }
 
@@ -47,7 +50,7 @@ impl Context {
     pub(crate) fn wait_for(&self, id: ForkHandle) -> WaitFor {
         let mut tasks = self.tasks.lock().unwrap();
         let task = tasks.get(&id).unwrap_or_else(|| {
-            let task = Arc::new(AtomicTask::new());
+            let task = Arc::new(AtomicWaker::new());
             tasks.insert(id, task.clone());
             task
         });
@@ -103,7 +106,7 @@ impl Context {
             id
         };
         if let Some(task) = self.tasks.lock().unwrap().get(&id) {
-            task.notify()
+            task.wake()
         }
         id
     }
@@ -114,7 +117,7 @@ impl Context {
         let d = TypeId::of::<K::DeconstructItem>();
         state.channel_types.insert(handle, (c, d));
         if let Some(task) = self.tasks.lock().unwrap().get(&handle) {
-            task.notify()
+            task.wake()
         }
     }
 
