@@ -17,11 +17,12 @@ enum TestEnum {
 }
 
 fn main() {
-    let meme: [TestEnum; 3] = [
+    let meme: (TestEnum, i64, f64, String) = (
         TestEnum::No("ok this is epic".to_owned()),
-        TestEnum::No("ok this is unepic".to_owned()),
-        TestEnum::Yes(69),
-    ];
+        5021,
+        420.69,
+        "gamer".to_owned(),
+    );
     ThreadPool::new().unwrap().run(
         meme.on_to::<IdChannel>()
             .map(Json::encode)
@@ -29,7 +30,7 @@ fn main() {
             .map(Json::decode::<IdChannel>)
             .flatten()
             .unwrap_or_else(|e| panic!(e))
-            .then(|item: [TestEnum; 3]| {
+            .then(|item: (TestEnum, i64, f64, String)| {
                 println!("{:?}", item);
                 ready(())
             }),
