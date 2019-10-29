@@ -24,6 +24,7 @@ fn kind_derive(s: Structure) -> TokenStream {
             impl Kind for #ident {
                 type ConstructItem = <<#ident as AsKind<#ty>>::Kind as Kind>::ConstructItem;
                 type ConstructFuture = <#ident as AsKind<#ty>>::ConstructFuture;
+                type Error = <<#ident as AsKind<#ty>>::Kind as Kind>::Error;
                 type DeconstructItem = <<#ident as AsKind<#ty>>::Kind as Kind>::DeconstructItem;
                 type DeconstructFuture = <<#ident as AsKind<#ty>>::Kind as Kind>::DeconstructFuture;
 

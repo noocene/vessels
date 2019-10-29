@@ -1,11 +1,18 @@
 use crate::{
-    channel::{Channel, Fork, ForkHandle},
-    Kind,
+    channel::{Channel, ForkHandle},
+    ConstructResult, Kind,
 };
 
 use serde::{Deserialize, Serialize};
 
-use futures::{Future as IFuture, Poll};
+use futures::{
+    future::{ok, BoxFuture},
+    stream::once,
+    task::Context,
+    Future as IFuture, FutureExt, Poll, SinkExt, StreamExt, TryFutureExt,
+};
+
+use std::pin::Pin;
 
 #[doc(hidden)]
 #[derive(Serialize, Deserialize, Debug)]
@@ -14,72 +21,60 @@ pub enum KResult {
     Err(ForkHandle),
 }
 
-pub struct Future<T: Kind, E: Kind>(Box<dyn IFuture<Item = T, Error = E> + Send>);
+pub struct Future<T: Kind>(BoxFuture<'static, T>);
 
-impl<T: Kind, E: Kind> IFuture for Future<T, E> {
-    type Item = T;
-    type Error = E;
+impl<T: Kind> IFuture for Future<T> {
+    type Output = T;
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        self.0.poll()
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        self.0.as_mut().poll(cx)
     }
 }
 
-impl<T: Kind, E: Kind> Future<T, E> {
-    pub fn new<F: IFuture<Item = T, Error = E> + Send + 'static>(future: F) -> Self {
-        Future(Box::new(future))
+impl<T: Kind> Future<T> {
+    pub fn new<F: IFuture<Output = T> + Send + 'static>(future: F) -> Self {
+        Future(Box::pin(future))
     }
 }
 
-impl<T, E> Kind for Future<T, E>
+impl<T> Kind for Future<T>
 where
     T: Kind,
-    E: Kind,
 {
-    type ConstructItem = KResult;
-    type ConstructFuture = Box<dyn IFuture<Item = Self, Error = ()> + Send>;
+    type ConstructItem = ForkHandle;
+    type Error = ();
+    type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructFuture = Box<dyn IFuture<Item = (), Error = ()> + Send>;
+    type DeconstructFuture = BoxFuture<'static, ()>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         channel: C,
     ) -> Self::DeconstructFuture {
-        Box::new(self.then(|v| {
-            let fork_factory = channel.split_factory();
-            match v {
-                Ok(v) => Box::new(fork_factory.fork(v).and_then(|h| {
-                    channel
-                        .send(KResult::Ok(h))
-                        .and_then(|_| Ok(()))
-                        .map_err(|_| panic!())
-                })),
-                Err(v) => Box::new(fork_factory.fork(v).and_then(|h| {
-                    channel
-                        .send(KResult::Err(h))
-                        .and_then(|_| Ok(()))
-                        .map_err(|_| panic!())
-                })) as Box<dyn IFuture<Item = (), Error = ()> + Send>,
-            }
+        Box::pin(self.then(move |v| {
+            channel.fork(v).then(|handle| {
+                let channel = channel.sink_map_err(|_| panic!());
+                Box::pin(
+                    once(ok(handle))
+                        .forward(channel)
+                        .unwrap_or_else(|_| panic!()),
+                )
+            })
         }))
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         channel: C,
     ) -> Self::ConstructFuture {
-        Box::new(channel.into_future().then(|item| {
-            if let Ok((result, channel)) = item {
-                Ok(match result.unwrap() {
-                    KResult::Ok(r) => Future(Box::new(
-                        channel.get_fork::<T>(r).map_err(|_| -> E { panic!() }),
+        Box::pin(
+            channel
+                .into_future()
+                .map(move |(item, channel)| {
+                    Future::new(
+                        channel
+                            .get_fork::<T>(item.unwrap())
+                            .unwrap_or_else(|_| panic!()),
                     )
-                        as Box<dyn IFuture<Item = T, Error = E> + Send>),
-                    KResult::Err(r) => {
-                        Future(Box::new(channel.get_fork::<E>(r).then(|v| Err(v.unwrap())))
-                            as Box<dyn IFuture<Item = T, Error = E> + Send>)
-                    }
                 })
-            } else {
-                panic!("lol")
-            }
-        }))
+                .unit_error(),
+        )
     }
 }

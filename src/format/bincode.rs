@@ -3,9 +3,10 @@ use super::Format;
 use serde::{de::DeserializeSeed, Serialize};
 
 use futures::{
-    lazy,
-    sync::oneshot::{channel, Receiver},
-    Future,
+    channel::oneshot::{channel, Receiver},
+    executor::ThreadPool,
+    future::{lazy, BoxFuture},
+    TryFutureExt,
 };
 
 pub struct Bincode;
@@ -21,19 +22,17 @@ impl Format for Bincode {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> Box<dyn Future<Item = T::Value, Error = Self::Error> + Send>
+    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
     where
         T::Value: Send + 'static,
         T: Send + 'static,
     {
-        Box::new(lazy(move || {
-            let (sender, receiver): (_, Receiver<Result<T::Value, Self::Error>>) = channel();
-            tokio::spawn(lazy(move || {
-                sender
-                    .send(serde_bincode::config().deserialize_from_seed(context, item.as_slice()))
-                    .map_err(|e| panic!(e))
-            }));
-            receiver.map_err(|e| panic!(e)).and_then(|item| item)
-        }))
+        let (sender, receiver): (_, Receiver<Result<T::Value, Self::Error>>) = channel();
+        ThreadPool::new().unwrap().spawn_ok(lazy(move |_| {
+            sender
+                .send(serde_bincode::config().deserialize_from_seed(context, item.as_slice()))
+                .unwrap_or_else(|e| panic!(e))
+        }));
+        Box::pin(receiver.unwrap_or_else(|e| panic!(e)))
     }
 }

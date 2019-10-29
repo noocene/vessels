@@ -1,64 +1,69 @@
 use crate::{
     channel::{Channel, ForkHandle},
-    Kind,
+    ConstructResult, Kind,
 };
 
-use futures::{future::join_all, Future};
+use futures::{
+    future::{join_all, ok, BoxFuture},
+    stream::once,
+    FutureExt, SinkExt, StreamExt, TryFutureExt,
+};
 
 use std::{mem::MaybeUninit, ptr};
 
 macro_rules! array_impl {
     ($($len:expr => ($($n:tt $nn:ident)+))+) => {$(
         impl<T> Kind for [T; $len]
-        where
-        T: Kind
+            where T: Kind
         {
             type ConstructItem = Vec<ForkHandle>;
-            type ConstructFuture = Box<dyn Future<Item = Self, Error = ()> + Send>;
+            type Error = ();
+            type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructFuture = Box<dyn Future<Item = (), Error = ()> + Send>;
+            type DeconstructFuture = BoxFuture<'static, ()>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
                 channel: C,
             ) -> Self::DeconstructFuture {
                 let [$($nn),+] = self;
-                Box::new(
+                Box::pin(
                     join_all(
                         vec![
                             $(channel.fork::<T>($nn)),+
                         ]
                     )
-                    .map_err(|_| panic!("lol"))
-                    .and_then(|handles| {
-                        channel
-                            .send(handles)
-                            .and_then(|_| Ok(()))
-                            .map_err(|_| panic!())
+                    .then(move |handles| {
+                        let channel = channel.sink_map_err(|_| panic!());
+                        Box::pin(
+                            once(ok(handles))
+                                .forward(channel)
+                                .unwrap_or_else(|_| panic!()),
+                        )
                     }),
                 )
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
                 channel: C,
             ) -> Self::ConstructFuture {
-                Box::new(
+                Box::pin(
                     channel
                         .into_future()
-                        .map_err(|_| panic!("lol"))
-                        .and_then(|(item, channel)| {
+                        .then(move |(item, channel)| {
                             join_all(
-                                item.unwrap().into_iter().map(move |item| channel.get_fork::<T>(item))
-                            ).map(|items| -> [T; $len] {
+                                item.unwrap().into_iter().map(move |item| channel.get_fork::<T>(item).unwrap_or_else(|_| panic!()))
+                            ).map(|items| {
                                 let len = items.len();
                                 if len != $len {
                                     panic!("expected data with {} elements, got {}", $len, len)
                                 }
-                                let mut arr: MaybeUninit<[T; $len]> = MaybeUninit::uninit();
+                                let mut arr = MaybeUninit::uninit();
                                 for (i, item) in items.into_iter().enumerate() {
-                                    unsafe { ptr::write((arr.as_mut_ptr() as *mut T).add(i) , item) };
+                                    unsafe { ptr::write((arr.as_mut_ptr() as *mut T).add(i), item) };
                                 }
                                 unsafe { arr.assume_init() }
                             })
                         })
+                        .unit_error()
                 )
             }
         })+

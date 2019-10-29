@@ -10,10 +10,16 @@ use serde::{
 use std::{
     any::TypeId,
     collections::HashMap,
-    sync::{Arc, Mutex, RwLock, Weak},
+    pin::Pin,
+    sync::{mpsc::sync_channel, Arc, Mutex, RwLock, Weak},
 };
 
-use futures::{future::ok, task::AtomicTask, Async, Future, Poll};
+use futures::{
+    executor::LocalPool,
+    future::{ready, BoxFuture},
+    task::{AtomicWaker, Context as FContext},
+    Future, Poll,
+};
 
 use weak_table::WeakValueHashMap;
 
@@ -24,27 +30,26 @@ type DeserializeFn =
 
 pub(crate) struct Registry {
     items: RwLock<HashMap<TypeId, DeserializeFn>>,
-    tasks: Mutex<WeakValueHashMap<TypeId, Weak<AtomicTask>>>,
+    tasks: Mutex<WeakValueHashMap<TypeId, Weak<AtomicWaker>>>,
 }
 
 pub(crate) struct WaitFor {
-    task: Arc<AtomicTask>,
+    task: Arc<AtomicWaker>,
     registry: &'static Registry,
     id: TypeId,
 }
 
 impl Future for WaitFor {
-    type Item = DeserializeFn;
-    type Error = ();
+    type Output = DeserializeFn;
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        Ok(self.registry.get(self.id).map_or_else(
+    fn poll(self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Self::Output> {
+        self.registry.get(self.id).map_or_else(
             || {
-                self.task.register();
-                Async::NotReady
+                self.task.register(cx.waker());
+                Poll::Pending
             },
-            Async::Ready,
-        ))
+            Poll::Ready,
+        )
     }
 }
 
@@ -58,7 +63,7 @@ impl Registry {
                         .map(|v| Box::new(v) as Box<dyn SerdeAny>)
                 });
                 if let Some(task) = self.tasks.lock().unwrap().get(&TypeId::of::<T>()) {
-                    task.notify()
+                    task.wake()
                 }
             }
         }
@@ -68,23 +73,21 @@ impl Registry {
         self.items.read().unwrap().get(&ty).copied()
     }
 
-    fn wait_for(&self, ty: TypeId) -> Box<dyn Future<Item = DeserializeFn, Error = ()> + Send> {
+    fn wait_for(&self, ty: TypeId) -> BoxFuture<'static, DeserializeFn> {
         self.items
             .read()
             .unwrap()
             .get(&ty)
             .copied()
-            .map(|item| {
-                Box::new(ok(item)) as Box<dyn Future<Item = DeserializeFn, Error = ()> + Send>
-            })
+            .map(|item| Box::pin(ready(item)) as BoxFuture<DeserializeFn>)
             .unwrap_or_else(|| {
-                Box::new(WaitFor {
+                Box::pin(WaitFor {
                     task: self
                         .tasks
                         .lock()
                         .unwrap()
                         .entry(ty)
-                        .or_insert_with(|| Arc::new(AtomicTask::new()))
+                        .or_insert_with(|| Arc::new(AtomicWaker::new()))
                         .clone(),
                     registry: &REGISTRY,
                     id: ty,
@@ -109,9 +112,10 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
     where
         D: Deserializer<'de>,
     {
-        let ty = self.1.wait_for(self.0).wait().unwrap();
+        let mut pool = LocalPool::new();
+        let ty = pool.run_until(self.1.wait_for(self.0));
         let mut deserializer = erased_serde::Deserializer::erase(deserializer);
-        (REGISTRY.wait_for(ty.0).wait().unwrap())(&mut deserializer).map_err(de::Error::custom)
+        (pool.run_until(REGISTRY.wait_for(ty.0)))(&mut deserializer).map_err(de::Error::custom)
     }
 }
 

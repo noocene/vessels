@@ -1,62 +1,48 @@
 use crate::{
     channel::{Channel, ForkHandle},
-    Kind,
+    ConstructResult, Kind,
 };
 
-use serde::{Deserialize, Serialize};
-
-use futures::{future::ok, Future};
-
-#[doc(hidden)]
-#[derive(Serialize, Deserialize, Debug)]
-pub enum KOption {
-    Some(ForkHandle),
-    None,
-}
+use futures::{
+    future::ok, future::BoxFuture, stream::once, FutureExt, SinkExt, StreamExt, TryFutureExt,
+};
 
 impl<T> Kind for Option<T>
 where
     T: Kind,
 {
-    type ConstructItem = KOption;
-    type ConstructFuture = Box<dyn Future<Item = Self, Error = ()> + Send>;
+    type ConstructItem = Option<ForkHandle>;
+    type Error = T::Error;
+    type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructFuture = Box<dyn Future<Item = (), Error = ()> + Send>;
+    type DeconstructFuture = BoxFuture<'static, ()>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         channel: C,
     ) -> Self::DeconstructFuture {
         match self {
-            Some(v) => Box::new(channel.fork(v).and_then(|h| {
-                channel
-                    .send(KOption::Some(h))
-                    .and_then(|_| Ok(()))
-                    .map_err(|_| panic!())
+            Some(v) => Box::pin(channel.fork(v).map(Some).then(|handle| {
+                let channel = channel.sink_map_err(|_| panic!());
+                Box::pin(
+                    once(ok(handle))
+                        .forward(channel)
+                        .unwrap_or_else(|_| panic!()),
+                )
             })),
-            None => Box::new(
-                channel
-                    .send(KOption::None)
-                    .and_then(|_| Ok(()))
-                    .map_err(|_| panic!()),
-            ) as Box<dyn Future<Item = (), Error = ()> + Send>,
+            None => {
+                let channel = channel.sink_map_err(|_| panic!());
+                Box::pin(once(ok(None)).forward(channel).unwrap_or_else(|_| panic!()))
+            }
         }
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         channel: C,
     ) -> Self::ConstructFuture {
-        Box::new(
-            channel
-                .into_future()
-                .map_err(|_| panic!("lol"))
-                .and_then(|(item, channel)| match item.unwrap() {
-                    KOption::Some(r) => {
-                        Box::new(channel.get_fork::<T>(r).map(Some).map_err(|_| panic!()))
-                            as Box<dyn Future<Item = Option<T>, Error = ()> + Send>
-                    }
-                    KOption::None => {
-                        Box::new(ok(None)) as Box<dyn Future<Item = Option<T>, Error = ()> + Send>
-                    }
-                }),
-        )
+        Box::pin(channel.into_future().then(move |(item, channel)| {
+            item.unwrap().map_or_else(
+                || Box::pin(ok(None)) as BoxFuture<'static, ConstructResult<Self>>,
+                move |handle| Box::pin(channel.get_fork(handle).map_ok(Some)),
+            )
+        }))
     }
 }

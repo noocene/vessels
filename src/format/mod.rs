@@ -11,7 +11,12 @@ pub mod bincode;
 #[cfg(feature = "bincode")]
 pub use bincode::Bincode;
 
-use futures::{lazy, Future, Poll, Sink, StartSend, Stream};
+use futures::{
+    future::{ok, BoxFuture},
+    stream::BoxStream,
+    task::Context as FContext,
+    Future, FutureExt, Poll, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
+};
 
 use crate::{
     channel::{Context, Shim, Target},
@@ -20,37 +25,47 @@ use crate::{
 
 use serde::{de::DeserializeSeed, Serialize};
 
-use std::fmt::{Debug, Display, Formatter};
+use std::{
+    fmt::{Debug, Display, Formatter},
+    pin::Pin,
+};
 
 use failure::Fail;
 
 #[doc(hidden)]
-pub struct StreamSink<T: Stream, U: Sink>(pub(crate) T, pub(crate) U);
+pub struct StreamSink<T, U, E>(
+    pub(crate) BoxStream<'static, T>,
+    pub(crate) Pin<Box<dyn Sink<U, Error = E> + Send>>,
+);
 
-impl<T: Stream, U: Sink> Sink for StreamSink<T, U> {
-    type SinkItem = U::SinkItem;
-    type SinkError = U::SinkError;
+impl<T, U, E> Sink<U> for StreamSink<T, U, E> {
+    type Error = E;
 
-    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        self.1.start_send(item)
+    fn start_send(mut self: Pin<&mut Self>, item: U) -> Result<(), Self::Error> {
+        self.1.as_mut().start_send(item)
     }
-    fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        self.1.poll_complete()
+    fn poll_ready(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
+        self.1.as_mut().poll_ready(cx)
+    }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
+        self.1.as_mut().poll_flush(cx)
+    }
+    fn poll_close(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
+        self.1.as_mut().poll_close(cx)
     }
 }
 
-impl<T: Stream, U: Sink> Stream for StreamSink<T, U> {
-    type Item = T::Item;
-    type Error = T::Error;
+impl<T, I, U> Stream for StreamSink<T, I, U> {
+    type Item = T;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        self.0.poll()
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Option<Self::Item>> {
+        self.0.as_mut().poll_next(cx)
     }
 }
 
-pub trait UniformStreamSink<T>: Sink<SinkItem = T> + Stream<Item = T> {}
+pub trait UniformStreamSink<T>: Sink<T> + Stream<Item = T> {}
 
-impl<T, U> UniformStreamSink<T> for U where U: Sink<SinkItem = T> + Stream<Item = T> {}
+impl<T, U> UniformStreamSink<T> for U where U: Sink<T> + Stream<Item = T> {}
 
 pub trait Format {
     type Representation;
@@ -62,7 +77,7 @@ pub trait Format {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> Box<dyn Future<Item = T::Value, Error = Self::Error> + Send>
+    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
     where
         Self: Sized,
         T::Value: Send + 'static,
@@ -91,6 +106,7 @@ pub trait ApplyDecode<'de, K: Kind> {
     where
         Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
         F::Representation: Send + 'static,
+        <Self as Sink<F::Representation>>::Error: Send,
         T::Item: Send + 'static;
 }
 
@@ -101,6 +117,7 @@ impl<'de, U, K: Kind> ApplyDecode<'de, K> for U {
     where
         Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
         F::Representation: Send,
+        <Self as Sink<F::Representation>>::Error: Send,
         T::Item: Send,
     {
         <F as Decode<'de, Self, K>>::decode::<T>(self)
@@ -113,7 +130,7 @@ pub trait Decode<
     K: Kind,
 >: Format
 {
-    type Output: Future<Item = K>;
+    type Output: Future<Output = Result<K, K::Error>>;
 
     fn decode<T: Target<'de, K> + Send + 'static>(input: C) -> Self::Output
     where
@@ -121,10 +138,10 @@ pub trait Decode<
 }
 
 pub trait Encode<'de, C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de>>:
-    Format
+    Format + Sized
 {
     type Output: Stream<Item = <Self as Format>::Representation>
-        + Sink<SinkItem = <Self as Format>::Representation>;
+        + Sink<Self::Representation, Error = EncodeError<Self, <C as Context<'de>>::Item, C>>;
 
     fn encode(input: C) -> Self::Output;
 }
@@ -137,49 +154,53 @@ impl<
     > Decode<'de, C, K> for T
 where
     Self::Representation: Send,
+    <C as Sink<<Self as Format>::Representation>>::Error: Send,
 {
-    type Output = Box<dyn Future<Item = K, Error = ()> + Send + 'de>;
+    type Output = BoxFuture<'static, Result<K, K::Error>>;
 
     fn decode<U: Target<'de, K> + Send + 'static>(input: C) -> Self::Output
     where
         U::Item: Send,
     {
-        Box::new(lazy(|| {
-            let shim = U::new_shim();
-            let context = shim.context();
-            let (sink, stream) = input.split();
+        let shim = U::new_shim();
+        let context = shim.context();
+        let (sink, stream) = input.split();
+        Box::pin(
             shim.complete(StreamSink(
-                stream
-                    .map_err(|_| panic!())
-                    .map(move |item| Self::deserialize(item, context.clone()).into_stream())
-                    .flatten(),
-                sink.sink_map_err(|_: <C as Sink>::SinkError| {
-                    panic!();
-                })
-                .with(|item| Ok(Self::serialize(item)))
-                .sink_map_err(|_: ()| panic!()),
-            ))
-            .map_err(|e| panic!(e))
-        }))
+                Box::pin(
+                    stream
+                        .map(move |item| {
+                            Self::deserialize(item, context.clone())
+                                .unwrap_or_else(|_| panic!())
+                                .into_stream()
+                        })
+                        .flatten(),
+                ),
+                Box::pin(
+                    sink.sink_map_err(|_| panic!())
+                        .with::<_, _, _, ()>(|item: U::Item| ok(Self::serialize(item))),
+                ),
+            )),
+        )
     }
 }
 
-pub enum EncodeError<T: Format, S: Sink> {
+pub enum EncodeError<T: Format, I, S: Sink<I>> {
     Format(T::Error),
-    Sink(S::SinkError),
+    Sink(S::Error),
 }
 
-impl<T: Format + 'static, S: Sink + 'static> Fail for EncodeError<T, S>
+impl<I: 'static, T: Format + 'static, S: Sink<I> + 'static> Fail for EncodeError<T, I, S>
 where
     T::Error: Send + Sync + Display + Debug,
-    S::SinkError: Send + Sync + Display + Debug,
+    S::Error: Send + Sync + Display + Debug,
 {
 }
 
-impl<T: Format, S: Sink> Display for EncodeError<T, S>
+impl<T: Format, I, S: Sink<I>> Display for EncodeError<T, I, S>
 where
     T::Error: Display,
-    S::SinkError: Display,
+    S::Error: Display,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match *self {
@@ -191,10 +212,10 @@ where
     }
 }
 
-impl<T: Format, S: Sink> Debug for EncodeError<T, S>
+impl<T: Format, I, S: Sink<I>> Debug for EncodeError<T, I, S>
 where
     T::Error: Debug,
-    S::SinkError: Debug,
+    S::Error: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match *self {
@@ -208,8 +229,8 @@ where
     }
 }
 
-impl<T: Format, S: Sink> EncodeError<T, S> {
-    fn from_sink_error(err: S::SinkError) -> Self {
+impl<T: Format, I, S: Sink<I>> EncodeError<T, I, S> {
+    fn from_sink_error(err: S::Error) -> Self {
         EncodeError::Sink(err)
     }
     fn from_format_error(err: T::Error) -> Self {
@@ -227,24 +248,22 @@ where
     <C as Context<'de>>::Item: Send,
 {
     type Output = StreamSink<
-        Box<dyn Stream<Item = <Self as Format>::Representation, Error = C::Error> + Send>,
-        Box<
-            dyn Sink<SinkItem = <Self as Format>::Representation, SinkError = EncodeError<T, C>>
-                + Send,
-        >,
+        Self::Representation,
+        Self::Representation,
+        EncodeError<T, <C as Context<'de>>::Item, C>,
     >;
 
     fn encode(input: C) -> Self::Output {
         let ctx = input.context();
         let (sink, stream) = input.split();
         StreamSink(
-            Box::new(stream.map(<Self as Format>::serialize)),
-            Box::new(
+            Box::pin(stream.map(<Self as Format>::serialize)),
+            Box::pin(
                 sink.sink_map_err(EncodeError::from_sink_error)
                     .with_flat_map(move |data| {
                         <Self as Format>::deserialize(data, ctx.clone())
-                            .into_stream()
                             .map_err(EncodeError::from_format_error)
+                            .into_stream()
                     }),
             ),
         )
