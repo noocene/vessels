@@ -14,9 +14,8 @@ use futures::{
 macro_rules! tuple_impl {
     ($($len:expr => ($($n:tt $name:ident $nn:ident)+))+) => {$(
         impl<$($name),+> Kind for ($($name),+)
-where
-    $($name: Kind),+ // each element must be Kind
-{
+            where $($name: Kind),+
+        {
             type ConstructItem = Vec<ForkHandle>;
             type Error = ();
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
@@ -92,6 +91,7 @@ where
         }))
     }
 }
+
 tuple_impl! {
     2 => (0 T0 a 1 T1 b)
     3 => (0 T0 a 1 T1 b 2 T2 c)
