@@ -4,6 +4,7 @@ use kinddev::{
     kind::{using, AsKind},
     Kind, OnTo,
 };
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -17,7 +18,12 @@ enum TestEnum {
 }
 
 fn main() {
-    let meme: Vec<TestEnum> = vec![TestEnum::No("ok this is epic".to_owned()); 1000];
+    let mut meme: HashMap<(i32, String), TestEnum> = HashMap::new();
+    meme.insert((69, "nice".to_owned()), TestEnum::Yes(5021));
+    meme.insert(
+        (-1, "not nice".to_owned()),
+        TestEnum::No("unepic".to_owned()),
+    );
     ThreadPool::new().unwrap().run(
         meme.on_to::<IdChannel>()
             .map(Json::encode)
@@ -25,7 +31,7 @@ fn main() {
             .map(Json::decode::<IdChannel>)
             .flatten()
             .unwrap_or_else(|e| panic!(e))
-            .then(|item: Vec<TestEnum>| {
+            .then(|item: HashMap<(i32, String), TestEnum>| {
                 println!("{:?}", item);
                 ready(())
             }),

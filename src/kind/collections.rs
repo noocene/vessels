@@ -4,7 +4,7 @@ use crate::{
 };
 
 use std::{
-    collections::{BTreeSet, BinaryHeap, HashSet, LinkedList, VecDeque},
+    collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque},
     hash::Hash,
 };
 
@@ -72,3 +72,59 @@ iterator_impl!(
     Vec<T>,
     VecDeque<T>
 );
+
+macro_rules! map_impl {
+    ($($ty:ident < K $(: $tbound1:ident $(+ $tbound2:ident)*)*, V >),+) => {$(
+        impl<K, V> Kind for $ty<K, V>
+            where K: Kind $(+ $tbound1 $(+ $tbound2)*)*,
+            V: Kind
+        {
+            type ConstructItem = Vec<ForkHandle>;
+            type Error = ();
+            type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+            type DeconstructItem = ();
+            type DeconstructFuture = BoxFuture<'static, ()>;
+            fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
+                self,
+                channel: C,
+            ) -> Self::DeconstructFuture {
+                Box::pin(
+                    join_all(
+                        self.into_iter()
+                            .map(|entry| channel.fork::<(K, V)>(entry))
+                            .collect::<Vec<_>>(),
+                    )
+                    .then(move |handles| {
+                        let channel = channel.sink_map_err(|_| panic!());
+                        Box::pin(
+                            once(ok(handles))
+                                .forward(channel)
+                                .unwrap_or_else(|_| panic!()),
+                        )
+                    }),
+                )
+            }
+            fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
+                channel: C,
+            ) -> Self::ConstructFuture {
+                Box::pin(
+                    channel
+                        .into_future().then(move |(item, channel)| {
+                            join_all(
+                                item.unwrap()
+                                    .into_iter()
+                                    .map(|entry| channel.get_fork::<(K, V)>(entry).unwrap_or_else(|_| panic!()))
+                                    .collect::<Vec<_>>(),
+                            )
+                            .map(|vec| vec.into_iter().collect()).unit_error()
+                        }),
+                )
+            }
+        }
+    )+};
+}
+
+map_impl! {
+    BTreeMap<K: Ord, V>,
+    HashMap<K: Eq + Hash, V>
+}
