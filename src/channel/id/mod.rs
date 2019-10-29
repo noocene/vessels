@@ -10,7 +10,6 @@ use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
     executor::ThreadPool,
     future::{lazy, ok, BoxFuture},
-    stream::{self, select, BoxStream},
     task::Context as FContext,
     Future, FutureExt, Poll, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
 };
@@ -33,7 +32,18 @@ use std::{
 use super::Shim as IShim;
 
 pub struct IdChannel {
-    out_channel: Arc<Mutex<BoxStream<'static, Item>>>,
+    out_channel: (
+        Pin<Box<UnboundedReceiver<Item>>>,
+        Pin<Box<UnboundedSender<Item>>>,
+    ),
+    context: Context,
+    in_channels:
+        Arc<Mutex<HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ()> + Send>>>>>,
+}
+
+#[derive(Clone)]
+pub struct IdChannelHandle {
+    out_channel: Pin<Box<UnboundedSender<Item>>>,
     context: Context,
     in_channels:
         Arc<Mutex<HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ()> + Send>>>>>,
@@ -42,8 +52,8 @@ pub struct IdChannel {
 impl Stream for IdChannel {
     type Item = Item;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Option<Self::Item>> {
-        self.out_channel.lock().unwrap().as_mut().poll_next(cx)
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Option<Self::Item>> {
+        self.out_channel.0.as_mut().poll_next(cx)
     }
 }
 
@@ -119,6 +129,15 @@ impl<'de> IContext<'de> for IdChannel {
     }
 }
 
+impl<'de> IContext<'de> for IdChannelHandle {
+    type Item = Item;
+    type Target = Context;
+
+    fn context(&self) -> Self::Target {
+        self.context.clone()
+    }
+}
+
 pub struct Shim<K: Kind> {
     context: Context,
     _marker: PhantomData<K>,
@@ -130,8 +149,9 @@ impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
         input: C,
     ) -> BoxFuture<'static, Result<K, K::Error>> {
         let (sink, stream) = input.split();
+        let (sender, receiver) = unbounded();
         let channel = IdChannel {
-            out_channel: Arc::new(Mutex::new(Box::pin(stream::empty()))),
+            out_channel: (Box::pin(receiver), Box::pin(sender)),
             context: self.context,
             in_channels: Arc::new(Mutex::new(HashMap::new())),
         };
@@ -163,14 +183,7 @@ impl<'a, K: Kind> IContext<'a> for Shim<K> {
     }
 }
 
-impl IdChannel {
-    fn clone(&self) -> Self {
-        IdChannel {
-            out_channel: self.out_channel.clone(),
-            context: self.context.clone(),
-            in_channels: self.in_channels.clone(),
-        }
-    }
+impl IdChannelHandle {
     fn fork<K: Kind>(&self, kind: K) -> BoxFuture<'static, ForkHandle> {
         let id = self.context.create::<K>();
         REGISTRY.add::<K::DeconstructItem>();
@@ -180,16 +193,16 @@ impl IdChannel {
 
         Box::pin(
             IdChannelFork::<Box<UnboundedReceiver<_>>, Box<UnboundedSender<_>>, _, _>::new(
-                kind, self,
+                kind,
+                self.clone(),
             )
             .map(move |(sender, receiver)| {
-                let mut out_channel = out_channel.lock().unwrap();
-                let mut empty_stream = Box::pin(stream::empty()) as BoxStream<'static, Item>;
-                std::mem::swap(&mut (*out_channel), &mut empty_stream);
-                *out_channel = Box::pin(select(
-                    empty_stream,
-                    receiver.map(move |item| Item::new(id, Box::new(item), context.clone())),
-                ));
+                ThreadPool::new().unwrap().spawn_ok(
+                    receiver
+                        .map(move |v| Ok(Item::new(id, Box::new(v), context.clone())))
+                        .forward(out_channel)
+                        .unwrap_or_else(|_| panic!()),
+                );
                 let mut in_channels = in_channels.lock().unwrap();
                 in_channels.insert(
                     id,
@@ -210,11 +223,8 @@ impl IdChannel {
     }
 
     fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> BoxFuture<'static, Result<K, K::Error>> {
-        let channel = self.clone();
-
-        let mut in_channels = channel.in_channels.lock().unwrap();
-        let mut out_channel = channel.out_channel.lock().unwrap();
-        channel.context.add::<K>(fork_ref);
+        let out_channel = self.out_channel.clone();
+        self.context.add::<K>(fork_ref);
         REGISTRY.add::<K::ConstructItem>();
         let (sender, ireceiver): (UnboundedSender<K::DeconstructItem>, _) = unbounded();
         let (isender, receiver): (UnboundedSender<K::ConstructItem>, _) = unbounded();
@@ -226,17 +236,67 @@ impl IdChannel {
                     Err(_) => panic!(),
                 }))
             });
-        in_channels.insert(fork_ref, Box::pin(isender));
-        let ct = channel.context.clone();
+        self.in_channels
+            .lock()
+            .unwrap()
+            .insert(fork_ref, Box::pin(isender));
+        let ct = self.context.clone();
         let ireceiver = ireceiver
             .map(move |item: K::DeconstructItem| Item::new(fork_ref, Box::new(item), ct.clone()));
-        let mut empty_stream = Box::pin(stream::empty()) as BoxStream<'static, Item>;
-        std::mem::swap(&mut (*out_channel), &mut empty_stream);
-        *out_channel = Box::pin(select(empty_stream, ireceiver));
+        ThreadPool::new().unwrap().spawn_ok(
+            ireceiver
+                .map(Ok)
+                .forward(out_channel)
+                .unwrap_or_else(|_| panic!()),
+        );
         Box::pin(K::construct(IdChannelFork {
             o: Box::pin(sender),
             i: Box::pin(receiver),
-            channel: channel.clone(),
+            channel: self.clone(),
+            sink_item: PhantomData,
+        }))
+    }
+}
+
+impl IdChannel {
+    fn clone(&self) -> IdChannelHandle {
+        IdChannelHandle {
+            out_channel: self.out_channel.1.clone(),
+            context: self.context.clone(),
+            in_channels: self.in_channels.clone(),
+        }
+    }
+    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> BoxFuture<'static, Result<K, K::Error>> {
+        let out_channel = self.out_channel.1.clone();
+        self.context.add::<K>(fork_ref);
+        REGISTRY.add::<K::ConstructItem>();
+        let (sender, ireceiver): (UnboundedSender<K::DeconstructItem>, _) = unbounded();
+        let (isender, receiver): (UnboundedSender<K::ConstructItem>, _) = unbounded();
+        let isender = isender
+            .sink_map_err(|e| panic!(e))
+            .with(|item: Box<dyn SerdeAny>| {
+                ok(*(match item.downcast::<K::ConstructItem>() {
+                    Ok(item) => item,
+                    Err(_) => panic!(),
+                }))
+            });
+        self.in_channels
+            .lock()
+            .unwrap()
+            .insert(fork_ref, Box::pin(isender));
+        let ct = self.context.clone();
+        let ireceiver = ireceiver
+            .map(move |item: K::DeconstructItem| Item::new(fork_ref, Box::new(item), ct.clone()));
+        ThreadPool::new().unwrap().spawn_ok(
+            ireceiver
+                .map(Ok)
+                .forward(out_channel)
+                .unwrap_or_else(|_| panic!()),
+        );
+        Box::pin(K::construct(IdChannelFork {
+            o: Box::pin(sender),
+            i: Box::pin(receiver),
+            channel: self.clone(),
             sink_item: PhantomData,
         }))
     }
@@ -300,7 +360,7 @@ pub(crate) struct IdChannelFork<
 {
     i: Pin<T>,
     o: Pin<U>,
-    channel: IdChannel,
+    channel: IdChannelHandle,
     sink_item: PhantomData<O>,
 }
 
@@ -339,12 +399,11 @@ where
 {
     fn new<K: Kind<DeconstructItem = I, ConstructItem = O>>(
         kind: K,
-        channel: &'_ IdChannel,
+        channel: IdChannelHandle,
     ) -> impl Future<Output = (UnboundedSender<I>, UnboundedReceiver<O>)>
     where
         K::DeconstructFuture: Send + 'static,
     {
-        let channel = channel.clone();
         lazy(move |_| {
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
             let (oi, receiver): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
@@ -386,21 +445,25 @@ where
             );
             let context = Context::new_with::<K>();
             let ct = context.clone();
+            let (csender, creceiver) = unbounded();
             let channel = IdChannel {
-                out_channel: Arc::new(Mutex::new(Box::pin(
-                    receiver.map(move |v| Item::new(ForkHandle(0), Box::new(v), ct.clone())),
-                ))),
+                out_channel: (Box::pin(creceiver), Box::pin(csender.clone())),
                 context,
                 in_channels: Arc::new(Mutex::new(in_channels)),
             };
-            ThreadPool::new()
-                .unwrap()
-                .spawn_ok(kind.deconstruct(IdChannelFork {
-                    o: Box::pin(oi),
-                    i: Box::pin(oo),
-                    channel: channel.clone(),
-                    sink_item: PhantomData,
-                }));
+            let pool = ThreadPool::new().unwrap();
+            pool.spawn_ok(
+                receiver
+                    .map(move |v| Ok(Item::new(ForkHandle(0), Box::new(v), ct.clone())))
+                    .forward(csender)
+                    .unwrap_or_else(|_| panic!()),
+            );
+            pool.spawn_ok(kind.deconstruct(IdChannelFork {
+                o: Box::pin(oi),
+                i: Box::pin(oo),
+                channel: channel.clone(),
+                sink_item: PhantomData,
+            }));
             channel
         })
     }
