@@ -7,6 +7,7 @@ mod phantom_data;
 mod primitives;
 mod result;
 pub mod serde;
+mod tuple;
 mod unit;
 pub mod using;
 pub use self::serde::Serde;
