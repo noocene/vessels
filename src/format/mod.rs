@@ -170,11 +170,9 @@ where
                 Box::pin(
                     stream
                         .map(move |item| {
-                            Self::deserialize(item, context.clone())
-                                .unwrap_or_else(|_| panic!())
-                                .into_stream()
+                            Self::deserialize(item, context.clone()).unwrap_or_else(|_| panic!())
                         })
-                        .flatten(),
+                        .buffer_unordered(std::usize::MAX),
                 ),
                 Box::pin(
                     sink.sink_map_err(|_| panic!())
