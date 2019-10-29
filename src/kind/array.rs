@@ -4,12 +4,32 @@ use crate::{
 };
 
 use futures::{
-    future::{join_all, ok, BoxFuture},
+    future::{join_all, ok, ready, BoxFuture, Ready},
     stream::once,
     FutureExt, SinkExt, StreamExt, TryFutureExt,
 };
 
 use std::{mem::MaybeUninit, ptr};
+
+impl<T: Send + 'static> Kind for [T; 0] {
+    type ConstructItem = ();
+    type Error = ();
+    type ConstructFuture = Ready<ConstructResult<Self>>;
+    type DeconstructItem = ();
+    type DeconstructFuture = Ready<()>;
+
+    fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
+        self,
+        _: C,
+    ) -> Self::DeconstructFuture {
+        ready(())
+    }
+    fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
+        _: C,
+    ) -> Self::ConstructFuture {
+        ok([])
+    }
+}
 
 macro_rules! array_impl {
     ($($len:expr => ($($n:tt $nn:ident)+))+) => {$(
