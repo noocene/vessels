@@ -24,7 +24,7 @@ pub trait Fork: Send + 'static {
 pub trait Channel<
     I: Serialize + DeserializeOwned + Send + 'static,
     O: Serialize + DeserializeOwned + Send + 'static,
->: Stream<Item = I> + Sink<O> + Fork + Unpin
+>: Stream<Item = I> + Sink<O> + Fork + Send + Unpin
 {
 }
 
