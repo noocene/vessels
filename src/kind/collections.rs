@@ -9,7 +9,7 @@ use std::{
 };
 
 use futures::{
-    future::{join_all, ok, BoxFuture},
+    future::{join_all, ok, try_join_all, BoxFuture},
     stream::once,
     FutureExt, SinkExt, StreamExt, TryFutureExt,
 };
@@ -20,7 +20,7 @@ macro_rules! iterator_impl {
             where T: Kind $(+ $tbound1 $(+ $tbound2)*)*, $($typaram: $bound,)*
         {
             type ConstructItem = Vec<ForkHandle>;
-            type Error = ();
+            type Error = T::Error;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
             type DeconstructFuture = BoxFuture<'static, ()>;
@@ -31,8 +31,7 @@ macro_rules! iterator_impl {
                 Box::pin(
                     join_all(
                         self.into_iter()
-                            .map(|entry| channel.fork::<T>(entry))
-                            .collect::<Vec<_>>(),
+                            .map(|entry| channel.fork::<T>(entry)),
                     )
                     .then(move |handles| {
                         let channel = channel.sink_map_err(|_| panic!());
@@ -50,13 +49,12 @@ macro_rules! iterator_impl {
                 Box::pin(
                     channel
                         .into_future().then(move |(item, channel)| {
-                            join_all(
+                            try_join_all(
                                 item.unwrap()
                                     .into_iter()
-                                    .map(|entry| channel.get_fork::<T>(entry).unwrap_or_else(|_| panic!()))
-                                    .collect::<Vec<_>>(),
+                                    .map(|entry| channel.get_fork::<T>(entry)),
                             )
-                            .map(|vec| vec.into_iter().collect()).unit_error()
+                            .map_ok(|vec| vec.into_iter().collect())
                         }),
                 )
             }
@@ -80,7 +78,7 @@ macro_rules! map_impl {
             V: Kind
         {
             type ConstructItem = Vec<ForkHandle>;
-            type Error = ();
+            type Error = <(K, V) as Kind>::Error;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
             type DeconstructFuture = BoxFuture<'static, ()>;
@@ -91,8 +89,7 @@ macro_rules! map_impl {
                 Box::pin(
                     join_all(
                         self.into_iter()
-                            .map(|entry| channel.fork::<(K, V)>(entry))
-                            .collect::<Vec<_>>(),
+                            .map(|entry| channel.fork::<(K, V)>(entry)),
                     )
                     .then(move |handles| {
                         let channel = channel.sink_map_err(|_| panic!());
@@ -110,13 +107,12 @@ macro_rules! map_impl {
                 Box::pin(
                     channel
                         .into_future().then(move |(item, channel)| {
-                            join_all(
+                            try_join_all(
                                 item.unwrap()
                                     .into_iter()
-                                    .map(|entry| channel.get_fork::<(K, V)>(entry).unwrap_or_else(|_| panic!()))
-                                    .collect::<Vec<_>>(),
+                                    .map(|entry| channel.get_fork::<(K, V)>(entry)),
                             )
-                            .map(|vec| vec.into_iter().collect()).unit_error()
+                            .map_ok(|vec| vec.into_iter().collect())
                         }),
                 )
             }
