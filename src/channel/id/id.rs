@@ -11,7 +11,7 @@ use std::{
     any::TypeId,
     collections::HashMap,
     pin::Pin,
-    sync::{mpsc::sync_channel, Arc, Mutex, RwLock, Weak},
+    sync::{Arc, Mutex, RwLock, Weak},
 };
 
 use futures::{

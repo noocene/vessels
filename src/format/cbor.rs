@@ -4,8 +4,7 @@ use serde::{de::DeserializeSeed, Serialize};
 
 use futures::{
     channel::oneshot::{channel, Receiver},
-    executor::ThreadPool,
-    future::{lazy, BoxFuture},
+    future::BoxFuture,
     TryFutureExt,
 };
 
@@ -28,12 +27,13 @@ impl Format for Cbor {
         T: Send + 'static,
     {
         let (sender, receiver): (_, Receiver<Result<T::Value, Self::Error>>) = channel();
-        ThreadPool::new().unwrap().spawn_ok(lazy(move |_| {
+        std::thread::spawn(move || {
             let mut deserializer = serde_cbor::Deserializer::from_reader(item.as_slice());
             sender
                 .send(context.deserialize(&mut deserializer))
-                .unwrap_or_else(|e| panic!(e))
-        }));
+                .map_err(|e| panic!(e))
+                .unwrap();
+        });
         Box::pin(receiver.unwrap_or_else(|e| panic!(e)))
     }
 }
