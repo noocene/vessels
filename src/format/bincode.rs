@@ -4,8 +4,7 @@ use serde::{de::DeserializeSeed, Serialize};
 
 use futures::{
     channel::oneshot::{channel, Receiver},
-    executor::ThreadPool,
-    future::{lazy, BoxFuture},
+    future::BoxFuture,
     TryFutureExt,
 };
 
@@ -28,11 +27,11 @@ impl Format for Bincode {
         T: Send + 'static,
     {
         let (sender, receiver): (_, Receiver<Result<T::Value, Self::Error>>) = channel();
-        ThreadPool::new().unwrap().spawn_ok(lazy(move |_| {
+        std::thread::spawn(move || {
             sender
                 .send(serde_bincode::config().deserialize_from_seed(context, item.as_slice()))
                 .unwrap_or_else(|e| panic!(e))
-        }));
+        });
         Box::pin(receiver.unwrap_or_else(|e| panic!(e)))
     }
 }
