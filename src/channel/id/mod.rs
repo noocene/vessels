@@ -318,6 +318,7 @@ impl<'a, K: Kind> Target<'a, K> for IdChannel {
     }
 
     fn new_shim() -> Self::Shim {
+        REGISTRY.add::<K::ConstructItem>();
         Shim {
             context: Context::new_with::<K>(),
             _marker: PhantomData,
