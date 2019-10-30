@@ -5,7 +5,6 @@ use crate::{
 
 use futures::{
     future::{join_all, ok, ready, try_join_all, BoxFuture, Ready},
-    stream::once,
     FutureExt, SinkExt, StreamExt, TryFutureExt,
 };
 
@@ -43,24 +42,16 @@ macro_rules! array_impl {
             type DeconstructFuture = BoxFuture<'static, ()>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
-                channel: C,
+                mut channel: C,
             ) -> Self::DeconstructFuture {
                 let [$($nn),+] = self;
-                Box::pin(
-                    join_all(
+                Box::pin(async move {
+                    channel.send(join_all(
                         vec![
                             $(channel.fork::<T>($nn)),+
                         ]
-                    )
-                    .then(move |handles| {
-                        let channel = channel.sink_map_err(|_| panic!());
-                        Box::pin(
-                            once(ok(handles))
-                                .forward(channel)
-                                .unwrap_or_else(|_| panic!()),
-                        )
-                    }),
-                )
+                    ).await).await.unwrap_or_else(|_| panic!())
+                })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
                 channel: C,

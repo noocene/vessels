@@ -1,10 +1,6 @@
 use serde::{de::DeserializeOwned, Serialize};
 
-use futures::{
-    future::{ok, BoxFuture},
-    stream::once,
-    FutureExt, SinkExt, StreamExt, TryFutureExt,
-};
+use futures::{future::BoxFuture, SinkExt, StreamExt, TryFutureExt};
 
 use crate::{channel::Channel, Kind};
 
@@ -34,7 +30,7 @@ impl<T: Serialize + DeserializeOwned + Send + 'static> From<T> for Serde<T> {
     }
 }
 
-impl<T: Serialize + DeserializeOwned + Send + Unpin + 'static> AsKind<using::Serde> for T {
+impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> AsKind<using::Serde> for T {
     type Kind = Serde<T>;
     type ConstructFuture = BoxFuture<'static, Result<T, <Serde<T> as Kind>::Error>>;
 
@@ -46,7 +42,7 @@ impl<T: Serialize + DeserializeOwned + Send + Unpin + 'static> AsKind<using::Ser
     }
 }
 
-impl<T: Serialize + DeserializeOwned + Send + Unpin + 'static> Kind for Serde<T> {
+impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> Kind for Serde<T> {
     type ConstructItem = T;
     type Error = ();
     type ConstructFuture = BoxFuture<'static, Result<Serde<T>, Self::Error>>;
@@ -55,23 +51,13 @@ impl<T: Serialize + DeserializeOwned + Send + Unpin + 'static> Kind for Serde<T>
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
-        channel: C,
+        mut channel: C,
     ) -> Self::DeconstructFuture {
-        let channel = channel.sink_map_err(|_| panic!());
-        Box::pin(
-            once(ok(self.0))
-                .forward(channel)
-                .unwrap_or_else(|_| panic!()),
-        )
+        Box::pin(async move { channel.send(self.0).await.unwrap_or_else(|_| panic!()) })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-        channel: C,
+        mut channel: C,
     ) -> Self::ConstructFuture {
-        Box::pin(
-            channel
-                .into_future()
-                .map(|v| Serde(v.0.unwrap()))
-                .unit_error(),
-        )
+        Box::pin(async move { Ok(Serde(channel.next().await.unwrap())) })
     }
 }
