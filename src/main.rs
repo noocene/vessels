@@ -7,7 +7,7 @@ use kinddev::{
 
 use serde::{Deserialize, Serialize};
 
-use futures::executor::ThreadPool;
+use futures::{executor::ThreadPool, stream::{BoxStream,iter}, StreamExt};
 
 #[derive(Serialize, Deserialize, Debug, Kind, Clone)]
 #[kind(using::Serde)]
@@ -17,10 +17,12 @@ enum TestEnum {
 }
 
 fn main() {
-    let meme = vec!["test".to_owned(); 100];
+    let meme: BoxStream<'static, String> = Box::pin(iter(vec!["test".to_owned(); 100].into_iter()));
     ThreadPool::new().unwrap().run(async move {
         let encoded = meme.on_to::<IdChannel>().await.encode::<Json>();
-        let decoded: Vec<String> = encoded.decode::<IdChannel, Json>().await.unwrap();
-        println!("{:?}", decoded)
+        let mut decoded: BoxStream<'static, String> = encoded.decode::<IdChannel, Json>().await.unwrap();
+        while let Some(item) = decoded.next().await {
+            println!("{}", item);
+        }
     })
 }
