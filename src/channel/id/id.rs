@@ -54,8 +54,11 @@ impl Future for WaitFor {
 }
 
 impl Registry {
-    pub(crate) fn add<K: Kind>(&self) {
+    pub(crate) fn add_construct<K: Kind>(&self) {
         self.add_type::<K::ConstructItem>();
+    }
+
+    pub(crate) fn add_deconstruct<K: Kind>(&self) {
         self.add_type::<K::DeconstructItem>();
     }
 
@@ -120,7 +123,7 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
         let mut pool = LocalPool::new();
         let ty = pool.run_until(self.1.wait_for(self.0));
         let mut deserializer = erased_serde::Deserializer::erase(deserializer);
-        (pool.run_until(REGISTRY.wait_for(ty.0)))(&mut deserializer).map_err(de::Error::custom)
+        (pool.run_until(REGISTRY.wait_for(ty)))(&mut deserializer).map_err(de::Error::custom)
     }
 }
 
