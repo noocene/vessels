@@ -7,7 +7,7 @@ use kinddev::{
 
 use serde::{Deserialize, Serialize};
 
-use futures::{executor::ThreadPool, stream::{BoxStream,iter}, StreamExt};
+use futures::{executor::ThreadPool, future::BoxFuture};
 
 #[derive(Serialize, Deserialize, Debug, Kind, Clone)]
 #[kind(using::Serde)]
@@ -16,13 +16,13 @@ enum TestEnum {
     No(String),
 }
 
+type Adder = Box<dyn FnOnce(u32, u32) -> BoxFuture<'static, u32> + Send + Sync>;
+
 fn main() {
-    let meme: BoxStream<'static, String> = Box::pin(iter(vec!["test".to_owned(); 100].into_iter()));
+    let func: Adder = Box::new(|a, b| Box::pin(async move { a + b }));
     ThreadPool::new().unwrap().run(async move {
-        let encoded = meme.on_to::<IdChannel>().await.encode::<Json>();
-        let mut decoded: BoxStream<'static, String> = encoded.decode::<IdChannel, Json>().await.unwrap();
-        while let Some(item) = decoded.next().await {
-            println!("{}", item);
-        }
+        let encoded = func.on_to::<IdChannel>().await.encode::<Json>();
+        let add: Adder = encoded.decode::<IdChannel, Json>().await.unwrap();
+        println!("{}", add(20, 35).await);
     })
 }

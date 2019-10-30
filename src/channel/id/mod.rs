@@ -158,12 +158,7 @@ impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
         let fork = channel.get_fork::<K>(ForkHandle(0));
         let (receiver, sender) = channel.split();
         let pool = ThreadPool::new().unwrap();
-        pool.spawn_ok(
-            sender
-                .map(Ok::<_, <C as Sink<Item>>::Error>)
-                .forward(sink)
-                .unwrap_or_else(|_| panic!()),
-        );
+        pool.spawn_ok(sender.map(Ok).forward(sink).unwrap_or_else(|_| panic!()));
         pool.spawn_ok(
             stream
                 .map(Ok)
