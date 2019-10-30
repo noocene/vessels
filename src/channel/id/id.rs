@@ -1,6 +1,6 @@
 use super::Context;
 
-use crate::{channel::ForkHandle, SerdeAny};
+use crate::{channel::ForkHandle, Kind, SerdeAny};
 
 use serde::{
     de::{self, DeserializeOwned, DeserializeSeed, Deserializer},
@@ -54,7 +54,12 @@ impl Future for WaitFor {
 }
 
 impl Registry {
-    pub(crate) fn add<T: Serialize + DeserializeOwned + Send + 'static>(&self) {
+    pub(crate) fn add<K: Kind>(&self) {
+        self.add_type::<K::ConstructItem>();
+        self.add_type::<K::DeconstructItem>();
+    }
+
+    fn add_type<T: Serialize + DeserializeOwned + Send + 'static>(&self) {
         if !self.items.read().unwrap().contains_key(&TypeId::of::<T>()) {
             let mut items = self.items.write().unwrap();
             if !items.contains_key(&TypeId::of::<T>()) {
