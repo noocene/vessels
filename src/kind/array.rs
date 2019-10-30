@@ -1,10 +1,10 @@
 use crate::{
     channel::{Channel, ForkHandle},
-    ConstructResult, Kind,
+    ConstructResult, DeconstructResult, Kind,
 };
 
 use futures::{
-    future::{join_all, ok, ready, try_join_all, BoxFuture, Ready},
+    future::{join_all, ok, try_join_all, BoxFuture, Ready},
     FutureExt, SinkExt, StreamExt, TryFutureExt,
 };
 
@@ -12,16 +12,17 @@ use std::{mem::MaybeUninit, ptr};
 
 impl<T: Send + 'static> Kind for [T; 0] {
     type ConstructItem = ();
-    type Error = ();
+    type ConstructError = ();
     type ConstructFuture = Ready<ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructFuture = Ready<()>;
+    type DeconstructError = ();
+    type DeconstructFuture = Ready<DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         _: C,
     ) -> Self::DeconstructFuture {
-        ready(())
+        ok(())
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         _: C,
@@ -36,10 +37,11 @@ macro_rules! array_impl {
             where T: Kind
         {
             type ConstructItem = Vec<ForkHandle>;
-            type Error = T::Error;
+            type ConstructError = T::ConstructError;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructFuture = BoxFuture<'static, ()>;
+            type DeconstructError = T::DeconstructError;
+            type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
                 mut channel: C,
@@ -50,7 +52,7 @@ macro_rules! array_impl {
                         vec![
                             $(channel.fork::<T>($nn)),+
                         ]
-                    ).await).await.unwrap_or_else(|_| panic!())
+                    ).await).await.map_err(|_| panic!())
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
