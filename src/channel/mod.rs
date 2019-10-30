@@ -18,7 +18,10 @@ pub struct ForkHandle(pub(crate) u32);
 
 pub trait Fork: Send + 'static {
     fn fork<K: Kind>(&self, kind: K) -> BoxFuture<'static, ForkHandle>;
-    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> BoxFuture<'static, Result<K, K::Error>>;
+    fn get_fork<K: Kind>(
+        &self,
+        fork_ref: ForkHandle,
+    ) -> BoxFuture<'static, Result<K, K::ConstructError>>;
 }
 
 pub trait Channel<
@@ -36,7 +39,7 @@ pub trait Shim<'a, T: Target<'a, K>, K: Kind>:
     >(
         self,
         input: C,
-    ) -> BoxFuture<'static, Result<K, K::Error>>;
+    ) -> BoxFuture<'static, Result<K, K::ConstructError>>;
 }
 
 pub trait Target<'a, K: Kind>: Context<'a> + Sized {

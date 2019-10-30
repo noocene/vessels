@@ -8,7 +8,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::{channel::Channel, Kind};
+use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
 
 use futures::{future::BoxFuture, SinkExt, StreamExt};
 
@@ -16,17 +16,18 @@ macro_rules! primitive_impl {
     ($($ty:ident)+) => {$(
         impl Kind for $ty {
             type ConstructItem = $ty;
-            type Error = ();
-            type ConstructFuture = BoxFuture<'static, Result<$ty, Self::Error>>;
+            type ConstructError = ();
+            type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructFuture = BoxFuture<'static, ()>;
+            type DeconstructError = ();
+            type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    channel.send(self).await.unwrap_or_else(|_| panic!())
+                    channel.send(self).await.map_err(|_| panic!())
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

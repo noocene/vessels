@@ -130,7 +130,7 @@ pub trait Decode<
     K: Kind,
 >: Format
 {
-    type Output: Future<Output = Result<K, K::Error>>;
+    type Output: Future<Output = Result<K, K::ConstructError>>;
 
     fn decode<T: Target<'de, K> + Send + 'static>(input: C) -> Self::Output
     where
@@ -156,7 +156,7 @@ where
     Self::Representation: Send,
     <C as Sink<<Self as Format>::Representation>>::Error: Send,
 {
-    type Output = BoxFuture<'static, Result<K, K::Error>>;
+    type Output = BoxFuture<'static, Result<K, K::ConstructError>>;
 
     fn decode<U: Target<'de, K> + Send + 'static>(input: C) -> Self::Output
     where

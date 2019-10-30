@@ -147,7 +147,7 @@ impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
     fn complete<C: Stream<Item = Item> + Sink<Item> + Send + 'static>(
         self,
         input: C,
-    ) -> BoxFuture<'static, Result<K, K::Error>> {
+    ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
         let (sink, stream) = input.split();
         let (sender, receiver) = unbounded();
         let channel = IdChannel {
@@ -222,7 +222,10 @@ impl IdChannelHandle {
         )
     }
 
-    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> BoxFuture<'static, Result<K, K::Error>> {
+    fn get_fork<K: Kind>(
+        &self,
+        fork_ref: ForkHandle,
+    ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
         let out_channel = self.out_channel.clone();
         self.context.add::<K>(fork_ref);
         REGISTRY.add::<K::ConstructItem>();
@@ -266,7 +269,10 @@ impl IdChannel {
             in_channels: self.in_channels.clone(),
         }
     }
-    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> BoxFuture<'static, Result<K, K::Error>> {
+    fn get_fork<K: Kind>(
+        &self,
+        fork_ref: ForkHandle,
+    ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
         let out_channel = self.out_channel.1.clone();
         self.context.add::<K>(fork_ref);
         REGISTRY.add::<K::ConstructItem>();
@@ -342,7 +348,10 @@ where
     fn fork<K: Kind>(&self, kind: K) -> BoxFuture<'static, ForkHandle> {
         self.channel.fork(kind)
     }
-    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> BoxFuture<'static, Result<K, K::Error>> {
+    fn get_fork<K: Kind>(
+        &self,
+        fork_ref: ForkHandle,
+    ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
         self.channel.get_fork(fork_ref)
     }
 }
@@ -408,14 +417,15 @@ where
         lazy(move |_| {
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
             let (oi, receiver): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
-            ThreadPool::new()
-                .unwrap()
-                .spawn_ok(kind.deconstruct(IdChannelFork {
+            ThreadPool::new().unwrap().spawn_ok(
+                kind.deconstruct(IdChannelFork {
                     o: Box::pin(oi),
                     i: Box::pin(oo),
                     channel,
                     sink_item: PhantomData,
-                }));
+                })
+                .unwrap_or_else(|_| panic!()),
+            );
             (sender, receiver)
         })
     }
@@ -459,12 +469,15 @@ where
                     .forward(csender)
                     .unwrap_or_else(|_| panic!()),
             );
-            pool.spawn_ok(kind.deconstruct(IdChannelFork {
-                o: Box::pin(oi),
-                i: Box::pin(oo),
-                channel: channel.clone(),
-                sink_item: PhantomData,
-            }));
+            pool.spawn_ok(
+                kind.deconstruct(IdChannelFork {
+                    o: Box::pin(oi),
+                    i: Box::pin(oo),
+                    channel: channel.clone(),
+                    sink_item: PhantomData,
+                })
+                .unwrap_or_else(|_| panic!()),
+            );
             channel
         })
     }

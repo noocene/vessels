@@ -1,6 +1,6 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
-use quote::{format_ident, quote, ToTokens};
+use quote::{format_ident, quote};
 use syn::{parse2, parse_str, Path, Type};
 use synstructure::{decl_derive, Structure};
 
@@ -24,8 +24,9 @@ fn kind_derive(s: Structure) -> TokenStream {
             impl Kind for #ident {
                 type ConstructItem = <<#ident as AsKind<#ty>>::Kind as Kind>::ConstructItem;
                 type ConstructFuture = <#ident as AsKind<#ty>>::ConstructFuture;
-                type Error = <<#ident as AsKind<#ty>>::Kind as Kind>::Error;
+                type ConstructError = <<#ident as AsKind<#ty>>::Kind as Kind>::ConstructError;
                 type DeconstructItem = <<#ident as AsKind<#ty>>::Kind as Kind>::DeconstructItem;
+                type DeconstructError = <<#ident as AsKind<#ty>>::Kind as Kind>::DeconstructError;
                 type DeconstructFuture = <<#ident as AsKind<#ty>>::Kind as Kind>::DeconstructFuture;
 
                 fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
