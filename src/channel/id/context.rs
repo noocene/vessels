@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex, RwLock, Weak},
 };
 
-use weak_table::WeakValueHashMap;
+use weak_table::PtrWeakHashSet;
 
 use futures::{
     task::{AtomicWaker, Context as FContext},
@@ -23,7 +23,7 @@ struct ContextState {
 #[derive(Clone)]
 pub struct Context {
     state: Arc<RwLock<ContextState>>,
-    tasks: Arc<Mutex<WeakValueHashMap<ForkHandle, Weak<AtomicWaker>>>>,
+    tasks: Arc<Mutex<HashMap<ForkHandle, PtrWeakHashSet<Weak<AtomicWaker>>>>>,
 }
 
 pub(crate) struct WaitFor {
@@ -32,28 +32,41 @@ pub(crate) struct WaitFor {
     id: ForkHandle,
 }
 
+impl Drop for WaitFor {
+    fn drop(&mut self) {
+        let mut tasks = self.context.tasks.lock().unwrap();
+        if tasks.get(&self.id).unwrap().len() == 1 {
+            tasks.remove(&self.id);
+        }
+    }
+}
+
 impl Future for WaitFor {
     type Output = (TypeId, TypeId);
 
     fn poll(self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Self::Output> {
-        self.context.get(self.id).map_or_else(
+        let state = self.context.state.read().unwrap();
+        let output = state.channel_types.get(&self.id).copied().map_or_else(
             || {
                 self.task.register(cx.waker());
                 Poll::Pending
             },
             Poll::Ready,
-        )
+        );
+        drop(state);
+        output
     }
 }
 
 impl Context {
     pub(crate) fn wait_for(&self, id: ForkHandle) -> WaitFor {
         let mut tasks = self.tasks.lock().unwrap();
-        let task = tasks.get(&id).unwrap_or_else(|| {
-            let task = Arc::new(AtomicWaker::new());
-            tasks.insert(id, task.clone());
-            task
-        });
+        let task = Arc::new(AtomicWaker::new());
+        tasks
+            .entry(id)
+            .or_insert_with(|| PtrWeakHashSet::new())
+            .insert(task.clone());
+        drop(tasks);
         WaitFor {
             task,
             context: self.clone(),
@@ -78,21 +91,13 @@ impl Context {
                 next_index: ForkHandle(1),
                 unused_indices: vec![],
             })),
-            tasks: Arc::new(Mutex::new(WeakValueHashMap::new())),
+            tasks: Arc::new(Mutex::new(HashMap::new())),
         }
-    }
-
-    pub(crate) fn get(&self, channel: ForkHandle) -> Option<(TypeId, TypeId)> {
-        self.state
-            .read()
-            .unwrap()
-            .channel_types
-            .get(&channel)
-            .copied()
     }
 
     pub(crate) fn create<K: Kind>(&self) -> ForkHandle {
         let mut state = self.state.write().unwrap();
+        let tasks = self.tasks.lock().unwrap();
         let c = TypeId::of::<K::ConstructItem>();
         let d = TypeId::of::<K::DeconstructItem>();
 
@@ -105,20 +110,24 @@ impl Context {
             state.channel_types.insert(id, (c, d));
             id
         };
-        if let Some(task) = self.tasks.lock().unwrap().get(&id) {
-            task.wake()
+        if let Some(tasks) = tasks.get(&id) {
+            tasks.iter().for_each(|task| task.wake())
         }
+        drop(tasks);
         id
     }
 
     pub(crate) fn add<K: Kind>(&self, handle: ForkHandle) {
         let mut state = self.state.write().unwrap();
+        let tasks = self.tasks.lock().unwrap();
         let c = TypeId::of::<K::ConstructItem>();
         let d = TypeId::of::<K::DeconstructItem>();
         state.channel_types.insert(handle, (c, d));
-        if let Some(task) = self.tasks.lock().unwrap().get(&handle) {
-            task.wake()
+        if let Some(tasks) = tasks.get(&handle) {
+            tasks.iter().for_each(|task| task.wake())
         }
+        drop(tasks);
+        drop(state);
     }
 
     pub(crate) fn len(&self) -> usize {
