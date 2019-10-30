@@ -17,11 +17,10 @@ enum TestEnum {
 }
 
 fn main() {
-    let meme = vec!["test".to_owned(); 1000];
+    let meme = vec!["test".to_owned(); 100];
     ThreadPool::new().unwrap().run(async move {
         let encoded = meme.on_to::<IdChannel>().await.encode::<Json>();
-        let decoded: Vec<String> =
-            encoded.decode::<IdChannel, Json>().await.unwrap();
+        let decoded: Vec<String> = encoded.decode::<IdChannel, Json>().await.unwrap();
         println!("{:?}", decoded)
     })
 }

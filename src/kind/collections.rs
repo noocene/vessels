@@ -1,6 +1,6 @@
 use crate::{
     channel::{Channel, ForkHandle},
-    ConstructResult, Kind,
+    ConstructResult, DeconstructResult, Kind,
 };
 
 use std::{
@@ -19,10 +19,11 @@ macro_rules! iterator_impl {
             where T: Kind $(+ $tbound1 $(+ $tbound2)*)*, $($typaram: $bound,)*
         {
             type ConstructItem = Vec<ForkHandle>;
-            type Error = T::Error;
+            type ConstructError = T::ConstructError;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructFuture = BoxFuture<'static, ()>;
+            type DeconstructError = T::DeconstructError;
+            type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
                 mut channel: C,
@@ -31,7 +32,7 @@ macro_rules! iterator_impl {
                     channel.send(join_all(
                         self.into_iter()
                             .map(|entry| channel.fork::<T>(entry)),
-                    ).await).await.unwrap_or_else(|_| panic!())
+                    ).await).await.map_err(|_| panic!())
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
@@ -67,10 +68,11 @@ macro_rules! map_impl {
             V: Kind
         {
             type ConstructItem = Vec<ForkHandle>;
-            type Error = <(K, V) as Kind>::Error;
+            type ConstructError = <(K, V) as Kind>::ConstructError;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructFuture = BoxFuture<'static, ()>;
+            type DeconstructError = <(K, V) as Kind>::DeconstructError;
+            type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
                 mut channel: C,
@@ -79,7 +81,7 @@ macro_rules! map_impl {
                     channel.send(join_all(
                         self.into_iter()
                             .map(|entry| channel.fork::<(K, V)>(entry)),
-                    ).await).await.unwrap_or_else(|_| panic!())
+                    ).await).await.map_err(|_| panic!())
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

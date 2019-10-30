@@ -2,7 +2,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use futures::{future::BoxFuture, SinkExt, StreamExt, TryFutureExt};
 
-use crate::{channel::Channel, Kind};
+use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
 
 use super::{using, AsKind};
 
@@ -32,7 +32,7 @@ impl<T: Serialize + DeserializeOwned + Send + 'static> From<T> for Serde<T> {
 
 impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> AsKind<using::Serde> for T {
     type Kind = Serde<T>;
-    type ConstructFuture = BoxFuture<'static, Result<T, <Serde<T> as Kind>::Error>>;
+    type ConstructFuture = BoxFuture<'static, Result<T, <Serde<T> as Kind>::ConstructError>>;
 
     fn into_kind(self) -> Serde<T> {
         Serde(self)
@@ -44,16 +44,17 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> AsKind<usi
 
 impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> Kind for Serde<T> {
     type ConstructItem = T;
-    type Error = ();
-    type ConstructFuture = BoxFuture<'static, Result<Serde<T>, Self::Error>>;
+    type ConstructError = ();
+    type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructFuture = BoxFuture<'static, ()>;
+    type DeconstructError = ();
+    type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         mut channel: C,
     ) -> Self::DeconstructFuture {
-        Box::pin(async move { channel.send(self.0).await.unwrap_or_else(|_| panic!()) })
+        Box::pin(async move { channel.send(self.0).await.map_err(|_| panic!()) })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         mut channel: C,

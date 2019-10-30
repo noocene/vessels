@@ -1,6 +1,6 @@
 use crate::{
     channel::{Channel, ForkHandle},
-    ConstructResult, Kind,
+    ConstructResult, DeconstructResult, Kind,
 };
 
 use serde::{Deserialize, Serialize};
@@ -41,10 +41,11 @@ where
     T: Kind,
 {
     type ConstructItem = ForkHandle;
-    type Error = T::Error;
+    type ConstructError = T::ConstructError;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructFuture = BoxFuture<'static, ()>;
+    type DeconstructError = T::DeconstructError;
+    type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         mut channel: C,
@@ -53,7 +54,7 @@ where
             channel
                 .send(channel.fork(self.await).await)
                 .await
-                .unwrap_or_else(|_| panic!())
+                .map_err(|_| panic!())
         })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

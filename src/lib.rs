@@ -16,11 +16,12 @@ use std::{any::Any, fmt::Debug};
 
 pub use derive::Kind;
 
-type ConstructResult<K> = Result<K, <K as Kind>::Error>;
+type ConstructResult<K> = Result<K, <K as Kind>::ConstructError>;
+type DeconstructResult<K> = Result<(), <K as Kind>::DeconstructError>;
 
 pub trait Kind: Sized + Send + 'static {
     type ConstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
-    type Error: Debug + Send;
+    type ConstructError: Debug + Send;
     type ConstructFuture: Future<Output = ConstructResult<Self>> + Send + 'static;
 
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
@@ -28,7 +29,8 @@ pub trait Kind: Sized + Send + 'static {
     ) -> Self::ConstructFuture;
 
     type DeconstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
-    type DeconstructFuture: Future<Output = ()> + Send + 'static;
+    type DeconstructError: Debug + Send;
+    type DeconstructFuture: Future<Output = DeconstructResult<Self>> + Send + 'static;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
