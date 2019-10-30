@@ -6,10 +6,9 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 use futures::{
-    future::{ok, BoxFuture, ready},
-    stream::once,
+    future::{ready, BoxFuture},
     task::Context,
-    Future as IFuture, FutureExt, Poll, SinkExt, StreamExt, TryFutureExt,
+    Future as IFuture, Poll, SinkExt, StreamExt,
 };
 
 use std::pin::Pin;
@@ -48,30 +47,23 @@ where
     type DeconstructFuture = BoxFuture<'static, ()>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
-        channel: C,
+        mut channel: C,
     ) -> Self::DeconstructFuture {
-        Box::pin(self.then(move |v| {
-            channel.fork(v).then(|handle| {
-                let channel = channel.sink_map_err(|_| panic!());
-                Box::pin(
-                    once(ok(handle))
-                        .forward(channel)
-                        .unwrap_or_else(|_| panic!()),
-                )
-            })
-        }))
+        Box::pin(async move {
+            channel
+                .send(channel.fork(self.await).await)
+                .await
+                .unwrap_or_else(|_| panic!())
+        })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-        channel: C,
+        mut channel: C,
     ) -> Self::ConstructFuture {
-        Box::pin(
-            channel
-                .into_future()
-                .then(move |(item, channel)| {
-                       channel
-                            .get_fork::<T>(item.unwrap())
-                            .map_ok(|t| Future::new(ready(t)))
-                })
-        )
+        Box::pin(async move {
+            let handle = channel.next().await.unwrap();
+            Ok(Future::new(ready(
+                channel.get_fork::<T>(handle).await.unwrap(),
+            )))
+        })
     }
 }

@@ -388,8 +388,8 @@ where
 impl<
         T: Send + Unpin + 'static,
         U: Send + Unpin + 'static,
-        I: Serialize + DeserializeOwned + Send + Unpin + 'static,
-        O: Serialize + DeserializeOwned + Send + Unpin + 'static,
+        I: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static,
+        O: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static,
     > IdChannelFork<T, U, I, O>
 where
     T: DerefMut,
@@ -503,11 +503,11 @@ impl<
         T: Send + Unpin + 'static,
         U: Send + Unpin + 'static,
         I: Serialize + DeserializeOwned + Send + 'static,
-        O: Serialize + Unpin + DeserializeOwned + Send + 'static,
+        O: Serialize + Unpin + DeserializeOwned + Send + Sync + 'static,
     > Channel<I, O> for IdChannelFork<T, U, I, O>
 where
-    T: DerefMut,
-    U: DerefMut,
+    T: DerefMut + Sync,
+    U: DerefMut + Sync,
     U::Target: Sink<O>,
     T::Target: Stream<Item = I>,
     <U::Target as Sink<O>>::Error: Send + 'static,

@@ -12,22 +12,22 @@ pub mod kind;
 use erased_serde::Serialize as ErasedSerialize;
 use futures::Future;
 use serde::{de::DeserializeOwned, Serialize};
-use std::any::Any;
+use std::{any::Any, fmt::Debug};
 
 pub use derive::Kind;
 
 type ConstructResult<K> = Result<K, <K as Kind>::Error>;
 
 pub trait Kind: Sized + Send + 'static {
-    type ConstructItem: Serialize + DeserializeOwned + Send + Unpin + 'static;
-    type Error: Send;
+    type ConstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
+    type Error: Debug + Send;
     type ConstructFuture: Future<Output = ConstructResult<Self>> + Send + 'static;
 
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         channel: C,
     ) -> Self::ConstructFuture;
 
-    type DeconstructItem: Serialize + DeserializeOwned + Send + Unpin + 'static;
+    type DeconstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
     type DeconstructFuture: Future<Output = ()> + Send + 'static;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
