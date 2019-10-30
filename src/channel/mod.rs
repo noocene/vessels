@@ -17,7 +17,8 @@ use futures::{future::BoxFuture, Sink, Stream};
 pub struct ForkHandle(pub(crate) u32);
 
 pub trait Fork: Send + 'static {
-    fn fork<K: Kind>(&self, kind: K) -> BoxFuture<'static, ForkHandle>;
+    fn fork<K: Kind>(&self, kind: K)
+        -> BoxFuture<'static, Result<ForkHandle, K::DeconstructError>>;
     fn get_fork<K: Kind>(
         &self,
         fork_ref: ForkHandle,

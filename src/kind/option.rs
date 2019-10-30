@@ -23,7 +23,7 @@ where
             channel
                 .send(match self {
                     None => None,
-                    Some(item) => Some(channel.fork(item).await),
+                    Some(item) => Some(channel.fork(item).await.unwrap()),
                 })
                 .await
                 .map_err(|_| panic!())

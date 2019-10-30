@@ -31,7 +31,7 @@ macro_rules! iterator_impl {
                 Box::pin(async move {
                     channel.send(join_all(
                         self.into_iter()
-                            .map(|entry| channel.fork::<T>(entry)),
+                            .map(|entry| channel.fork::<T>(entry).unwrap_or_else(|_| panic!())),
                     ).await).await.map_err(|_| panic!())
                 })
             }
@@ -80,7 +80,7 @@ macro_rules! map_impl {
                 Box::pin(async move {
                     channel.send(join_all(
                         self.into_iter()
-                            .map(|entry| channel.fork::<(K, V)>(entry)),
+                            .map(|entry| channel.fork::<(K, V)>(entry).unwrap_or_else(|_| panic!())),
                     ).await).await.map_err(|_| panic!())
                 })
             }

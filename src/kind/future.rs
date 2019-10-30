@@ -52,7 +52,7 @@ where
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             channel
-                .send(channel.fork(self.await).await)
+                .send(channel.fork(self.await).await.unwrap())
                 .await
                 .map_err(|_| panic!())
         })
