@@ -2,6 +2,7 @@ mod array;
 mod collections;
 mod functions;
 mod future;
+pub mod iterator;
 mod option;
 mod phantom_data;
 mod primitives;
@@ -12,6 +13,7 @@ mod tuple;
 mod unit;
 pub mod using;
 pub use self::serde::Serde;
+pub use iterator::Iterator;
 
 use futures::Future as IFuture;
 
