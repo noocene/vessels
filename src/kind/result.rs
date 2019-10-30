@@ -23,8 +23,8 @@ where
         Box::pin(async move {
             channel
                 .send(match self {
-                    Ok(item) => Ok(channel.fork(item).await),
-                    Err(item) => Err(channel.fork(item).await),
+                    Ok(item) => Ok(channel.fork(item).await.unwrap()),
+                    Err(item) => Err(channel.fork(item).await.unwrap()),
                 })
                 .await
                 .map_err(|_| panic!())

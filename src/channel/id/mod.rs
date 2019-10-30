@@ -184,7 +184,10 @@ impl<'a, K: Kind> IContext<'a> for Shim<K> {
 }
 
 impl IdChannelHandle {
-    fn fork<K: Kind>(&self, kind: K) -> BoxFuture<'static, ForkHandle> {
+    fn fork<K: Kind>(
+        &self,
+        kind: K,
+    ) -> BoxFuture<'static, Result<ForkHandle, K::DeconstructError>> {
         let id = self.context.create::<K>();
         REGISTRY.add::<K::DeconstructItem>();
         let context = self.context.clone();
@@ -217,7 +220,7 @@ impl IdChannelHandle {
                             }),
                     ),
                 );
-                id
+                Ok(id)
             }),
         )
     }
@@ -345,7 +348,10 @@ where
     T::Target: Stream<Item = I>,
     <U::Target as Sink<O>>::Error: Send + 'static,
 {
-    fn fork<K: Kind>(&self, kind: K) -> BoxFuture<'static, ForkHandle> {
+    fn fork<K: Kind>(
+        &self,
+        kind: K,
+    ) -> BoxFuture<'static, Result<ForkHandle, K::DeconstructError>> {
         self.channel.fork(kind)
     }
     fn get_fork<K: Kind>(

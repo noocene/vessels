@@ -4,8 +4,8 @@ use crate::{
 };
 
 use futures::{
-    future::{join_all, BoxFuture},
-    SinkExt, StreamExt,
+    future::{ BoxFuture},
+    SinkExt, StreamExt, 
 };
 
 impl<T> Kind for (T,)
@@ -24,7 +24,7 @@ where
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             channel
-                .send(channel.fork::<T>(self.0).await)
+                .send(channel.fork::<T>(self.0).await.unwrap())
                 .await
                 .map_err(|_| panic!())
         })
@@ -55,11 +55,11 @@ macro_rules! tuple_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    channel.send(join_all(
+                    channel.send(
                         vec![
-                            $(channel.fork::<$name>(self.$n)),+
+                            $(channel.fork::<$name>(self.$n).await.unwrap()),+
                         ]
-                    ).await).await.map_err(|_| panic!())
+                    ).await.map_err(|_| panic!())
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
