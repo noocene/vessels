@@ -3,40 +3,9 @@ use crate::{
     ConstructResult, DeconstructResult, Kind,
 };
 
-use serde::{Deserialize, Serialize};
+use futures::{future::BoxFuture, SinkExt, StreamExt};
 
-use futures::{
-    future::{ready, BoxFuture},
-    task::Context,
-    Future as IFuture, Poll, SinkExt, StreamExt,
-};
-
-use std::pin::Pin;
-
-#[doc(hidden)]
-#[derive(Serialize, Deserialize, Debug)]
-pub enum KResult {
-    Ok(ForkHandle),
-    Err(ForkHandle),
-}
-
-pub struct Future<T: Kind>(BoxFuture<'static, T>);
-
-impl<T: Kind> IFuture for Future<T> {
-    type Output = T;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        self.0.as_mut().poll(cx)
-    }
-}
-
-impl<T: Kind> Future<T> {
-    pub fn new<F: IFuture<Output = T> + Send + 'static>(future: F) -> Self {
-        Future(Box::pin(future))
-    }
-}
-
-impl<T> Kind for Future<T>
+impl<T> Kind for BoxFuture<'static, T>
 where
     T: Kind,
 {
@@ -61,10 +30,10 @@ where
         mut channel: C,
     ) -> Self::ConstructFuture {
         Box::pin(async move {
-            let handle = channel.next().await.unwrap();
-            Ok(Future::new(ready(
-                channel.get_fork::<T>(handle).await.unwrap(),
-            )))
+            Ok(Box::pin(async move {
+                let handle = channel.next().await.unwrap();
+                channel.get_fork::<T>(handle).await.unwrap()
+            }) as BoxFuture<'static, T>)
         })
     }
 }

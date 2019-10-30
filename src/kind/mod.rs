@@ -1,7 +1,6 @@
 mod array;
 mod collections;
-pub mod future;
-pub use future::Future;
+mod future;
 mod option;
 mod phantom_data;
 mod primitives;
