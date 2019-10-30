@@ -6,6 +6,7 @@ mod phantom_data;
 mod primitives;
 mod result;
 pub mod serde;
+mod stream;
 mod tuple;
 mod unit;
 pub mod using;
