@@ -1,5 +1,6 @@
 mod array;
 mod collections;
+mod functions;
 mod future;
 mod option;
 mod phantom_data;
