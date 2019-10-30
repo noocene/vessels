@@ -1,11 +1,11 @@
-use crate::{channel::Channel, Kind};
+use crate::{channel::Channel, ConstructResult, Kind};
 
 use futures::future::{ok, ready, Ready};
 
 impl Kind for () {
     type ConstructItem = ();
     type Error = ();
-    type ConstructFuture = Ready<Result<(), ()>>;
+    type ConstructFuture = Ready<ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructFuture = Ready<()>;
 

@@ -1,15 +1,42 @@
-use futures::try_join;
-
 use crate::{
     channel::{Channel, ForkHandle},
     ConstructResult, Kind,
 };
 
 use futures::{
-    future::{join_all, ok, BoxFuture},
-    stream::once,
-    FutureExt, SinkExt, StreamExt, TryFutureExt,
+    future::{join_all, BoxFuture},
+    SinkExt, StreamExt,
 };
+
+impl<T> Kind for (T,)
+where
+    T: Kind,
+{
+    type ConstructItem = ForkHandle;
+    type Error = T::Error;
+    type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+    type DeconstructItem = ();
+    type DeconstructFuture = BoxFuture<'static, ()>;
+    fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
+        self,
+        mut channel: C,
+    ) -> Self::DeconstructFuture {
+        Box::pin(async move {
+            channel
+                .send(channel.fork::<T>(self.0).await)
+                .await
+                .unwrap_or_else(|_| panic!())
+        })
+    }
+    fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
+        mut channel: C,
+    ) -> Self::ConstructFuture {
+        Box::pin(async move {
+            let handle = channel.next().await.unwrap();
+            Ok(channel.get_fork(handle).await.unwrap())
+        })
+    }
+}
 
 macro_rules! tuple_impl {
     ($($len:expr => ($($n:tt $name:ident $nn:ident)+))+) => {$(
@@ -23,72 +50,25 @@ macro_rules! tuple_impl {
             type DeconstructFuture = BoxFuture<'static, ()>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
-                channel: C,
+                mut channel: C,
             ) -> Self::DeconstructFuture {
-                Box::pin(
-                    join_all(
+                Box::pin(async move {
+                    channel.send(join_all(
                         vec![
                             $(channel.fork::<$name>(self.$n)),+
                         ]
-                    )
-                    .then(move |handles| {
-                        let channel = channel.sink_map_err(|_| panic!());
-                        Box::pin(
-                            once(ok(handles))
-                                .forward(channel)
-                                .unwrap_or_else(|_| panic!()),
-                        )
-                    }),
-                )
+                    ).await).await.unwrap_or_else(|_| panic!())
+                })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-                channel: C,
+                mut channel: C,
             ) -> Self::ConstructFuture {
-                Box::pin(
-                    channel
-                        .into_future()
-                        .then(move |(item, channel)| {
-                            let item = item.unwrap();
-                            let ($($nn),+) = ($(channel.get_fork::<$name>(item[$n]).map_err(|_| panic!("lol"))),+);
-                            async {
-                                Ok(try_join!($($nn),+).unwrap_or_else(|_| panic!("lol")))
-                            }
-                        })
-                )
+                Box::pin(async move {
+                    let item = channel.next().await.unwrap();
+                    Ok(($(channel.get_fork::<$name>(item[$n]).await.unwrap()),+))
+                })
             }
         })+
-    }
-}
-
-impl<T> Kind for (T,)
-where
-    T: Kind,
-{
-    type ConstructItem = ForkHandle;
-    type Error = T::Error;
-    type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
-    type DeconstructItem = ();
-    type DeconstructFuture = BoxFuture<'static, ()>;
-    fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
-        self,
-        channel: C,
-    ) -> Self::DeconstructFuture {
-        Box::pin(channel.fork::<T>(self.0).then(move |handles| {
-            let channel = channel.sink_map_err(|_| panic!());
-            Box::pin(
-                once(ok(handles))
-                    .forward(channel)
-                    .unwrap_or_else(|_| panic!()),
-            )
-        }))
-    }
-    fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-        channel: C,
-    ) -> Self::ConstructFuture {
-        Box::pin(channel.into_future().then(move |(item, channel)| {
-            let item = item.unwrap();
-            channel.get_fork::<T>(item).map_ok(|t| (t,))
-        }))
     }
 }
 

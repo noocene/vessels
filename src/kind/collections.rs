@@ -9,9 +9,8 @@ use std::{
 };
 
 use futures::{
-    future::{join_all, ok, try_join_all, BoxFuture},
-    stream::once,
-    FutureExt, SinkExt, StreamExt, TryFutureExt,
+    future::{join_all, try_join_all, BoxFuture},
+    SinkExt, StreamExt, TryFutureExt,
 };
 
 macro_rules! iterator_impl {
@@ -26,37 +25,27 @@ macro_rules! iterator_impl {
             type DeconstructFuture = BoxFuture<'static, ()>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
-                channel: C,
+                mut channel: C,
             ) -> Self::DeconstructFuture {
-                Box::pin(
-                    join_all(
+                Box::pin(async move {
+                    channel.send(join_all(
                         self.into_iter()
                             .map(|entry| channel.fork::<T>(entry)),
-                    )
-                    .then(move |handles| {
-                        let channel = channel.sink_map_err(|_| panic!());
-                        Box::pin(
-                            once(ok(handles))
-                                .forward(channel)
-                                .unwrap_or_else(|_| panic!()),
-                        )
-                    }),
-                )
+                    ).await).await.unwrap_or_else(|_| panic!())
+                })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-                channel: C,
+                mut channel: C,
             ) -> Self::ConstructFuture {
-                Box::pin(
-                    channel
-                        .into_future().then(move |(item, channel)| {
-                            try_join_all(
-                                item.unwrap()
-                                    .into_iter()
-                                    .map(|entry| channel.get_fork::<T>(entry)),
-                            )
-                            .map_ok(|vec| vec.into_iter().collect())
-                        }),
-                )
+                Box::pin(async move {
+                    let handles = channel.next().await.unwrap();
+                    try_join_all(
+                        handles
+                            .into_iter()
+                            .map(|entry| channel.get_fork::<T>(entry)),
+                    )
+                    .map_ok(|vec| vec.into_iter().collect()).await
+                })
             }
         }
     )+};
@@ -84,37 +73,27 @@ macro_rules! map_impl {
             type DeconstructFuture = BoxFuture<'static, ()>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
-                channel: C,
+                mut channel: C,
             ) -> Self::DeconstructFuture {
-                Box::pin(
-                    join_all(
+                Box::pin(async move {
+                    channel.send(join_all(
                         self.into_iter()
                             .map(|entry| channel.fork::<(K, V)>(entry)),
-                    )
-                    .then(move |handles| {
-                        let channel = channel.sink_map_err(|_| panic!());
-                        Box::pin(
-                            once(ok(handles))
-                                .forward(channel)
-                                .unwrap_or_else(|_| panic!()),
-                        )
-                    }),
-                )
+                    ).await).await.unwrap_or_else(|_| panic!())
+                })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-                channel: C,
+                mut channel: C,
             ) -> Self::ConstructFuture {
-                Box::pin(
-                    channel
-                        .into_future().then(move |(item, channel)| {
-                            try_join_all(
-                                item.unwrap()
-                                    .into_iter()
-                                    .map(|entry| channel.get_fork::<(K, V)>(entry)),
-                            )
-                            .map_ok(|vec| vec.into_iter().collect())
-                        }),
-                )
+                Box::pin(async move {
+                    let handles = channel.next().await.unwrap();
+                    try_join_all(
+                        handles
+                            .into_iter()
+                            .map(|entry| channel.get_fork::<(K, V)>(entry)),
+                    )
+                    .map_ok(|vec| vec.into_iter().collect()).await
+                })
             }
         }
     )+};

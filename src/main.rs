@@ -1,6 +1,6 @@
 use kinddev::{
     channel::{Channel, IdChannel},
-    format::{Decode, Encode, Json},
+    format::{ApplyDecode, ApplyEncode, Json},
     kind::{using, AsKind},
     Kind, OnTo,
 };
@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use futures::{executor::ThreadPool, future::ready, FutureExt, StreamExt, TryFutureExt};
+use futures::executor::ThreadPool;
 
 #[derive(Serialize, Deserialize, Debug, Kind, Clone)]
 #[kind(using::Serde)]
@@ -24,16 +24,10 @@ fn main() {
         (-1, "not nice".to_owned()),
         TestEnum::No("unepic".to_owned()),
     );
-    ThreadPool::new().unwrap().run(
-        meme.on_to::<IdChannel>()
-            .map(Json::encode)
-            .map(|c| c.inspect(|item| println!("{}", item)))
-            .map(Json::decode::<IdChannel>)
-            .flatten()
-            .unwrap_or_else(|e| panic!(e))
-            .then(|item: HashMap<(i32, String), TestEnum>| {
-                println!("{:?}", item);
-                ready(())
-            }),
-    )
+    ThreadPool::new().unwrap().run(async move {
+        let encoded = meme.on_to::<IdChannel>().await.encode::<Json>();
+        let decoded: HashMap<(i32, String), TestEnum> =
+            encoded.decode::<IdChannel, Json>().await.unwrap();
+        println!("{:?}", decoded)
+    })
 }

@@ -10,11 +10,7 @@ use std::{
 
 use crate::{channel::Channel, Kind};
 
-use futures::{
-    future::{ok, BoxFuture},
-    stream::once,
-    FutureExt, SinkExt, StreamExt, TryFutureExt,
-};
+use futures::{future::BoxFuture, SinkExt, StreamExt};
 
 macro_rules! primitive_impl {
     ($($ty:ident)+) => {$(
@@ -27,25 +23,19 @@ macro_rules! primitive_impl {
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
-                channel: C,
+                mut channel: C,
             ) -> Self::DeconstructFuture {
-                let channel = channel.sink_map_err(|_| panic!());
-                Box::pin(
-                    once(ok(self))
-                        .forward(channel)
-                        .unwrap_or_else(|_| panic!()),
-                )
+                Box::pin(async move {
+                    channel.send(self).await.unwrap_or_else(|_| panic!())
+                })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-                channel: C,
+                mut channel: C,
             ) -> Self::ConstructFuture
             {
-                Box::pin(
-                    channel
-                        .into_future()
-                        .map(|v| v.0.unwrap())
-                        .unit_error(),
-                )
+                Box::pin(async move {
+                    Ok(channel.next().await.unwrap())
+                })
             }
         }
     )+};
