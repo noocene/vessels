@@ -189,7 +189,7 @@ impl IdChannelHandle {
         kind: K,
     ) -> BoxFuture<'static, Result<ForkHandle, K::DeconstructError>> {
         let id = self.context.create::<K>();
-        REGISTRY.add::<K::DeconstructItem>();
+        REGISTRY.add::<K>();
         let context = self.context.clone();
         let out_channel = self.out_channel.clone();
         let in_channels = self.in_channels.clone();
@@ -231,7 +231,7 @@ impl IdChannelHandle {
     ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
         let out_channel = self.out_channel.clone();
         self.context.add::<K>(fork_ref);
-        REGISTRY.add::<K::ConstructItem>();
+        REGISTRY.add::<K>();
         let (sender, ireceiver): (UnboundedSender<K::DeconstructItem>, _) = unbounded();
         let (isender, receiver): (UnboundedSender<K::ConstructItem>, _) = unbounded();
         let isender = isender
@@ -278,7 +278,7 @@ impl IdChannel {
     ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
         let out_channel = self.out_channel.1.clone();
         self.context.add::<K>(fork_ref);
-        REGISTRY.add::<K::ConstructItem>();
+        REGISTRY.add::<K>();
         let (sender, ireceiver): (UnboundedSender<K::DeconstructItem>, _) = unbounded();
         let (isender, receiver): (UnboundedSender<K::ConstructItem>, _) = unbounded();
         let isender = isender
@@ -327,7 +327,7 @@ impl<'a, K: Kind> Target<'a, K> for IdChannel {
     }
 
     fn new_shim() -> Self::Shim {
-        REGISTRY.add::<K::ConstructItem>();
+        REGISTRY.add::<K>();
         Shim {
             context: Context::new_with::<K>(),
             _marker: PhantomData,
@@ -446,7 +446,7 @@ where
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
             let (oi, receiver): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
             let mut in_channels = HashMap::new();
-            REGISTRY.add::<K::ConstructItem>();
+            REGISTRY.add::<K>();
             in_channels.insert(
                 ForkHandle(0),
                 Box::pin(
