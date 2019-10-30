@@ -3,10 +3,7 @@ use crate::{
     ConstructResult, DeconstructResult, Kind,
 };
 
-use futures::{
-    future::{ BoxFuture},
-    SinkExt, StreamExt, 
-};
+use futures::{future::BoxFuture, SinkExt, StreamExt};
 
 impl<T> Kind for (T,)
 where
