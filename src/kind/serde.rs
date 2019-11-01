@@ -8,7 +8,6 @@ use super::{using, AsKind};
 
 use std::ops::Deref;
 
-
 #[derive(Clone, Debug, Copy, Hash, Eq, Ord, PartialOrd, PartialEq, Default)]
 pub struct Serde<T: Serialize + DeserializeOwned + Send + 'static>(pub T);
 
