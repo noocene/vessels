@@ -12,7 +12,7 @@ pub mod kind;
 use erased_serde::Serialize as ErasedSerialize;
 use futures::Future;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{any::Any, fmt::Debug};
+use std::fmt::Debug;
 
 pub use derive::Kind;
 
@@ -38,14 +38,7 @@ pub trait Kind: Sized + Send + 'static {
     ) -> Self::DeconstructFuture;
 }
 
-pub(crate) trait SerdeAny: erased_serde::Serialize + mopa::Any + Send {
-    fn as_any(self) -> Box<dyn Any>
-    where
-        Self: Sized,
-    {
-        Box::new(self)
-    }
-}
+pub(crate) trait SerdeAny: erased_serde::Serialize + mopa::Any + Send {}
 
 mopafy!(SerdeAny);
 
