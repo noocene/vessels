@@ -1,5 +1,5 @@
 [package]
-name = "kinddev"
+name = "vessels"
 version = "0.1.0"
 authors = ["Izzy Swart <zenerboson@gmail.com>"]
 edition = "2018"

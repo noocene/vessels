@@ -1,13 +1,12 @@
-use kinddev::{
-    channel::{Channel, IdChannel},
+use vessels::{
+    channel::IdChannel,
     format::{ApplyDecode, ApplyEncode, Json},
-    kind::{using, AsKind,Iterator},
-    Kind, OnTo,
+    kind::{using, Iterator}, Kind, OnTo,
 };
 
 use serde::{Deserialize, Serialize};
 
-use futures::{executor::ThreadPool};
+use futures::executor::ThreadPool;
 
 #[derive(Serialize, Deserialize, Debug, Kind, Clone)]
 #[kind(using::Serde)]
