@@ -10,8 +10,8 @@ use futures::executor::ThreadPool;
 
 #[derive(Serialize, Deserialize, Debug, Kind, Clone)]
 #[kind(using::Serde)]
-enum TestEnum {
-    Yes(u32),
+enum TestEnum<T> {
+    Yes(T),
     No(String),
 }
 
