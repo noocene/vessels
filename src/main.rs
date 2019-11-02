@@ -1,8 +1,27 @@
-use vessels::object;
+use vessels::{kind::Future, object, OnTo, channel::IdChannel, format::{ApplyDecode, ApplyEncode, Json}};
+
+use futures::executor::ThreadPool;
 
 #[object]
-trait ObjectTest {
-    fn test(&self, hello: String) -> u32;
+trait Test {
+    fn test(&self, hello: String) -> Future<u32>;
 }
 
-fn main() {}
+struct Shim;
+
+impl Test for Shim {
+    fn test(&self, hello: String) -> Future<u32> {
+        Box::pin(async move {
+            hello.len() as u32
+        })
+    }
+}
+
+fn main() {
+    let test: Box<dyn Test> = Box::new(Shim);
+    ThreadPool::new().unwrap().run(async move {
+        let encoded = test.on_to::<IdChannel>().await.encode::<Json>();
+        let decoded: Box<dyn Test> = encoded.decode::<IdChannel, Json>().await.unwrap();
+        println!("{:?}", decoded.test("hello".to_string()).await);
+    })
+}
