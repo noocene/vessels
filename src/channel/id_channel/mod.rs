@@ -7,7 +7,7 @@ pub(crate) use id::Id;
 use id::REGISTRY;
 
 use futures::{
-    channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
+    channel::mpsc::{unbounded, SendError, UnboundedReceiver, UnboundedSender},
     executor::ThreadPool,
     future::{lazy, ok, BoxFuture},
     task::Context as FContext,
@@ -16,7 +16,7 @@ use futures::{
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use std::{collections::HashMap, ops::DerefMut};
+use std::collections::HashMap;
 
 use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle},
@@ -190,11 +190,7 @@ impl IdChannelHandle {
         let in_channels = self.in_channels.clone();
 
         Box::pin(
-            IdChannelFork::<Box<UnboundedReceiver<_>>, Box<UnboundedSender<_>>, _, _>::new(
-                kind,
-                self.clone(),
-            )
-            .map(move |(sender, receiver)| {
+            IdChannelFork::new(kind, self.clone()).map(move |(sender, receiver)| {
                 ThreadPool::new().unwrap().spawn_ok(
                     receiver
                         .map(move |v| Ok(Item::new(id, Box::new(v), context.clone())))
@@ -313,12 +309,7 @@ impl<'a, K: Kind> Target<'a, K> for IdChannel {
     where
         K::DeconstructFuture: Send,
     {
-        Box::pin(IdChannelFork::<
-            Box<UnboundedReceiver<_>>,
-            Box<UnboundedSender<_>>,
-            _,
-            _,
-        >::new_root(kind))
+        Box::pin(IdChannelFork::new_root(kind))
     }
 
     fn new_shim() -> Self::Shim {
@@ -333,17 +324,9 @@ impl<'a, K: Kind> Target<'a, K> for IdChannel {
 }
 
 impl<
-        T: Send + Unpin + 'static,
-        U: Send + Unpin + 'static,
         I: Serialize + DeserializeOwned + Send + 'static,
         O: Serialize + DeserializeOwned + Send + Unpin + 'static,
-    > IFork for IdChannelFork<T, U, I, O>
-where
-    T: DerefMut,
-    U: DerefMut,
-    U::Target: Sink<O>,
-    T::Target: Stream<Item = I>,
-    <U::Target as Sink<O>>::Error: Send + 'static,
+    > IFork for IdChannelFork<I, O>
 {
     fn fork<K: Kind>(
         &self,
@@ -360,35 +343,19 @@ where
 }
 
 pub(crate) struct IdChannelFork<
-    T: Send + Unpin + 'static,
-    U: Send + Unpin + 'static,
     I: Serialize + DeserializeOwned + Send + 'static,
     O: Serialize + DeserializeOwned + Send + Unpin + 'static,
-> where
-    T: DerefMut,
-    U: DerefMut,
-    U::Target: Sink<O>,
-    T::Target: Stream<Item = I>,
-    <U::Target as Sink<O>>::Error: Send + 'static,
-{
-    i: Pin<T>,
-    o: Pin<U>,
+> {
+    i: Pin<Box<UnboundedReceiver<I>>>,
+    o: Pin<Box<UnboundedSender<O>>>,
     channel: IdChannelHandle,
     sink_item: PhantomData<O>,
 }
 
 impl<
-        T: Send + Unpin + 'static,
-        U: Send + Unpin + 'static,
         I: Serialize + DeserializeOwned + Send + 'static,
         O: Serialize + DeserializeOwned + Send + Unpin + 'static,
-    > Stream for IdChannelFork<T, U, I, O>
-where
-    T: DerefMut,
-    U: DerefMut,
-    U::Target: Sink<O>,
-    T::Target: Stream<Item = I>,
-    <U::Target as Sink<O>>::Error: Send + 'static,
+    > Stream for IdChannelFork<I, O>
 {
     type Item = I;
 
@@ -398,17 +365,9 @@ where
 }
 
 impl<
-        T: Send + Unpin + 'static,
-        U: Send + Unpin + 'static,
         I: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static,
         O: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static,
-    > IdChannelFork<T, U, I, O>
-where
-    T: DerefMut,
-    U: DerefMut,
-    U::Target: Sink<O>,
-    T::Target: Stream<Item = I>,
-    <U::Target as Sink<O>>::Error: Send + 'static,
+    > IdChannelFork<I, O>
 {
     fn new<K: Kind<DeconstructItem = I, ConstructItem = O>>(
         kind: K,
@@ -488,19 +447,11 @@ where
 }
 
 impl<
-        T: Send + Unpin + 'static,
-        U: Send + Unpin + 'static,
         I: Serialize + DeserializeOwned + Send + 'static,
         O: Serialize + Unpin + DeserializeOwned + Send + 'static,
-    > Sink<O> for IdChannelFork<T, U, I, O>
-where
-    T: DerefMut,
-    U: DerefMut,
-    U::Target: Sink<O>,
-    T::Target: Stream<Item = I>,
-    <U::Target as Sink<O>>::Error: Send + 'static,
+    > Sink<O> for IdChannelFork<I, O>
 {
-    type Error = <U::Target as Sink<O>>::Error;
+    type Error = SendError;
 
     fn start_send(mut self: Pin<&mut Self>, item: O) -> Result<(), Self::Error> {
         self.o.as_mut().start_send(item)
@@ -517,16 +468,8 @@ where
 }
 
 impl<
-        T: Send + Unpin + 'static,
-        U: Send + Unpin + 'static,
         I: Serialize + DeserializeOwned + Send + 'static,
         O: Serialize + Unpin + DeserializeOwned + Send + Sync + 'static,
-    > Channel<I, O> for IdChannelFork<T, U, I, O>
-where
-    T: DerefMut + Sync,
-    U: DerefMut + Sync,
-    U::Target: Sink<O>,
-    T::Target: Stream<Item = I>,
-    <U::Target as Sink<O>>::Error: Send + 'static,
+    > Channel<I, O> for IdChannelFork<I, O>
 {
 }
