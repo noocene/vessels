@@ -17,10 +17,10 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         if let Type(parameter) = parameter {
             let ident = &parameter.ident;
             parameter.bounds.push(parse_quote!('static));
+            parameter.bounds.push(parse_quote!(Send));
             params.extend(quote!(#ident,));
         }
     }
-    let bounded_params = &item.generics.params;
     let ident = &item.ident;
     let hygiene = format_ident!("_IMPLEMENT_PROTOCOL_FOR_{}", ident);
     let mut fields = TokenStream::new();
@@ -69,18 +69,20 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         #[allow(non_upper_case_globals)]
         const #hygiene: () = {
             #[derive(::vessels::Kind)]
-            pub struct _DERIVED_Shim {
+            pub struct _DERIVED_Shim<#kind_bounded_params> {
                 #fields
+                _marker: ::std::marker::PhantomData<(#params)>
             }
-            impl _DERIVED_Shim {
-                fn from_object<#kind_bounded_params>(object: ::std::boxed::Box<dyn #ident<#params>>) -> Self {
+            impl<#kind_bounded_params> _DERIVED_Shim<#params> {
+                fn from_object(object: ::std::boxed::Box<dyn #ident<#params>>) -> Self {
                     let object = ::std::sync::Arc::new(::std::sync::Mutex::new(object));
                     _DERIVED_Shim {
                        #from_fields
+                       _marker: ::std::marker::PhantomData
                     }
                 }
             }
-            impl<#bounded_params> #ident<#params> for _DERIVED_Shim {
+            impl<#kind_bounded_params> #ident<#params> for _DERIVED_Shim<#params> {
                 #shim_items
             }
             impl<#kind_bounded_params> ::vessels::Kind for ::std::boxed::Box<dyn #ident<#params>> {
@@ -97,7 +99,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 ) -> <Self as ::vessels::Kind>::DeconstructFuture {
                     use ::vessels::futures::{SinkExt, TryFutureExt};
                     ::std::boxed::Box::pin(async move {
-                        channel.send(channel.fork(_DERIVED_Shim::from_object(self)).await.unwrap()).unwrap_or_else(|_| panic!()).await;
+                        channel.send(channel.fork::<_DERIVED_Shim<#params>>(_DERIVED_Shim::from_object(self)).await.unwrap()).unwrap_or_else(|_| panic!()).await;
                         Ok(())
                     })
                 }
@@ -108,7 +110,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     use ::vessels::futures::StreamExt;
                     ::std::boxed::Box::pin(async move {
                         let handle = channel.next().await.unwrap();
-                        Ok(Box::new(channel.get_fork::<_DERIVED_Shim>(handle).await.unwrap()) as Box<dyn #ident<#params>>)
+                        Ok(Box::new(channel.get_fork::<_DERIVED_Shim<#params>>(handle).await.unwrap()) as Box<dyn #ident<#params>>)
                     })
                 }
             }
