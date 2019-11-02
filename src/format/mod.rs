@@ -69,7 +69,7 @@ impl<T, U> UniformStreamSink<T> for U where U: Sink<T> + Stream<Item = T> {}
 
 pub trait Format {
     type Representation;
-    type Error;
+    type Error: Fail;
 
     fn serialize<T: Serialize>(item: T) -> Self::Representation
     where
