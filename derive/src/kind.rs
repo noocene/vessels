@@ -57,18 +57,22 @@ pub fn derive(mut s: Structure) -> TokenStream {
                 Named(fields) => {
                     let mut items = TokenStream::new();
                     let mut cons_extension = TokenStream::new();
-                    let mut cons_c_extension = TokenStream::new();
                     for (field, binding) in (&fields.named).into_iter().zip(variant.bindings()) {
                         let ident = &field.ident;
                         let pat = binding.pat();
                         items.extend(quote!(#ident: ::vessels::channel::ForkHandle,));
                         cons_extension.extend(quote!(#ident,));
-                        cons_c_extension.extend(quote!(#ident: channel.get_fork(#ident).await.unwrap(),));
                         bindings.extend(quote!(#ident: channel.fork(#pat).await.unwrap(),));
                     }
                     item_fields.extend(quote!(#ident { #items },));
-                    let id = &s.ast().ident;
-                    cons_arms.extend(quote!(_DERIVE_Items::#ident{ #cons_extension } => #id::#ident{ #cons_c_extension },));
+                    let construct = variant.construct(|field, _| {
+                        let field = field.ident.as_ref().unwrap();
+                        quote! {
+                            channel.get_fork(#field).await.unwrap()
+                        }
+                    });
+                    cons_arms
+                        .extend(quote!(_DERIVE_Items::#ident{ #cons_extension } => #construct,));
                     return quote! {
                         channel.send({
                             _DERIVE_Items::#ident { #bindings }
