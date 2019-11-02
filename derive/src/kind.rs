@@ -96,7 +96,7 @@ pub fn derive(mut s: Structure) -> TokenStream {
                 Unit => {
                     item_fields.extend(quote!(#ident,));
                     let id = &s.ast().ident;
-                    cons_arms.extend(quote!(_DERIVE_Items::#ident => #id::#ident));
+                    cons_arms.extend(quote!(_DERIVE_Items::#ident => #id::#ident,));
                     return quote! {
                         channel.send({
                             _DERIVE_Items::#ident
