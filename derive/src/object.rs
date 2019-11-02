@@ -87,10 +87,10 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             }
             impl<#kind_bounded_params> ::vessels::Kind for ::std::boxed::Box<dyn #ident<#params>> {
                 type ConstructItem = ::vessels::channel::ForkHandle;
-                type ConstructError = ();
+                type ConstructError = ::vessels::void::Void;
                 type ConstructFuture = ::vessels::futures::future::BoxFuture<'static, ::vessels::ConstructResult<Self>>;
                 type DeconstructItem = ();
-                type DeconstructError = ();
+                type DeconstructError = ::vessels::void::Void;
                 type DeconstructFuture = ::vessels::futures::future::BoxFuture<'static, ::vessels::DeconstructResult<Self>>;
 
                 fn deconstruct<C: ::vessels::channel::Channel<<Self as ::vessels::Kind>::DeconstructItem, <Self as ::vessels::Kind>::ConstructItem>>(

@@ -4,12 +4,14 @@ use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
 
 use futures::future::{ok, Ready};
 
+use void::Void;
+
 impl<T: Send + 'static> Kind for PhantomData<T> {
     type ConstructItem = ();
-    type ConstructError = ();
+    type ConstructError = Void;
     type ConstructFuture = Ready<ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = ();
+    type DeconstructError = Void;
     type DeconstructFuture = Ready<DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(

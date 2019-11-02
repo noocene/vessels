@@ -12,14 +12,16 @@ use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
 
 use futures::{future::BoxFuture, SinkExt, StreamExt};
 
+use void::Void;
+
 macro_rules! primitive_impl {
     ($($ty:ident),+) => {$(
         impl Kind for $ty {
             type ConstructItem = $ty;
-            type ConstructError = ();
+            type ConstructError = Void;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructError = ();
+            type DeconstructError = Void;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(

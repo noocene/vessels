@@ -5,16 +5,18 @@ use crate::{
 
 use futures::{future::BoxFuture, SinkExt, StreamExt};
 
+use void::Void;
+
 impl<T, E> Kind for Result<T, E>
 where
     T: Kind,
     E: Kind,
 {
     type ConstructItem = Result<ForkHandle, ForkHandle>;
-    type ConstructError = ();
+    type ConstructError = Void;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = ();
+    type DeconstructError = Void;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,

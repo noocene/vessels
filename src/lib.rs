@@ -10,9 +10,9 @@ pub mod format;
 pub mod kind;
 
 use erased_serde::Serialize as ErasedSerialize;
+use failure::Fail;
 use futures::Future;
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
 
 pub use derive::{object, Kind};
 
@@ -20,13 +20,15 @@ pub use derive::{object, Kind};
 pub use futures;
 #[doc(hidden)]
 pub use serde;
+#[doc(hidden)]
+pub use void;
 
 pub type ConstructResult<K> = Result<K, <K as Kind>::ConstructError>;
 pub type DeconstructResult<K> = Result<(), <K as Kind>::DeconstructError>;
 
 pub trait Kind: Sized + Send + 'static {
     type ConstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
-    type ConstructError: Debug + Send;
+    type ConstructError: Fail;
     type ConstructFuture: Future<Output = ConstructResult<Self>> + Send + 'static;
 
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
@@ -34,7 +36,7 @@ pub trait Kind: Sized + Send + 'static {
     ) -> Self::ConstructFuture;
 
     type DeconstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
-    type DeconstructError: Debug + Send;
+    type DeconstructError: Fail;
     type DeconstructFuture: Future<Output = DeconstructResult<Self>> + Send + 'static;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(

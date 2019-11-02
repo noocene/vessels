@@ -8,6 +8,8 @@ use super::{using, AsKind};
 
 use std::ops::Deref;
 
+use void::Void;
+
 #[derive(Clone, Debug, Copy, Hash, Eq, Ord, PartialOrd, PartialEq, Default)]
 pub struct Serde<T: Serialize + DeserializeOwned + Send + 'static>(pub T);
 
@@ -44,10 +46,10 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> AsKind<usi
 
 impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> Kind for Serde<T> {
     type ConstructItem = T;
-    type ConstructError = ();
+    type ConstructError = Void;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = ();
+    type DeconstructError = Void;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(

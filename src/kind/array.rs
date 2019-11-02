@@ -10,12 +10,14 @@ use futures::{
 
 use std::{mem::MaybeUninit, ptr};
 
+use void::Void;
+
 impl<T: Send + 'static> Kind for [T; 0] {
     type ConstructItem = ();
-    type ConstructError = ();
+    type ConstructError = Void;
     type ConstructFuture = Ready<ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = ();
+    type DeconstructError = Void;
     type DeconstructFuture = Ready<DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
