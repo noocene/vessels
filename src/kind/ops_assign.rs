@@ -17,6 +17,8 @@ use futures::{
     SinkExt, StreamExt, TryFutureExt,
 };
 
+use void::Void;
+
 macro_rules! ops_assign_impl {
     ($($trait:ident::$method:ident with $shim:ident),+) => {$(
         struct $shim<T: Kind>(UnboundedSender<T>);
@@ -29,10 +31,10 @@ macro_rules! ops_assign_impl {
 
         impl<T: Kind> Kind for Box<dyn $trait<T> + Send> {
             type ConstructItem = ();
-            type ConstructError = ();
+            type ConstructError = Void;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ForkHandle;
-            type DeconstructError = ();
+            type DeconstructError = Void;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(

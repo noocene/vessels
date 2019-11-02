@@ -12,6 +12,8 @@ use super::{using, AsKind};
 
 use std::{iter::FromIterator, ops::Deref};
 
+use void::Void;
+
 #[derive(Clone, Debug, Copy, Hash, Eq, Ord, PartialOrd, PartialEq, Default)]
 pub struct Iterator<T: Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static>(
     pub T,
@@ -105,10 +107,10 @@ where
     T::IntoIter: Send,
 {
     type ConstructItem = Vec<ForkHandle>;
-    type ConstructError = ();
+    type ConstructError = Void;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = ();
+    type DeconstructError = Void;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(

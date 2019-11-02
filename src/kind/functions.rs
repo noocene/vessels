@@ -9,6 +9,8 @@ use futures::{
 
 use std::sync::Arc;
 
+use void::Void;
+
 macro_rules! functions_impl {
     ($($len:expr => ($($n:tt $name:ident $nn:ident)+))+) => {$(
         #[allow(non_snake_case)]
@@ -16,10 +18,10 @@ macro_rules! functions_impl {
             where $($name: Kind),+
         {
             type ConstructItem = ForkHandle;
-            type ConstructError = ();
+            type ConstructError = Void;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = Vec<ForkHandle>;
-            type DeconstructError = ();
+            type DeconstructError = Void;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -67,10 +69,10 @@ macro_rules! functions_impl {
             where $($name: Kind),+
         {
             type ConstructItem = ForkHandle;
-            type ConstructError = ();
+            type ConstructError = Void;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = Vec<ForkHandle>;
-            type DeconstructError = ();
+            type DeconstructError = Void;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -118,10 +120,10 @@ macro_rules! functions_impl {
             where $($name: Kind),+
         {
             type ConstructItem = ForkHandle;
-            type ConstructError = ();
+            type ConstructError = Void;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = Vec<ForkHandle>;
-            type DeconstructError = ();
+            type DeconstructError = Void;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -166,10 +168,10 @@ macro_rules! functions_impl {
             where $($name: Kind),+
         {
             type ConstructItem = ForkHandle;
-            type ConstructError = ();
+            type ConstructError = Void;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = Vec<ForkHandle>;
-            type DeconstructError = ();
+            type DeconstructError = Void;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
