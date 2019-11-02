@@ -1,17 +1,21 @@
-use vessels::{Kind, channel::IdChannel, format::{Json, ApplyEncode, ApplyDecode}, OnTo, kind::Iterator};
+use vessels::{
+    channel::IdChannel,
+    format::{ApplyDecode, ApplyEncode, Json},
+    kind::Iterator,
+    Kind, OnTo,
+};
 
-use futures::{executor::ThreadPool};
+use futures::executor::ThreadPool;
 
 #[derive(Kind, Debug)]
-pub enum Test {
-    Item(Iterator<Vec<u32>>, u64),
-    StructStyle { test: u32 },
-    Other(String),
-    Empty,
+pub struct Test {
+    test: Iterator<Vec<String>>,
 }
 
 fn main() {
-    let func = Test::Item(Iterator(vec![4, 5]), 4);
+    let func = Test {
+        test: Iterator(vec!["test".to_owned(); 10]),
+    };
     ThreadPool::new().unwrap().run(async move {
         let encoded = func.on_to::<IdChannel>().await.encode::<Json>();
         let decoded: Test = encoded.decode::<IdChannel, Json>().await.unwrap();
