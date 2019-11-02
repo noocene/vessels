@@ -1,5 +1,6 @@
 mod array;
 mod collections;
+pub mod default;
 mod functions;
 mod future;
 pub mod iterator;
