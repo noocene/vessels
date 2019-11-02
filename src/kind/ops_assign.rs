@@ -17,7 +17,7 @@ use futures::{
     SinkExt, StreamExt, TryFutureExt,
 };
 
-macro_rules! primitive_impl {
+macro_rules! ops_assign_impl {
     ($($trait:ident::$method:ident with $shim:ident),+) => {$(
 
         struct $shim<T: Kind>(UnboundedSender<T>);
@@ -64,7 +64,7 @@ macro_rules! primitive_impl {
     )+};
 }
 
-primitive_impl!(
+ops_assign_impl!(
     IAddAssign::add_assign with AddAssignShim,
     IBitAndAssign::bitand_assign with BitAndAssignShim,
     IBitOrAssign::bitor_assign with BitOrAssignShim,
