@@ -55,7 +55,7 @@ pub fn build(_: TokenStream, item: TokenStream) -> TokenStream {
                 #fields
             }
             impl _DERIVED_Shim {
-                fn from_object(object: ::std::boxed::Box<dyn #ident>) -> Self {
+                fn from_object(object: ::std::boxed::Box<dyn #ident + Send>) -> Self {
                     let object = ::std::sync::Arc::new(::std::sync::Mutex::new(object));
                     _DERIVED_Shim {
                        #from_fields
@@ -65,7 +65,7 @@ pub fn build(_: TokenStream, item: TokenStream) -> TokenStream {
             impl #ident for _DERIVED_Shim {
                 #shim_items
             }
-            impl ::vessels::object::Protocol for dyn #ident {
+            impl ::vessels::object::Protocol for dyn #ident + Send {
                 type Shim = _DERIVED_Shim;
             }
         };
