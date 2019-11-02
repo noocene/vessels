@@ -8,11 +8,11 @@ pub fn derive(mut s: Structure) -> TokenStream {
     let ast = s.ast();
     let ref ident = ast.ident;
     let hygiene = format_ident!("_IMPLEMENT_KIND_FOR_{}", ident);
-    let mut using_kinds = ast.attrs.iter().filter(move |attr| attr.path == kind_attr);
+    let mut using_kinds = ast.attrs.iter().filter(|attr| attr.path == kind_attr);
     let stream = if let Some(ty) = using_kinds.next() {
         if let Ok(ty) = parse2::<Type>(ty.tokens.clone()) {
             if let Some(ty) = using_kinds.next() {
-                quote_spanned!(ty.span() => compile_error!("duplicative kind directive"))
+                quote_spanned!(ty.span() => compile_error!("duplicate kind directive"))
             } else {
                 s.add_bounds(AddBounds::None);
                 for parameter in ast.generics.type_params() {
@@ -84,9 +84,26 @@ pub fn derive(mut s: Structure) -> TokenStream {
                     let mut cons_extension = TokenStream::new();
                     let mut cons_c_extension = TokenStream::new();
                     for (_, binding) in (&fields.unnamed).into_iter().zip(variant.bindings()) {
+                        let mut using_kinds = binding.ast().attrs.iter().filter(|attr| attr.path == kind_attr);
                         let pat = binding.pat();
+                        let stream = if let Some(ty) = using_kinds.next() {
+                            if let Ok(ty) = parse2::<Type>(ty.tokens.clone()) {
+                                if let Some(ty) = using_kinds.next() {
+                                    quote_spanned!(ty.span() => compile_error!("duplicate kind directive"))
+                                } else {
+                                    let binding_ty = &binding.ast().ty;
+                                    quote! {
+                                        <#binding_ty as ::vessels::kind::AsKind<#ty>>::from_kind(channel.get_fork::<<#binding_ty as ::vessels::kind::AsKind<#ty>>::Kind>(#pat))
+                                    }
+                                }
+                            } else {
+                                quote_spanned!(ty.span() => compile_error!("not a valid type"))
+                            }
+                        } else {
+                            quote!(channel.get_fork(#pat))
+                        };
                         cons_extension.extend(quote!(#pat,));
-                        cons_c_extension.extend(quote!(channel.get_fork(#pat).await.unwrap(),));
+                        cons_c_extension.extend(quote!(#stream.await.unwrap(),));
                         items.extend(quote!(::vessels::channel::ForkHandle,));
                     }
                     let id = &s.ast().ident;
@@ -106,8 +123,25 @@ pub fn derive(mut s: Structure) -> TokenStream {
             };
             item_fields.extend(quote!(#ident#fields,));
             for binding in variant.bindings() {
+                let mut using_kinds = binding.ast().attrs.iter().filter(|attr| attr.path == kind_attr);
                 let pat = binding.pat();
-                bindings.extend(quote!(channel.fork(#pat).await.unwrap(),))
+                let stream = if let Some(ty) = using_kinds.next() {
+                    if let Ok(ty) = parse2::<Type>(ty.tokens.clone()) {
+                        if let Some(ty) = using_kinds.next() {
+                            quote_spanned!(ty.span() => compile_error!("duplicate kind directive"))
+                        } else {
+                            let binding_ty = &binding.ast().ty;
+                            quote! {
+                                <#binding_ty as ::vessels::kind::AsKind<#ty>>::into_kind(#pat)
+                            }
+                        }
+                    } else {
+                        quote_spanned!(ty.span() => compile_error!("not a valid type"))
+                    }
+                } else {
+                    quote!(#pat)
+                };
+                bindings.extend(quote!(channel.fork(#stream).await.unwrap(),))
             }
             quote! {
                 channel.send({

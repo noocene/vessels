@@ -1,23 +1,28 @@
 use vessels::{
     channel::IdChannel,
     format::{ApplyDecode, ApplyEncode, Json},
-    kind::Iterator,
+    kind::using,
     Kind, OnTo,
 };
 
 use futures::executor::ThreadPool;
 
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NotKind;
+
 #[derive(Kind, Debug)]
 pub enum Test {
     Test,
     Two(u32, String),
-    Other(Iterator<Vec<u32>>)
+    Other(#[kind(using::Serde)] NotKind),
 }
 
 fn main() {
-    let func = Test::Other(Iterator(vec![0; 5]));
+    let test = Test::Other(NotKind);
     ThreadPool::new().unwrap().run(async move {
-        let encoded = func.on_to::<IdChannel>().await.encode::<Json>();
+        let encoded = test.on_to::<IdChannel>().await.encode::<Json>();
         let decoded: Test = encoded.decode::<IdChannel, Json>().await.unwrap();
         println!("{:?}", decoded);
     })
