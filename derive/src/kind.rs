@@ -17,22 +17,22 @@ pub fn derive(mut s: Structure) -> TokenStream {
                 s.add_bounds(AddBounds::None);
                 for parameter in ast.generics.type_params() {
                     let ident = &parameter.ident;
-                    s.add_where_predicate(parse_quote!(#ident: Send + Sync + Unpin + 'static));
+                    s.add_where_predicate(parse_quote!(#ident: ::std::marker::Send + ::std::marker::Sync + ::std::marker::Unpin + 'static));
                 }
                 s.gen_impl(quote!{
                     gen impl ::vessels::Kind for @Self where Self: ::vessels::kind::AsKind<#ty> {
                         type ConstructItem = ::vessels::channel::ForkHandle;
                         type ConstructError = ();
-                        type ConstructFuture = ::futures::future::BoxFuture<'static, ::vessels::ConstructResult<Self>>;
+                        type ConstructFuture = ::vessels::futures::future::BoxFuture<'static, ::vessels::ConstructResult<Self>>;
                         type DeconstructItem = ();
                         type DeconstructError = ();
-                        type DeconstructFuture = ::futures::future::BoxFuture<'static, ::vessels::DeconstructResult<Self>>;
+                        type DeconstructFuture = ::vessels::futures::future::BoxFuture<'static, ::vessels::DeconstructResult<Self>>;
 
                         fn deconstruct<C: ::vessels::channel::Channel<<Self as ::vessels::Kind>::DeconstructItem, <Self as ::vessels::Kind>::ConstructItem>>(
                             self,
                             mut channel: C,
                         ) -> <Self as ::vessels::Kind>::DeconstructFuture {
-                            use ::futures::{SinkExt, TryFutureExt};
+                            use ::vessels::futures::{SinkExt, TryFutureExt};
                             Box::pin(async move {
                                 channel.send(channel.fork(<Self as ::vessels::kind::AsKind<#ty>>::into_kind(self)).await.unwrap()).unwrap_or_else(|_| panic!()).await;
                                 Ok(())
@@ -41,7 +41,7 @@ pub fn derive(mut s: Structure) -> TokenStream {
                         fn construct<C: ::vessels::channel::Channel<<Self as ::vessels::Kind>::ConstructItem, <Self as ::vessels::Kind>::DeconstructItem>>(
                             mut channel: C,
                         ) -> <Self as ::vessels::Kind>::ConstructFuture {
-                            use ::futures::StreamExt;
+                            use ::vessels::futures::StreamExt;
                             Box::pin(async move {
                                 let handle = channel.next().await.unwrap();
                                 Ok(<Self as ::vessels::kind::AsKind<#ty>>::from_kind(channel.get_fork::<<Self as ::vessels::kind::AsKind<#ty>>::Kind>(handle).await.unwrap()))
@@ -215,7 +215,7 @@ pub fn derive(mut s: Structure) -> TokenStream {
                     self,
                     mut channel: C,
                 ) -> <Self as ::vessels::Kind>::DeconstructFuture {
-                    use ::futures::{SinkExt, TryFutureExt};
+                    use ::vessels::futures::{SinkExt, TryFutureExt};
                     ::std::boxed::Box::pin(async move {
                         match self {
                             #arms
@@ -227,7 +227,7 @@ pub fn derive(mut s: Structure) -> TokenStream {
                 fn construct<C: ::vessels::channel::Channel<<Self as ::vessels::Kind>::ConstructItem, <Self as ::vessels::Kind>::DeconstructItem>>(
                     mut channel: C,
                 ) -> <Self as ::vessels::Kind>::ConstructFuture {
-                    use ::futures::StreamExt;
+                    use ::vessels::futures::StreamExt;
                     ::std::boxed::Box::pin(async move {
                         Ok(match channel.next().await.unwrap() {
                             #cons_arms

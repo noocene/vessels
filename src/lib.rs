@@ -8,8 +8,6 @@ pub use channel::OnTo;
 use channel::{Channel, Target};
 pub mod format;
 pub mod kind;
-pub mod object;
-pub use object::Object;
 
 use erased_serde::Serialize as ErasedSerialize;
 use futures::Future;
