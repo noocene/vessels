@@ -25,13 +25,12 @@ impl<T: IDefault> From<T> for Default<T> {
 
 impl<T: IDefault + Send + 'static> AsKind<using::Default> for T {
     type Kind = Default<T>;
-    type ConstructFuture = Ready<Result<T, ()>>;
 
     fn into_kind(self) -> Default<T> {
         Default::new()
     }
-    fn from_kind(_: <Default<T> as Kind>::ConstructFuture) -> Self::ConstructFuture {
-        ok(T::default())
+    fn from_kind(_: Self::Kind) -> Self {
+        T::default()
     }
 }
 

@@ -1,6 +1,6 @@
 use serde::{de::DeserializeOwned, Serialize};
 
-use futures::{future::BoxFuture, SinkExt, StreamExt, TryFutureExt};
+use futures::{future::BoxFuture, SinkExt, StreamExt};
 
 use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
 
@@ -33,13 +33,12 @@ impl<T: Serialize + DeserializeOwned + Send + 'static> From<T> for Serde<T> {
 
 impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> AsKind<using::Serde> for T {
     type Kind = Serde<T>;
-    type ConstructFuture = BoxFuture<'static, Result<T, <Serde<T> as Kind>::ConstructError>>;
 
     fn into_kind(self) -> Serde<T> {
         Serde(self)
     }
-    fn from_kind(future: <Serde<T> as Kind>::ConstructFuture) -> Self::ConstructFuture {
-        Box::pin(future.map_ok(|item| item.0))
+    fn from_kind(kind: Self::Kind) -> Self {
+        kind.0
     }
 }
 

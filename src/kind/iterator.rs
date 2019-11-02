@@ -75,13 +75,12 @@ where
     T::IntoIter: Send,
 {
     type Kind = Iterator<T>;
-    type ConstructFuture = BoxFuture<'static, Result<T, <Iterator<T> as Kind>::ConstructError>>;
 
     fn into_kind(self) -> Iterator<T> {
         Iterator(self)
     }
-    fn from_kind(future: <Iterator<T> as Kind>::ConstructFuture) -> Self::ConstructFuture {
-        Box::pin(future.map_ok(|item| item.0))
+    fn from_kind(kind: Self::Kind) -> Self {
+        kind.0
     }
 }
 
