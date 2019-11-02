@@ -20,9 +20,11 @@ pub use derive::{object, Kind};
 
 #[doc(hidden)]
 pub use futures;
+#[doc(hidden)]
+pub use serde;
 
-type ConstructResult<K> = Result<K, <K as Kind>::ConstructError>;
-type DeconstructResult<K> = Result<(), <K as Kind>::DeconstructError>;
+pub type ConstructResult<K> = Result<K, <K as Kind>::ConstructError>;
+pub type DeconstructResult<K> = Result<(), <K as Kind>::DeconstructError>;
 
 pub trait Kind: Sized + Send + 'static {
     type ConstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;

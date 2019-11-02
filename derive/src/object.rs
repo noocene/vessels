@@ -1,11 +1,8 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{
-    parse2, parse_quote, punctuated::Punctuated, FieldsUnnamed, FnArg, ImplItemMethod, ItemStruct,
-    ItemTrait, ReturnType::Type, Token, TraitItem, Variant,
-};
+use syn::{parse2, punctuated::Punctuated, FnArg, ItemTrait, Token, TraitItem};
 
-pub fn build(attribute: TokenStream, item: TokenStream) -> TokenStream {
+pub fn build(_: TokenStream, item: TokenStream) -> TokenStream {
     let item = parse2::<ItemTrait>(item.clone()).unwrap_or_else(|_| panic!("expected trait"));
     let ident = item.ident;
     let hygiene = format_ident!("_IMPLEMENT_PROTOCOL_FOR_{}", ident);
@@ -54,7 +51,6 @@ pub fn build(attribute: TokenStream, item: TokenStream) -> TokenStream {
     quote! {
         #[allow(non_upper_case_globals)]
         const #hygiene: () = {
-
             pub struct _DERIVED_Shim {
                 #fields
             }
