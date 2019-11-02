@@ -18,7 +18,7 @@ pub use self::serde::Serde;
 pub use default::Default;
 pub use iterator::Iterator;
 
-use futures::{future::BoxFuture, stream::BoxStream, Future as IFuture};
+use futures::{future::BoxFuture, stream::BoxStream};
 
 use crate::Kind;
 
@@ -30,9 +30,6 @@ pub trait AsKindMarker {}
 pub trait AsKind<M: AsKindMarker>: Sized {
     type Kind: Kind;
 
-    type ConstructFuture: IFuture<Output = Result<Self, <Self::Kind as Kind>::ConstructError>>
-        + Send;
-
     fn into_kind(self) -> Self::Kind;
-    fn from_kind(future: <Self::Kind as Kind>::ConstructFuture) -> Self::ConstructFuture;
+    fn from_kind(kind: Self::Kind) -> Self;
 }
