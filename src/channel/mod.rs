@@ -1,5 +1,5 @@
-pub mod id;
-pub use id::IdChannel;
+pub mod id_channel;
+pub use id_channel::IdChannel;
 
 use serde::{
     de::{DeserializeOwned, DeserializeSeed},
