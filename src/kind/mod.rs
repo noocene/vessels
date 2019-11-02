@@ -18,9 +18,12 @@ pub use self::serde::Serde;
 pub use default::Default;
 pub use iterator::Iterator;
 
-use futures::Future as IFuture;
+use futures::{future::BoxFuture, stream::BoxStream, Future as IFuture};
 
 use crate::Kind;
+
+pub type Stream<T> = BoxStream<'static, T>;
+pub type Future<T> = BoxFuture<'static, T>;
 
 pub trait AsKindMarker {}
 
