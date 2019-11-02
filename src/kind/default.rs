@@ -6,6 +6,8 @@ use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
 
 use super::{using, AsKind};
 
+use void::Void;
+
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Default<T: IDefault>(T);
 
@@ -42,10 +44,10 @@ impl<T: IDefault> Default<T> {
 
 impl<T: IDefault + Send + 'static> Kind for Default<T> {
     type ConstructItem = ();
-    type ConstructError = ();
+    type ConstructError = Void;
     type ConstructFuture = Ready<ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = ();
+    type DeconstructError = Void;
     type DeconstructFuture = Ready<DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(

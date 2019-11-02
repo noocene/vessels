@@ -5,6 +5,8 @@ use crate::{
 
 use futures::{future::BoxFuture, SinkExt, StreamExt};
 
+use void::Void;
+
 impl<T> Kind for (T,)
 where
     T: Kind,
@@ -42,10 +44,10 @@ macro_rules! tuple_impl {
             where $($name: Kind),+
         {
             type ConstructItem = Vec<ForkHandle>;
-            type ConstructError = ();
+            type ConstructError = Void;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructError = ();
+            type DeconstructError = Void;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
