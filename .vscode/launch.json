@@ -7,16 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'kinddev'",
+            "name": "Debug unit tests in library 'vessels'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=kinddev"
+                    "--package=vessels"
                 ],
                 "filter": {
-                    "name": "kinddev",
+                    "name": "vessels",
                     "kind": "lib"
                 }
             },
@@ -26,15 +26,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'kinddev'",
+            "name": "Debug executable 'vessels'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=kinddev",
-                    "--package=kinddev",
+                    "--bin=vessels",
+                    "--package=vessels",
                 ],
                 "filter": {
-                    "name": "kinddev",
+                    "name": "vessels",
                     "kind": "bin"
                 }
             },
@@ -44,16 +44,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'kinddev'",
+            "name": "Debug unit tests in executable 'vessels'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=kinddev",
-                    "--package=kinddev"
+                    "--bin=vessels",
+                    "--package=vessels"
                 ],
                 "filter": {
-                    "name": "kinddev",
+                    "name": "vessels",
                     "kind": "bin"
                 }
             },
