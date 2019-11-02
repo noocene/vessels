@@ -43,7 +43,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             });
             shim_items.extend(quote! {
                 #sig {
-                    self.#ident(#inputs)
+                    (self.#ident)(#inputs)
                 }
             });
         }
