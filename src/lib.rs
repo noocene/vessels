@@ -8,13 +8,18 @@ pub use channel::OnTo;
 use channel::{Channel, Target};
 pub mod format;
 pub mod kind;
+pub mod object;
+pub use object::Object;
 
 use erased_serde::Serialize as ErasedSerialize;
 use futures::Future;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 
-pub use derive::Kind;
+pub use derive::{object, Kind};
+
+#[doc(hidden)]
+pub use futures;
 
 type ConstructResult<K> = Result<K, <K as Kind>::ConstructError>;
 type DeconstructResult<K> = Result<(), <K as Kind>::DeconstructError>;
