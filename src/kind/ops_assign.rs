@@ -19,7 +19,6 @@ use futures::{
 
 macro_rules! ops_assign_impl {
     ($($trait:ident::$method:ident with $shim:ident),+) => {$(
-
         struct $shim<T: Kind>(UnboundedSender<T>);
 
         impl<T: Kind> $trait<T> for $shim<T> {
