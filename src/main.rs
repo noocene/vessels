@@ -3,13 +3,13 @@ use vessels::{kind::Future, object, OnTo, channel::IdChannel, format::{ApplyDeco
 use futures::executor::ThreadPool;
 
 #[object]
-trait Test {
+trait Test<T> {
     fn test(&self, hello: String) -> Future<u32>;
 }
 
 struct Shim;
 
-impl Test for Shim {
+impl<T> Test<T> for Shim {
     fn test(&self, hello: String) -> Future<u32> {
         Box::pin(async move {
             hello.len() as u32
@@ -18,10 +18,10 @@ impl Test for Shim {
 }
 
 fn main() {
-    let test: Box<dyn Test> = Box::new(Shim);
+    let test: Box<dyn Test<u32>> = Box::new(Shim);
     ThreadPool::new().unwrap().run(async move {
         let encoded = test.on_to::<IdChannel>().await.encode::<Json>();
-        let decoded: Box<dyn Test> = encoded.decode::<IdChannel, Json>().await.unwrap();
+        let decoded: Box<dyn Test<u32>> = encoded.decode::<IdChannel, Json>().await.unwrap();
         println!("{:?}", decoded.test("hello".to_string()).await);
     })
 }

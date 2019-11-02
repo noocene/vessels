@@ -1,9 +1,26 @@
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
-use syn::{parse_quote, punctuated::Punctuated, FnArg, ItemTrait, Token, TraitItem};
+use quote::{format_ident, quote, quote_spanned};
+use syn::{
+    parse_quote, punctuated::Punctuated, spanned::Spanned, FnArg, GenericParam, ItemTrait, Token,
+    TraitItem,
+};
 
 pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
     item.supertraits.push(parse_quote!(::std::marker::Send));
+    let mut params = TokenStream::new();
+    let mut kind_bounded_params = item.generics.params.clone();
+    for parameter in &mut kind_bounded_params {
+        use GenericParam::{Lifetime, Type};
+        if let Lifetime(_) = parameter {
+            return quote_spanned!(parameter.span() => compile_error!("lifetime parameters are not supported"));
+        }
+        if let Type(parameter) = parameter {
+            let ident = &parameter.ident;
+            parameter.bounds.push(parse_quote!('static));
+            params.extend(quote!(#ident,));
+        }
+    }
+    let bounded_params = &item.generics.params;
     let ident = &item.ident;
     let hygiene = format_ident!("_IMPLEMENT_PROTOCOL_FOR_{}", ident);
     let mut fields = TokenStream::new();
@@ -20,7 +37,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 use FnArg::Typed;
                 if let Typed(ty) = input {
                     let ty = &ty.ty;
-                    args.extend(quote!(#ty,))
+                    args.extend(quote!(#ty,));
                 }
             }
             let output = &method.sig.output;
@@ -56,17 +73,17 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 #fields
             }
             impl _DERIVED_Shim {
-                fn from_object(object: ::std::boxed::Box<dyn #ident>) -> Self {
+                fn from_object<#kind_bounded_params>(object: ::std::boxed::Box<dyn #ident<#params>>) -> Self {
                     let object = ::std::sync::Arc::new(::std::sync::Mutex::new(object));
                     _DERIVED_Shim {
                        #from_fields
                     }
                 }
             }
-            impl #ident for _DERIVED_Shim {
+            impl<#bounded_params> #ident<#params> for _DERIVED_Shim {
                 #shim_items
             }
-            impl ::vessels::Kind for ::std::boxed::Box<dyn #ident> {
+            impl<#kind_bounded_params> ::vessels::Kind for ::std::boxed::Box<dyn #ident<#params>> {
                 type ConstructItem = ::vessels::channel::ForkHandle;
                 type ConstructError = ();
                 type ConstructFuture = ::vessels::futures::future::BoxFuture<'static, ::vessels::ConstructResult<Self>>;
@@ -91,7 +108,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     use ::vessels::futures::StreamExt;
                     ::std::boxed::Box::pin(async move {
                         let handle = channel.next().await.unwrap();
-                        Ok(Box::new(channel.get_fork::<_DERIVED_Shim>(handle).await.unwrap()) as Box<dyn #ident>)
+                        Ok(Box::new(channel.get_fork::<_DERIVED_Shim>(handle).await.unwrap()) as Box<dyn #ident<#params>>)
                     })
                 }
             }
