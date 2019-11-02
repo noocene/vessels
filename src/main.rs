@@ -12,7 +12,7 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NotKind<T>(T);
 
-#[derive(Serialize, Deserialize, Kind, Debug)]
+#[derive(Kind, Debug)]
 pub enum Test<T> {
     Test,
     Two(u32, String),
