@@ -17,6 +17,25 @@ use failure::Fail;
 use futures::Future;
 use serde::{de::DeserializeOwned, Serialize};
 
+/// Generates an implementation of `Kind` for trait objects.
+///
+/// Annotating an object-safe trait with this macro will allow the use of
+/// trait objects constructed from that trait as `Kind`s. This uses the implementations
+/// of `Kind` for boxed `dyn Fn`s internally and therefore only functions that return
+/// `Future` or `Stream` will result in an implementation that compiles. This is intended,
+/// synchronous returns in an RPC system are an antipattern and this system avoids them.
+/// ```
+/// use vessels::object;
+///
+/// #[object]
+/// pub trait Object<T: Kind> {
+///     fn test(&self) -> Future<T>;
+/// }
+/// ```
+/// The above will generate an implementation of Kind for `Box<dyn Object<T>>` where `T: Kind`.
+/// Generic parameters are, as thereby evidenced, supported. Functions with between zero and sixteen arguments
+/// not including receiver are supported where all arguments implement `Kind`. Associated types are currently not supported,
+/// nor are annotated wrapper Kinds as with the primary derive macro, though support is planned for both.
 pub use derive::object;
 
 /// Generates an implementation of `Kind` for a struct or enum.
