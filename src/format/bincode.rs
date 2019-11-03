@@ -8,6 +8,17 @@ use futures::{
     TryFutureExt,
 };
 
+/// A format implementing `bincode`.
+///
+/// bincode is a Rust-specific compact binary over-the-wire format with the unique guarantee of providing
+/// smaller or equivalent over-the-wire size for any type as compared
+/// to the size of that type in-memory. Unlike JSON and CBOR it is not self describing
+/// (but therefore substantially more compact)
+/// and given that it is tighly tied to the in-memory layout of Rust data structures
+/// it lacks guarantees of stability or compatability across Rust versions.
+/// It is, however, entirely validated and safe for untrusted input, and is very performant.
+///
+/// For this format to be used the `bincode` feature must be enabled.
 pub struct Bincode;
 
 impl Format for Bincode {
