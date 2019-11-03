@@ -42,7 +42,7 @@ pub struct IdChannel {
 }
 
 #[derive(Clone)]
-pub struct IdChannelHandle {
+struct IdChannelHandle {
     out_channel: Pin<Box<UnboundedSender<Item>>>,
     context: Context,
     in_channels:
