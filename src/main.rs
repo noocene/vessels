@@ -1,4 +1,4 @@
-use vessels::{kind::Future, object, OnTo, channel::IdChannel, format::{ApplyDecode, ApplyEncode, Json}, Kind};
+use vessels::{kind::Future, object, OnTo, channel::IdChannel, ApplyEncode, ApplyDecode, format::Json, Kind};
 
 use futures::executor::ThreadPool;
 

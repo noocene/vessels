@@ -4,9 +4,12 @@ extern crate erased_serde;
 extern crate mopa;
 
 pub mod channel;
+#[doc(inline)]
 pub use channel::OnTo;
 use channel::{Channel, Target};
 pub mod format;
+#[doc(inline)]
+pub use format::{ApplyDecode, ApplyEncode};
 pub mod kind;
 
 use erased_serde::Serialize as ErasedSerialize;

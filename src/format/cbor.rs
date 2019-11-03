@@ -8,6 +8,16 @@ use futures::{
     TryFutureExt,
 };
 
+/// A format implementing the Compact Binary Object Representation.
+///
+/// CBOR is a binary over-the-wire format loosely based on JSON that is defined in
+/// IETF RFC 7049. It is performant and concise and an effective
+/// alternative to `bincode` in applications where stability of the format
+/// across distinct Rust compiler versions is necessary, that of course including
+/// most applications where any persistence of serialized data is intended. This functionality
+/// is provided by `serde_cbor`.
+///
+/// For this format to be used the `cbor` feature must be enabled.
 pub struct Cbor;
 
 impl Format for Cbor {

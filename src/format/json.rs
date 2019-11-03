@@ -8,6 +8,13 @@ use futures::{
     TryFutureExt,
 };
 
+/// A format implementing JavaScript Object Notation.
+///
+/// JSON is a human readable object
+/// serialization format used in a diverse range of applications.
+/// This wraps functionality provided by the `serde_json` crate.
+///
+/// For this format to be used the `json` feature must be enabled.
 pub struct Json;
 
 impl Format for Json {
