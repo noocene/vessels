@@ -16,7 +16,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 pub use derive::object;
 
-/// Macro that automatically generates an implementation of `Kind` for a struct or enum.
+/// Generates an implementation of `Kind` for a struct or enum.
 ///
 /// This macro has a number of modes of operation.
 /// First, it may be used in a fashion equivalent to the manner of operation of standard library derive macros.
