@@ -4,6 +4,8 @@ use std::{
     fmt::{self, Display, Formatter},
 };
 
+pub type MethodIndex = u8;
+
 pub struct MethodTypes {
     pub arguments: Vec<TypeId>,
     pub output: TypeId,
@@ -35,7 +37,7 @@ impl Display for CallError {
 #[derive(Debug, Fail)]
 #[fail(display = "method {} out of range", index)]
 pub struct OutOfRangeError {
-    pub index: u8,
+    pub index: MethodIndex,
 }
 
 #[derive(Debug, Fail)]
@@ -54,11 +56,11 @@ pub struct NameError {
 pub trait Trait {
     fn call(
         &mut self,
-        index: u8,
+        index: MethodIndex,
         args: Vec<Box<dyn Any + Send>>,
     ) -> Result<Box<dyn Any + Send>, CallError>;
-    fn by_name(&self, name: &'_ str) -> Result<u8, NameError>;
-    fn count(&self) -> u8;
-    fn name_of(&self, index: u8) -> Result<String, OutOfRangeError>;
-    fn types(&self, index: u8) -> Result<MethodTypes, OutOfRangeError>;
+    fn by_name(&self, name: &'_ str) -> Result<MethodIndex, NameError>;
+    fn count(&self) -> MethodIndex;
+    fn name_of(&self, index: MethodIndex) -> Result<String, OutOfRangeError>;
+    fn types(&self, index: MethodIndex) -> Result<MethodTypes, OutOfRangeError>;
 }
