@@ -10,11 +10,13 @@ type MethodIndex = u8;
 pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
     item.supertraits.push(parse_quote!(::std::marker::Send));
     let mut params = TokenStream::new();
+    let ident = &item.ident;
+    let hygiene = format_ident!("_IMPLEMENT_PROTOCOL_FOR_{}", ident);
     let mut kind_bounded_params = item.generics.params.clone();
     for parameter in &mut kind_bounded_params {
         use GenericParam::{Lifetime, Type};
         if let Lifetime(_) = parameter {
-            return quote_spanned!(parameter.span() => compile_error!("lifetime parameters are not supported"));
+            return quote_spanned!(parameter.span() => const #hygiene: () = { compile_error!("lifetime parameters are not supported") };);
         }
         if let Type(parameter) = parameter {
             let ident = &parameter.ident;
@@ -24,8 +26,6 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         }
     }
     let mut methods = vec![];
-    let ident = &item.ident;
-    let hygiene = format_ident!("_IMPLEMENT_PROTOCOL_FOR_{}", ident);
     let mut fields = TokenStream::new();
     let mut from_fields = TokenStream::new();
     let mut shim_items = TokenStream::new();
@@ -35,7 +35,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         if let Method(method) = item {
             let mut arg_types = vec![];
             if methods.len() == 255 {
-                return quote_spanned!(item.span() => compile_error!("traits with more than {} methods are not supported", ::vessels::reflection::MethodIndex::MAX));
+                return quote_spanned!(item.span() => const #hygiene: () = { compile_error!("traits with more than {} methods are not supported", ::vessels::reflection::MethodIndex::MAX) };);
             }
             let sig = method.sig.clone();
             let ident = &method.sig.ident;
@@ -53,7 +53,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 }
             }
             if receiver.is_none() {
-                return quote_spanned!(method.span() => compile_error!("object-safe trait methods must have a borrowed receiver"));
+                return quote_spanned!(method.span() => const #hygiene: () = { compile_error!("object-safe trait methods must have a borrowed receiver") };);
             }
             let receiver = receiver.unwrap();
             let output = &method.sig.output;
