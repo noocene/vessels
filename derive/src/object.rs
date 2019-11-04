@@ -5,6 +5,8 @@ use syn::{
     ReturnType, Token, TraitItem,
 };
 
+type MethodIndex = u8;
+
 pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
     item.supertraits.push(parse_quote!(::std::marker::Send));
     let mut params = TokenStream::new();
@@ -32,7 +34,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         if let Method(method) = item {
             let mut arg_types = vec![];
             if methods.len() == 255 {
-                return quote_spanned!(item.span() => compile_error!("traits with more than {} methods are not supported", u8::MAX));
+                return quote_spanned!(item.span() => compile_error!("traits with more than {} methods are not supported", ::vessels::reflection::MethodIndex::MAX));
             }
             let sig = method.sig.clone();
             let ident = &method.sig.ident;
@@ -80,13 +82,13 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             });
         }
     }
-    let methods_count = methods.len() as u8;
+    let methods_count = methods.len();
     let mut types_arms = TokenStream::new();
     let mut call_arms = TokenStream::new();
     let mut name_arms = TokenStream::new();
     let mut index_name_arms = TokenStream::new();
     for (idx, method) in methods.iter().enumerate() {
-        let idx = idx as u8;
+        let idx = idx as MethodIndex;
         let output = &method.1;
         let args = &method.0;
         let ident = &method.2;
@@ -106,7 +108,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         });
         let mut arg_stream = TokenStream::new();
         for (idx, arg) in args.iter().enumerate() {
-            let o_idx = idx as u8;
+            let o_idx = idx as MethodIndex;
             arg_stream.extend(quote! {
                 *::std::boxed::Box::<dyn ::std::any::Any + Send>::downcast::<#arg>(args.pop().unwrap()).map_err(|_| ::vessels::reflection::CallError::Type(#o_idx))?
             })
@@ -152,7 +154,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 #shim_items
             }
             impl<#kind_bounded_params> ::vessels::reflection::Trait for ::std::boxed::Box<dyn #ident<#params>> {
-                fn call(&mut self, index: u8, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
+                fn call(&mut self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
                     args.reverse();
                     match index {
                         #call_arms
@@ -161,7 +163,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                         })),
                     }
                 }
-                fn by_name(&self, name: &'_ str) -> ::std::result::Result<u8, ::vessels::reflection::NameError> {
+                fn by_name(&self, name: &'_ str) -> ::std::result::Result<::vessels::reflection::MethodIndex, ::vessels::reflection::NameError> {
                     match name {
                         #name_arms
                         _ => {
@@ -171,10 +173,10 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                         }
                     }
                 }
-                fn count(&self) -> u8 {
-                    #methods_count
+                fn count(&self) -> ::vessels::reflection::MethodIndex {
+                    #methods_count as ::vessels::reflection::MethodIndex
                 }
-                fn name_of(&self, index: u8) -> ::std::result::Result<::std::string::String, ::vessels::reflection::OutOfRangeError> {
+                fn name_of(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::std::string::String, ::vessels::reflection::OutOfRangeError> {
                     match index {
                         #index_name_arms
                         _ => {
@@ -184,7 +186,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                         }
                     }
                 }
-                fn types(&self, index: u8) -> ::std::result::Result<::vessels::reflection::MethodTypes, ::vessels::reflection::OutOfRangeError> {
+                fn types(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::vessels::reflection::MethodTypes, ::vessels::reflection::OutOfRangeError> {
                     match index {
                         #types_arms
                         _ => {
