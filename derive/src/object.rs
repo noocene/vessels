@@ -153,7 +153,10 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             impl<#kind_bounded_params> #ident<#params> for _DERIVED_Shim<#params> {
                 #shim_items
             }
-            impl<#kind_bounded_params> ::vessels::reflection::Trait for ::std::boxed::Box<dyn #ident<#params>> {
+            impl<#kind_bounded_params> ::vessels::reflection::Reflected for dyn #ident<#params> {
+                const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: () = ();
+            }
+            impl<#kind_bounded_params> ::vessels::reflection::Trait<dyn #ident<#params>> for ::std::boxed::Box<dyn #ident<#params>> {
                 fn call(&mut self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
                     args.reverse();
                     match index {
