@@ -51,7 +51,7 @@ pub struct NameError {
     pub name: String,
 }
 
-pub trait Trait<T: ?Sized> {
+pub trait Trait {
     fn call(
         &mut self,
         index: u8,
