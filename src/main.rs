@@ -20,7 +20,7 @@ impl Test for Shim {
 }
 
 fn main() {
-    let mut trait_object = Box::new(Shim) as Box<dyn Test>;
+    let trait_object = Box::new(Shim) as Box<dyn Test>;
     let method_index = trait_object.by_name("test").unwrap();
     println!("{}", block_on(*Box::<dyn Any + Send>::downcast::<Future<u32>>(trait_object.call(method_index, vec![Box::new("four".to_owned())]).unwrap()).unwrap()));
 }

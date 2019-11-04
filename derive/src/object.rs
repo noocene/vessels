@@ -29,6 +29,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
     let mut fields = TokenStream::new();
     let mut from_fields = TokenStream::new();
     let mut shim_items = TokenStream::new();
+    let mut reflected_items = TokenStream::new();
     for item in &item.items {
         use TraitItem::Method;
         if let Method(method) = item {
@@ -38,25 +39,23 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             }
             let sig = method.sig.clone();
             let ident = &method.sig.ident;
+            let mut receiver = None;
             let mut args = TokenStream::new();
             let inputs = &method.sig.inputs;
             for input in inputs {
-                use FnArg::Typed;
+                use FnArg::{Receiver, Typed};
                 if let Typed(ty) = input {
                     let ty = &ty.ty;
                     arg_types.push(ty.into_token_stream());
                     args.extend(quote!(#ty,));
+                } else if let Receiver(r) = input {
+                    receiver = Some(r.clone());
                 }
             }
-            use ReturnType::Type;
-            methods.push((
-                arg_types,
-                match &method.sig.output {
-                    Type(_, ty) => ty.clone().into_token_stream(),
-                    _ => TokenStream::new(),
-                },
-                method.sig.ident.clone(),
-            ));
+            if receiver.is_none() {
+                return quote_spanned!(method.span() => compile_error!("object-safe trait methods must have a receiver"));
+            }
+            let receiver = receiver.unwrap();
             let output = &method.sig.output;
             fields.extend(quote! {
                 #ident: Box<dyn Fn(#args) #output + Send + Sync>,
@@ -80,13 +79,37 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     (self.#ident)(#inputs)
                 }
             });
+            let idx = methods.len();
+            let call_method = if receiver.mutability.is_some() {
+                quote!(call_mut)
+            } else {
+                quote!(call)
+            };
+            let arg_idents: Vec<_> = inputs.iter().map(|arg| arg.clone()).collect();
+            reflected_items.extend(quote! {
+                #sig {
+                    *::std::boxed::Box::<dyn ::std::any::Any + Send>::downcast(self.#call_method(#idx as ::vessels::reflection::MethodIndex, vec![#( Box::new(#arg_idents) as Box<dyn ::std::any::Any + Send> )*]).unwrap()).unwrap()
+                }
+            });
+            use ReturnType::Type;
+            methods.push((
+                arg_types,
+                match &method.sig.output {
+                    Type(_, ty) => ty.clone().into_token_stream(),
+                    _ => TokenStream::new(),
+                },
+                method.sig.ident.clone(),
+                receiver,
+            ));
         }
     }
     let methods_count = methods.len();
     let mut types_arms = TokenStream::new();
     let mut call_arms = TokenStream::new();
+    let mut call_mut_arms = TokenStream::new();
     let mut name_arms = TokenStream::new();
     let mut index_name_arms = TokenStream::new();
+    let mut receiver_arms = TokenStream::new();
     for (idx, method) in methods.iter().enumerate() {
         let idx = idx as MethodIndex;
         let output = &method.1;
@@ -114,10 +137,16 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             })
         }
         let args_len = args.len();
-        call_arms.extend(quote! {
+        let mutability = method.3.mutability.is_some();
+        let ref_call = if mutability {
+            quote!(as_mut())
+        } else {
+            quote!(as_ref())
+        };
+        let arm = quote! {
             #idx => {
                 if args.len() == #args_len {
-                    Ok(Box::new(self.#ident(#arg_stream)) as Box<dyn ::std::any::Any + Send>)
+                    Ok(Box::new(self.#ref_call.#ident(#arg_stream)) as Box<dyn ::std::any::Any + Send>)
                 } else {
                     Err(::vessels::reflection::CallError::ArgumentCount(::vessels::reflection::ArgumentCountError {
                         got: args.len(),
@@ -125,7 +154,29 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     }))
                 }
             }
-        });
+        };
+        let fail_arm = quote! {
+            #idx => {
+                Err(::vessels::reflection::CallError::IncorrectReceiver(#mutability))
+            }
+        };
+        if mutability {
+            receiver_arms.extend(quote! {
+                #idx => {
+                    Ok(Mutable)
+                }
+            });
+            call_mut_arms.extend(arm);
+            call_arms.extend(fail_arm);
+        } else {
+            receiver_arms.extend(quote! {
+                #idx => {
+                    Ok(Immutable)
+                }
+            });
+            call_arms.extend(arm);
+            call_mut_arms.extend(fail_arm);
+        }
         index_name_arms.extend(quote! {
             #idx => {
                 Ok(#name.to_owned())
@@ -156,11 +207,23 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             impl<#kind_bounded_params> ::vessels::reflection::Reflected for dyn #ident<#params> {
                 const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: () = ();
             }
+            impl<#kind_bounded_params DERIVEPARAM: Send + ::vessels::reflection::Trait<dyn #ident<#params>>> #ident<#params> for DERIVEPARAM {
+                #reflected_items
+            }
             impl<#kind_bounded_params> ::vessels::reflection::Trait<dyn #ident<#params>> for ::std::boxed::Box<dyn #ident<#params>> {
-                fn call(&mut self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
+                fn call(&self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
                     args.reverse();
                     match index {
                         #call_arms
+                        _ => Err(::vessels::reflection::CallError::OutOfRange(::vessels::reflection::OutOfRangeError {
+                            index,
+                        })),
+                    }
+                }
+                fn call_mut(&mut self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
+                    args.reverse();
+                    match index {
+                        #call_mut_arms
                         _ => Err(::vessels::reflection::CallError::OutOfRange(::vessels::reflection::OutOfRangeError {
                             index,
                         })),
@@ -178,6 +241,17 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 }
                 fn count(&self) -> ::vessels::reflection::MethodIndex {
                     #methods_count as ::vessels::reflection::MethodIndex
+                }
+                fn receiver(&self, index: ::vessels::reflection::MethodIndex) -> Result<::vessels::reflection::Receiver, ::vessels::reflection::OutOfRangeError> {
+                    use ::vessels::reflection::Receiver::{Mutable, Immutable};
+                    match index {
+                        #receiver_arms
+                        _ => {
+                            Err(::vessels::reflection::OutOfRangeError {
+                                index,
+                            })
+                        }
+                    }
                 }
                 fn name_of(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::std::string::String, ::vessels::reflection::OutOfRangeError> {
                     match index {
