@@ -11,6 +11,7 @@ pub mod format;
 #[doc(inline)]
 pub use format::{ApplyDecode, ApplyEncode};
 pub mod kind;
+pub mod reflection;
 
 use erased_serde::Serialize as ErasedSerialize;
 use failure::Fail;
