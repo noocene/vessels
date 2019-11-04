@@ -53,7 +53,11 @@ pub struct NameError {
     pub name: String,
 }
 
-pub trait Trait {
+pub trait Reflected {
+    const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: ();
+}
+
+pub trait Trait<T: Reflected + ?Sized> {
     fn call(
         &mut self,
         index: MethodIndex,
