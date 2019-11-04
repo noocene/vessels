@@ -16,11 +16,12 @@ pub enum CallError {
     Type(u8),
     ArgumentCount(ArgumentCountError),
     OutOfRange(OutOfRangeError),
+    IncorrectReceiver(bool),
 }
 
 impl Display for CallError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        use CallError::{ArgumentCount, OutOfRange, Type};
+        use CallError::{ArgumentCount, IncorrectReceiver, OutOfRange, Type};
 
         write!(
             f,
@@ -29,6 +30,11 @@ impl Display for CallError {
                 Type(position) => format!("invalid type for argument {}", position),
                 OutOfRange(error) => format!("{}", error),
                 ArgumentCount(error) => format!("{}", error),
+                IncorrectReceiver(mutable) => format!(
+                    "expected {} receiver, found {}",
+                    if *mutable { "mutable" } else { "immutable" },
+                    if *mutable { "immutable" } else { "mutable" },
+                ),
             }
         )
     }
@@ -57,8 +63,30 @@ pub trait Reflected {
     const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: ();
 }
 
+#[derive(Debug)]
+pub enum Receiver {
+    Mutable,
+    Immutable,
+}
+
+impl Receiver {
+    pub fn is_mutable(&self) -> bool {
+        use Receiver::Mutable;
+        if let Mutable = self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
 pub trait Trait<T: Reflected + ?Sized> {
     fn call(
+        &self,
+        index: MethodIndex,
+        args: Vec<Box<dyn Any + Send>>,
+    ) -> Result<Box<dyn Any + Send>, CallError>;
+    fn call_mut(
         &mut self,
         index: MethodIndex,
         args: Vec<Box<dyn Any + Send>>,
@@ -67,4 +95,5 @@ pub trait Trait<T: Reflected + ?Sized> {
     fn count(&self) -> MethodIndex;
     fn name_of(&self, index: MethodIndex) -> Result<String, OutOfRangeError>;
     fn types(&self, index: MethodIndex) -> Result<MethodTypes, OutOfRangeError>;
+    fn receiver(&self, index: MethodIndex) -> Result<Receiver, OutOfRangeError>;
 }
