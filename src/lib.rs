@@ -16,6 +16,7 @@ use erased_serde::Serialize as ErasedSerialize;
 use failure::Fail;
 use futures::Future;
 use serde::{de::DeserializeOwned, Serialize};
+use std::any::Any;
 
 /// Generates an implementation of `Kind` for trait objects.
 ///
@@ -125,7 +126,7 @@ pub type DeconstructResult<K> = Result<(), <K as Kind>::DeconstructError>;
 /// Authors of third-party crates are encouraged to derive or implement Kind or Kind providers for
 /// types their crates expose that might be useful over some form of wire boundary, be it network, IPC,
 /// or any other similar transport.
-pub trait Kind: Sized + Send + 'static {
+pub trait Kind: Any + Sized + Send + 'static {
     /// The item transmitted over the network **to** the construction task
     /// from deconstruction.
     type ConstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
