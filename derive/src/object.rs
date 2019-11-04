@@ -53,7 +53,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 }
             }
             if receiver.is_none() {
-                return quote_spanned!(method.span() => compile_error!("object-safe trait methods must have a receiver"));
+                return quote_spanned!(method.span() => compile_error!("object-safe trait methods must have a borrowed receiver"));
             }
             let receiver = receiver.unwrap();
             let output = &method.sig.output;
