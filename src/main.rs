@@ -12,6 +12,7 @@ use std::any::Any;
 #[object]
 pub trait Supertrait {
     fn super_test(&self, hello: String) -> Future<u32>;
+    fn move_out(self: Box<Self>) -> Future<String>;
 }
 
 #[object]
@@ -22,6 +23,9 @@ pub trait Test<T: Kind>: Supertrait {
 impl Supertrait for Shim {
     fn super_test(&self, _: String) -> Future<u32> {
         Box::pin(async move { 2u32 })
+    }
+    fn move_out(self: Box<Self>) -> Future<String> {
+        Box::pin(async move { "test".to_owned() })
     }
 }
 
@@ -44,9 +48,7 @@ fn main() {
         "{}",
         block_on(
             *Box::<dyn Any + Send>::downcast::<Future<u32>>(
-                upcast_object
-                    .call(method_index, vec![Box::new("four".to_owned())])
-                    .unwrap()
+                upcast_object.get().call(method_index, vec![Box::new("test".to_owned())]).unwrap()
             )
             .unwrap()
         )
