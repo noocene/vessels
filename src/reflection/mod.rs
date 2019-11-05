@@ -137,7 +137,7 @@ impl<S: ?Sized + Reflected> Cast<S> for Box<dyn Erased> {
     fn downcast(self) -> Result<Box<S>, CastError> {
         self.cast(TypeId::of::<S>()).map(|erased| {
             Box::<dyn Any + Send>::downcast::<Casted<S>>(erased)
-                .map_err(|_| panic!("could downcast after successful reinterpretation"))
+                .map_err(|_| panic!("could not downcast after successful reinterpretation"))
                 .unwrap()
                 .0
         })
@@ -155,7 +155,7 @@ impl<T: ?Sized + Reflected + Trait<T>, S: ?Sized + Reflected> Cast<S> for Box<T>
     fn downcast(self) -> Result<Box<S>, CastError> {
         self.erase().cast(TypeId::of::<S>()).map(|erased| {
             Box::<dyn Any + Send>::downcast::<Casted<S>>(erased)
-                .map_err(|_| panic!("could downcast after successful reinterpretation"))
+                .map_err(|_| panic!("could not downcast after successful reinterpretation"))
                 .unwrap()
                 .0
         })
