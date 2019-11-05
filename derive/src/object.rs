@@ -57,7 +57,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             let receiver = receiver.unwrap();
             let output = &method.sig.output;
             fields.extend(quote! {
-                #ident: Box<dyn Fn(#args) #output + Send + Sync>,
+                #ident: ::std::boxed::Box<dyn Fn(#args) #output + Send + Sync>,
             });
             let inputs: Punctuated<_, Token![,]> = inputs
                 .iter()
@@ -87,7 +87,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             let arg_idents: Vec<_> = inputs.iter().map(|arg| arg.clone()).collect();
             reflected_items.extend(quote! {
                 #sig {
-                    *::std::boxed::Box::<dyn ::std::any::Any + Send>::downcast(self.#call_method(#idx as ::vessels::reflection::MethodIndex, vec![#( Box::new(#arg_idents) as Box<dyn ::std::any::Any + Send> )*]).unwrap()).unwrap()
+                    *::std::boxed::Box::<dyn ::std::any::Any + Send>::downcast(self.#call_method(#idx as ::vessels::reflection::MethodIndex, vec![#( ::std::boxed::Box::new(#arg_idents) as ::std::boxed::Box<dyn ::std::any::Any + Send> ),*]).unwrap()).unwrap()
                 }
             });
             use ReturnType::Type;
@@ -132,7 +132,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         for (idx, arg) in args.iter().enumerate() {
             let o_idx = idx as MethodIndex;
             arg_stream.extend(quote! {
-                *::std::boxed::Box::<dyn ::std::any::Any + Send>::downcast::<#arg>(args.pop().unwrap()).map_err(|_| ::vessels::reflection::CallError::Type(#o_idx))?
+                *::std::boxed::Box::<dyn ::std::any::Any + Send>::downcast::<#arg>(args.pop().unwrap()).map_err(|_| ::vessels::reflection::CallError::Type(#o_idx))?,
             })
         }
         let args_len = args.len();
@@ -140,7 +140,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         let arm = quote! {
             #idx => {
                 if args.len() == #args_len {
-                    Ok(Box::new(self.#ident(#arg_stream)) as Box<dyn ::std::any::Any + Send>)
+                    Ok(::std::boxed::Box::new(self.#ident(#arg_stream)) as ::std::boxed::Box<dyn ::std::any::Any + Send>)
                 } else {
                     Err(::vessels::reflection::CallError::ArgumentCount(::vessels::reflection::ArgumentCountError {
                         got: args.len(),
@@ -215,13 +215,13 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
                         (self.#id.lock().unwrap().as_ref() as &dyn #path).supertraits()
                     }
-                    fn upcast(self: Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::UpcastError> {
-                        (::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!()).unwrap().into_inner().unwrap() as Box<dyn #path>).upcast(ty)
+                    fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::UpcastError> {
+                        (::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!()).unwrap().into_inner().unwrap() as ::std::boxed::Box<dyn #path>).upcast(ty)
                     }
                 }
             });
             from_fields.extend(quote! {
-                #id: ::std::sync::Arc::new(::std::sync::Mutex::new(Box::new(<dyn #path as ::vessels::reflection::Reflected>::Shim::from_instance(object)))),
+                #id: ::std::sync::Arc::new(::std::sync::Mutex::new(::std::boxed::Box::new(<dyn #path as ::vessels::reflection::Reflected>::Shim::from_instance(object)))),
             });
             derive_param_bounds.extend(quote! {
                 + #path
@@ -231,7 +231,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             });
             upcast_arms.extend(quote! {
                 if ty == ::std::any::TypeId::of::<dyn #path>() {
-                    return Ok(::std::boxed::Box::new(::vessels::reflection::Upcasted::<dyn #path>(Box::new(<dyn #path as ::vessels::reflection::Reflected>::Shim::from_instance(::std::sync::Arc::new(::std::sync::Mutex::new(self)))))) as ::std::boxed::Box<dyn ::std::any::Any + Send>);
+                    return Ok(::std::boxed::Box::new(::vessels::reflection::Upcasted::<dyn #path>(::std::boxed::Box::new(<dyn #path as ::vessels::reflection::Reflected>::Shim::from_instance(::std::sync::Arc::new(::std::sync::Mutex::new(self)))))) as ::std::boxed::Box<dyn ::std::any::Any + Send>);
                 }
             })
         }
@@ -248,7 +248,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 _marker: ::std::marker::PhantomData<(#params)>
             }
             impl<#kind_bounded_params> _DERIVED_Shim<#params> {
-                pub fn from_instance<T: ?Sized + #ident<#params> + 'static>(object: ::std::sync::Arc<::std::sync::Mutex<Box<T>>>) -> Self {
+                pub fn from_instance<T: ?Sized + #ident<#params> + 'static>(object: ::std::sync::Arc<::std::sync::Mutex<::std::boxed::Box<T>>>) -> Self {
                     _DERIVED_Shim {
                        #from_fields
                        _marker: ::std::marker::PhantomData
@@ -332,7 +332,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
                     vec![#supertrait_ids]
                 }
-                fn upcast(self: Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::UpcastError> {
+                fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::UpcastError> {
                     #upcast_arms
                     Err(::vessels::reflection::UpcastError {
                         supertrait: ty,
@@ -364,7 +364,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     use ::vessels::futures::StreamExt;
                     ::std::boxed::Box::pin(async move {
                         let handle = channel.next().await.unwrap();
-                        Ok(Box::new(channel.get_fork::<_DERIVED_Shim<#params>>(handle).await.unwrap()) as Box<dyn #ident<#params>>)
+                        Ok(::std::boxed::Box::new(channel.get_fork::<_DERIVED_Shim<#params>>(handle).await.unwrap()) as ::std::boxed::Box<dyn #ident<#params>>)
                     })
                 }
             }
