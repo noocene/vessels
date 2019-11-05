@@ -1,4 +1,5 @@
 use crate::Kind;
+use downcast_rs::{impl_downcast, Downcast};
 use failure::Fail;
 use std::{
     any::{Any, TypeId},
@@ -72,6 +73,7 @@ pub struct UpcastError {
 /// have a generated implementation allowing it to satisfy `SomeTrait`.
 pub trait Reflected {
     type Shim: Kind;
+    type ErasedShim: From<Box<Self>>;
     #[doc(hidden)]
     const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: ();
 }
@@ -132,6 +134,24 @@ impl<T: Reflected + ?Sized> DerefMut for Upcasted<T> {
     }
 }
 
+pub enum SomeTrait {}
+
+impl Reflected for SomeTrait {
+    type Shim = ();
+    type ErasedShim = ();
+    const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: () = ();
+}
+
+impl From<Box<SomeTrait>> for () {
+    fn from(_: Box<SomeTrait>) {}
+}
+
+pub trait Erased: Send + Trait<SomeTrait> + Downcast {}
+
+impl_downcast!(Erased);
+
+impl<T: Send + Trait<SomeTrait> + 'static> Erased for T {}
+
 pub trait Trait<T: Reflected + ?Sized> {
     fn call(
         &self,
@@ -156,5 +176,5 @@ pub trait Trait<T: Reflected + ?Sized> {
     fn supertraits(&self) -> Vec<TypeId>;
     /// For a `TypeId` that is `TypeId::of<dyn SomeTrait>` returns the erasure of a concrete type
     /// `Upcasted<dyn SomeTrait>` which can then be downcasted and, if necessary, moved out to obtain a `Box<dyn SomeTrait>`.
-    fn upcast(self: Box<Self>, ty: TypeId) -> Result<Box<dyn Any + Send>, UpcastError>;
+    fn upcast(self: Box<Self>, ty: TypeId) -> Result<Box<dyn Erased>, UpcastError>;
 }

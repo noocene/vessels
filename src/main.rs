@@ -1,7 +1,7 @@
 use vessels::{
     kind::Future,
     object,
-    reflection::{Trait, Upcasted},
+    reflection::{Trait, Upcasted, Erased},
     Kind,
 };
 
@@ -41,14 +41,13 @@ fn main() {
     let trait_object = Box::new(Shim) as Box<dyn Test<u32>>;
     let supertraits = trait_object.supertraits();
     println!("{:?}", supertraits);
-    let upcast_object: Upcasted<dyn Supertrait> =
-        *Box::<dyn Any + Send>::downcast(trait_object.upcast(supertraits[0]).unwrap()).unwrap();
+    let upcast_object: Box<dyn Erased> = trait_object.upcast(supertraits[0]).unwrap();
     let method_index = upcast_object.by_name("super_test").unwrap();
     println!(
         "{}",
         block_on(
             *Box::<dyn Any + Send>::downcast::<Future<u32>>(
-                upcast_object.get().call(method_index, vec![Box::new("test".to_owned())]).unwrap()
+                upcast_object.call(method_index, vec![Box::new("test".to_owned())]).unwrap()
             )
             .unwrap()
         )
