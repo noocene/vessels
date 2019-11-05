@@ -3,6 +3,7 @@ use failure::Fail;
 use std::{
     any::{Any, TypeId},
     fmt::{self, Display, Formatter},
+    ops::{Deref, DerefMut},
 };
 
 pub type MethodIndex = u8;
@@ -99,6 +100,20 @@ pub struct Upcasted<T: ?Sized>(pub Box<T>);
 impl<T: ?Sized> Upcasted<T> {
     pub fn get(self) -> Box<T> {
         self.0
+    }
+}
+
+impl<T: ?Sized> Deref for Upcasted<T> {
+    type Target = Box<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: ?Sized> DerefMut for Upcasted<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
