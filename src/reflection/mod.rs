@@ -128,11 +128,11 @@ pub trait Erased: Send + Trait<SomeTrait> {
     fn cast(self: Box<Self>, ty: TypeId) -> Result<Box<dyn Any + Send>, CastError>;
 }
 
-pub trait Downcast {
+pub trait Cast {
     fn downcast<T: ?Sized + Reflected>(self) -> Result<Box<T>, CastError>;
 }
 
-impl Downcast for Box<dyn Erased> {
+impl Cast for Box<dyn Erased> {
     fn downcast<T: ?Sized + Reflected>(self) -> Result<Box<T>, CastError> {
         self.cast(TypeId::of::<T>()).map(|erased| {
             Box::<dyn Any + Send>::downcast::<Casted<T>>(erased)
