@@ -5,8 +5,21 @@ use futures::executor::block_on;
 use std::any::Any;
 
 #[object]
-trait Test {
+pub trait Supertrait {
+    fn super_test(&self, hello: String) -> Future<u32>;
+}
+
+#[object]
+pub trait Test: Supertrait {
     fn test(&self, hello: String) -> Future<u32>;
+}
+
+impl Supertrait for Shim {
+    fn super_test(&self, hello: String) -> Future<u32> {
+        Box::pin(async move {
+            (hello.len() + 1) as u32
+        })
+    }
 }
 
 struct Shim;
