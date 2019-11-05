@@ -23,7 +23,18 @@ where
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             channel
-                .send(channel.fork::<T>(Arc::try_unwrap(self).map_err(|_| panic!()).unwrap().into_inner().unwrap()).await.unwrap())
+                .send(
+                    channel
+                        .fork::<T>(
+                            Arc::try_unwrap(self)
+                                .map_err(|_| panic!())
+                                .unwrap()
+                                .into_inner()
+                                .unwrap(),
+                        )
+                        .await
+                        .unwrap(),
+                )
                 .await
                 .map_err(|_| panic!())
         })
@@ -33,7 +44,9 @@ where
     ) -> Self::ConstructFuture {
         Box::pin(async move {
             let handle = channel.next().await.unwrap();
-            Ok(Arc::new(Mutex::new(channel.get_fork(handle).await.unwrap())))
+            Ok(Arc::new(Mutex::new(
+                channel.get_fork(handle).await.unwrap(),
+            )))
         })
     }
 }
