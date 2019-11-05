@@ -14,6 +14,7 @@ mod stream;
 mod tuple;
 mod unit;
 pub mod using;
+mod wrapped;
 pub use self::serde::Serde;
 pub use default::Default;
 pub use iterator::Iterator;
