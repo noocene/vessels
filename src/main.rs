@@ -1,13 +1,11 @@
 use vessels::{
     kind::Future,
     object,
-    reflection::{Trait, Erased},
+    reflection::{Erased, Trait, Downcast},
     Kind,
 };
 
 use futures::executor::block_on;
-
-use std::any::Any;
 
 #[object]
 pub trait Supertrait {
@@ -42,14 +40,9 @@ fn main() {
     let supertraits = trait_object.supertraits();
     println!("{:?}", supertraits);
     let upcast_object: Box<dyn Erased> = trait_object.upcast(supertraits[0]).unwrap();
-    let method_index = upcast_object.by_name("super_test").unwrap();
+    let concrete_object: Box<dyn Supertrait> = upcast_object.downcast().unwrap();
     println!(
         "{}",
-        block_on(
-            *Box::<dyn Any + Send>::downcast::<Future<u32>>(
-                upcast_object.call(method_index, vec![Box::new("test".to_owned())]).unwrap()
-            )
-            .unwrap()
-        )
+        block_on(concrete_object.super_test("hello".to_owned()))
     );
 }
