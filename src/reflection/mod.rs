@@ -75,6 +75,7 @@ pub struct UpcastError {
 /// have a generated implementation allowing it to satisfy `SomeTrait`.
 pub trait Reflected {
     type Shim: Kind;
+    #[doc(hidden)]
     const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: ();
 }
 
