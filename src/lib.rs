@@ -1,7 +1,5 @@
 #[macro_use]
 extern crate erased_serde;
-#[macro_use]
-extern crate mopa;
 
 pub mod channel;
 #[doc(inline)]
@@ -13,6 +11,7 @@ pub use format::{ApplyDecode, ApplyEncode};
 pub mod kind;
 pub mod reflection;
 
+use downcast_rs::{impl_downcast, Downcast};
 use erased_serde::Serialize as ErasedSerialize;
 use failure::Fail;
 use futures::Future;
@@ -163,10 +162,10 @@ pub trait Kind: Any + Sized + Send + 'static {
 
 /// An erased representation of any serializable type used in communication
 /// by `Kind`.
-pub(crate) trait SerdeAny: erased_serde::Serialize + mopa::Any + Send {}
+pub(crate) trait SerdeAny: erased_serde::Serialize + Downcast + Send {}
 
-mopafy!(SerdeAny);
+impl_downcast!(SerdeAny);
 
 serialize_trait_object!(SerdeAny);
 
-impl<T: ?Sized> SerdeAny for T where T: ErasedSerialize + mopa::Any + Send {}
+impl<T: ?Sized> SerdeAny for T where T: ErasedSerialize + Downcast + Send {}
