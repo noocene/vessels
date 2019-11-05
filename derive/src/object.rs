@@ -268,7 +268,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
                         ::vessels::reflection::Trait::<dyn #path>::supertraits(self.#id.lock().unwrap().as_ref() as &dyn #path)
                     }
-                    fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::UpcastError> {
+                    fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::UpcastError> {
                         ::vessels::reflection::Trait::<dyn #path>::upcast(::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as ::std::boxed::Box<dyn #path>, ty)
                     }
                 }
@@ -284,7 +284,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             });
             upcast_arms.extend(quote! {
                 if ty == ::std::any::TypeId::of::<dyn #path>() {
-                    return Ok(::std::boxed::Box::new(::vessels::reflection::Upcasted::<dyn #path>(::std::boxed::Box::new(<dyn #path as ::vessels::reflection::Reflected>::Shim::from_instance(::std::sync::Arc::new(::std::sync::Mutex::new(self)))))) as ::std::boxed::Box<dyn ::std::any::Any + Send>);
+                    return Ok(::std::boxed::Box::new(<dyn #path as ::vessels::reflection::Reflected>::ErasedShim::from(Box::new(<dyn #path as ::vessels::reflection::Reflected>::Shim::from_instance(::std::sync::Arc::new(::std::sync::Mutex::new(self)))) as Box<dyn #path>)) as ::std::boxed::Box<dyn ::vessels::reflection::Erased>);
                 }
             })
         }
@@ -314,10 +314,46 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             }
             impl<#kind_bounded_params> ::vessels::reflection::Reflected for dyn #ident<#params> {
                 type Shim = _DERIVED_Shim<#params>;
+                type ErasedShim = _DERIVE_ErasedShim<#params>;
                 const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: () = ();
+            }
+            impl<#kind_bounded_params> From<Box<dyn #ident<#params>>> for _DERIVE_ErasedShim<#params> {
+                fn from(input: Box<dyn #ident<#params>>) -> _DERIVE_ErasedShim<#params> {
+                    _DERIVE_ErasedShim(input)
+                }
             }
             impl<DERIVEPARAM: 'static + Send + ::vessels::reflection::Trait<dyn #ident<#params>> #derive_param_bounds, #kind_bounded_params> #ident<#params> for DERIVEPARAM {
                 #reflected_items
+            }
+            pub struct _DERIVE_ErasedShim<#kind_bounded_params>(Box<dyn #ident<#params>>);
+            impl<#kind_bounded_params> ::vessels::reflection::Trait<::vessels::reflection::SomeTrait> for _DERIVE_ErasedShim<#params> {
+                fn call(&self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
+                    ::vessels::reflection::Trait::call(self.0.as_ref(), index, args)
+                }
+                fn call_mut(&mut self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
+                    ::vessels::reflection::Trait::call_mut(self.0.as_mut(), index, args)
+                }
+                fn call_move(self: Box<Self>, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
+                    ::vessels::reflection::Trait::call_move(self.0, index, args)
+                }
+                fn by_name(&self, name: &'_ str) -> ::std::result::Result<::vessels::reflection::MethodIndex, ::vessels::reflection::NameError> {
+                    ::vessels::reflection::Trait::by_name(self.0.as_ref(), name)
+                }
+                fn count(&self) -> ::vessels::reflection::MethodIndex {
+                    ::vessels::reflection::Trait::count(self.0.as_ref())
+                }
+                fn name_of(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::std::string::String, ::vessels::reflection::OutOfRangeError> {
+                    ::vessels::reflection::Trait::name_of(self.0.as_ref(), index)
+                }
+                fn types(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::vessels::reflection::MethodTypes, ::vessels::reflection::OutOfRangeError> {
+                    ::vessels::reflection::Trait::types(self.0.as_ref(), index)
+                }
+                fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
+                    ::vessels::reflection::Trait::supertraits(self.0.as_ref())
+                }
+                fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::UpcastError> {
+                    ::vessels::reflection::Trait::upcast(self, ty)
+                }
             }
             impl<#kind_bounded_params> ::vessels::reflection::Trait<dyn #ident<#params>> for dyn #ident<#params> {
                 fn call(&self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
@@ -383,7 +419,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
                     vec![#supertrait_ids]
                 }
-                fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::UpcastError> {
+                fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::UpcastError> {
                     #upcast_arms
                     Err(::vessels::reflection::UpcastError {
                         supertrait: ty,
