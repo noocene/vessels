@@ -133,6 +133,9 @@ pub trait Trait<T: Reflected + ?Sized> {
     fn name_of(&self, index: MethodIndex) -> Result<String, OutOfRangeError>;
     fn types(&self, index: MethodIndex) -> Result<MethodTypes, OutOfRangeError>;
     fn receiver(&self, index: MethodIndex) -> Result<Receiver, OutOfRangeError>;
+    /// Returns all supertraits in the form `TypeId::of<dyn SomeTrait>` for each supertrait `SomeTrait`.
     fn supertraits(&self) -> Vec<TypeId>;
+    /// For a `TypeId` that is `TypeId::of<dyn SomeTrait>` returns the erasure of a concrete type
+    /// `Upcasted<dyn SomeTrait>` which can then be downcasted and, if necessary, moved out to obtain a `Box<dyn SomeTrait>`.
     fn upcast(self: Box<Self>, ty: TypeId) -> Result<Box<dyn Any + Send>, UpcastError>;
 }
