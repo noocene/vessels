@@ -1,7 +1,7 @@
 use vessels::{
     kind::Future,
     object,
-    reflection::{Erased, Trait, Downcast},
+    reflection::{Erased, Trait, Cast},
     Kind,
 };
 
