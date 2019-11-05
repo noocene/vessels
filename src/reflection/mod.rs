@@ -1,5 +1,4 @@
 use crate::Kind;
-use downcast_rs::{impl_downcast, Downcast};
 use failure::Fail;
 use std::{
     any::{Any, TypeId},
@@ -123,9 +122,7 @@ impl From<Box<SomeTrait>> for () {
     fn from(_: Box<SomeTrait>) {}
 }
 
-pub trait Erased: Send + Trait<SomeTrait> + Downcast {}
-
-impl_downcast!(Erased);
+pub trait Erased: Send + Trait<SomeTrait> {}
 
 pub trait Trait<T: Reflected + ?Sized> {
     fn call(
