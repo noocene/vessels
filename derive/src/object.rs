@@ -178,6 +178,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         })
     }
     let mut supertrait_impls = TokenStream::new();
+    let mut supertrait_ids = TokenStream::new();
     let mut derive_param_bounds = TokenStream::new();
     for (idx, supertrait) in item.supertraits.iter().enumerate() {
         use TypeParamBound::Trait;
@@ -210,6 +211,9 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     fn types(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::vessels::reflection::MethodTypes, ::vessels::reflection::OutOfRangeError> {
                         (self.#id.lock().unwrap().as_ref() as &dyn #path).types(index)
                     }
+                    fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
+                        (self.#id.lock().unwrap().as_ref() as &dyn #path).supertraits()
+                    }
                 }
             });
             from_fields.extend(quote! {
@@ -217,6 +221,9 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             });
             derive_param_bounds.extend(quote! {
                 + #path
+            });
+            supertrait_ids.extend(quote! {
+                ::std::any::TypeId::of::<dyn #path>()
             });
         }
     }
@@ -312,6 +319,9 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                             })
                         }
                     }
+                }
+                fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
+                    vec![#supertrait_ids]
                 }
             }
             impl<#kind_bounded_params> ::vessels::Kind for ::std::boxed::Box<dyn #ident<#params>> {

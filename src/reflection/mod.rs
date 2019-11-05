@@ -104,4 +104,5 @@ pub trait Trait<T: Reflected + ?Sized> {
     fn name_of(&self, index: MethodIndex) -> Result<String, OutOfRangeError>;
     fn types(&self, index: MethodIndex) -> Result<MethodTypes, OutOfRangeError>;
     fn receiver(&self, index: MethodIndex) -> Result<Receiver, OutOfRangeError>;
+    fn supertraits(&self) -> Vec<TypeId>;
 }
