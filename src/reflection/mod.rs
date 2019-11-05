@@ -110,15 +110,15 @@ impl Receiver {
     }
 }
 
-pub struct Upcasted<T: ?Sized>(pub Box<T>);
+pub struct Upcasted<T: Reflected + ?Sized>(pub Box<T>);
 
-impl<T: ?Sized> Upcasted<T> {
+impl<T: Reflected + ?Sized> Upcasted<T> {
     pub fn get(self) -> Box<T> {
         self.0
     }
 }
 
-impl<T: ?Sized> Deref for Upcasted<T> {
+impl<T: Reflected + ?Sized> Deref for Upcasted<T> {
     type Target = Box<T>;
 
     fn deref(&self) -> &Self::Target {
@@ -126,7 +126,7 @@ impl<T: ?Sized> Deref for Upcasted<T> {
     }
 }
 
-impl<T: ?Sized> DerefMut for Upcasted<T> {
+impl<T: Reflected + ?Sized> DerefMut for Upcasted<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

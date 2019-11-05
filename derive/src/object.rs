@@ -52,7 +52,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 return quote_spanned!(item.span() => const #hygiene: () = { compile_error!("traits with more than {} methods are not supported", ::vessels::reflection::MethodIndex::MAX) };);
             }
             let sig = method.sig.clone();
-            let ident = &method.sig.ident;
+            let mident = &method.sig.ident;
             let mut receiver = None;
             let mut args = TokenStream::new();
             let inputs = &method.sig.inputs;
@@ -94,7 +94,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 ty = quote!(FnOnce(#args));
             }
             fields.extend(quote! {
-                #ident: ::std::boxed::Box<dyn #ty #output + Send + Sync>,
+                #mident: ::std::boxed::Box<dyn #ty #output + Send + Sync>,
             });
             let inputs: Punctuated<_, Token![,]> = inputs
                 .iter()
@@ -111,11 +111,11 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 })
                 .collect();
             from_fields.extend(quote! {
-                #ident: { let object = object.clone(); ::std::boxed::Box::new(move |#inputs| #lock.#ident(#inputs)) },
+                #mident: { let object = object.clone(); ::std::boxed::Box::new(move |#inputs| #lock.#mident(#inputs)) },
             });
             shim_items.extend(quote! {
                 #sig {
-                    (self.#ident)(#inputs)
+                    (self.#mident)(#inputs)
                 }
             });
             let idx = methods.len();
@@ -131,7 +131,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             let arg_idents: Vec<_> = inputs.iter().map(|arg| arg.clone()).collect();
             reflected_items.extend(quote! {
                 #sig {
-                    *::std::boxed::Box::<dyn ::std::any::Any + Send>::downcast(self.#call_method(#idx as ::vessels::reflection::MethodIndex, vec![#( ::std::boxed::Box::new(#arg_idents) as ::std::boxed::Box<dyn ::std::any::Any + Send> ),*]).unwrap()).unwrap()
+                    *::std::boxed::Box::<dyn ::std::any::Any + Send>::downcast(::vessels::reflection::Trait::<dyn #ident<#params>>::#call_method(self, #idx as ::vessels::reflection::MethodIndex, vec![#( ::std::boxed::Box::new(#arg_idents) as ::std::boxed::Box<dyn ::std::any::Any + Send> ),*]).unwrap()).unwrap()
                 }
             });
             use ReturnType::Type;
@@ -157,7 +157,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         let idx = idx as MethodIndex;
         let output = &method.1;
         let args = &method.0;
-        let ident = &method.2;
+        let mident = &method.2;
         let name = &method.2.to_string();
         let mutability = method.3.is_mutable();
         let receiver;
@@ -195,7 +195,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         let arm = quote! {
             #idx => {
                 if args.len() == #args_len {
-                    Ok(::std::boxed::Box::new(self.#ident(#arg_stream)) as ::std::boxed::Box<dyn ::std::any::Any + Send>)
+                    Ok(::std::boxed::Box::new(self.#mident(#arg_stream)) as ::std::boxed::Box<dyn ::std::any::Any + Send>)
                 } else {
                     Err(::vessels::reflection::CallError::ArgumentCount(::vessels::reflection::ArgumentCountError {
                         got: args.len(),
@@ -245,31 +245,31 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             supertrait_impls.extend(quote! {
                 impl<#kind_bounded_params> ::vessels::reflection::Trait<dyn #path> for _DERIVED_Shim<#params> {
                     fn call(&self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
-                        (self.#id.lock().unwrap().as_ref() as &dyn #path).call(index, args)
+                        ::vessels::reflection::Trait::<dyn #path>::call(self.#id.lock().unwrap().as_ref() as &dyn #path, index, args)
                     }
                     fn call_mut(&mut self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
-                        (self.#id.lock().unwrap().as_mut() as &mut dyn #path).call_mut(index, args)
+                        ::vessels::reflection::Trait::<dyn #path>::call_mut(self.#id.lock().unwrap().as_mut() as &mut dyn #path, index, args)
                     }
                     fn call_move(self: Box<Self>, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
-                        (::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as Box<dyn #path>).call_mut(index, args)
+                        ::vessels::reflection::Trait::<dyn #path>::call_move(::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as Box<dyn #path>, index, args)
                     }
                     fn by_name(&self, name: &'_ str) -> ::std::result::Result<::vessels::reflection::MethodIndex, ::vessels::reflection::NameError> {
-                        (self.#id.lock().unwrap().as_ref() as &dyn #path).by_name(name)
+                        ::vessels::reflection::Trait::<dyn #path>::by_name(self.#id.lock().unwrap().as_ref() as &dyn #path, name)
                     }
                     fn count(&self) -> ::vessels::reflection::MethodIndex {
-                        (self.#id.lock().unwrap().as_ref() as &dyn #path).count()
+                        ::vessels::reflection::Trait::<dyn #path>::count(self.#id.lock().unwrap().as_ref() as &dyn #path)
                     }
                     fn name_of(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::std::string::String, ::vessels::reflection::OutOfRangeError> {
-                        (self.#id.lock().unwrap().as_ref() as &dyn #path).name_of(index)
+                        ::vessels::reflection::Trait::<dyn #path>::name_of(self.#id.lock().unwrap().as_ref() as &dyn #path, index)
                     }
                     fn types(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::vessels::reflection::MethodTypes, ::vessels::reflection::OutOfRangeError> {
-                        (self.#id.lock().unwrap().as_ref() as &dyn #path).types(index)
+                        ::vessels::reflection::Trait::<dyn #path>::types(self.#id.lock().unwrap().as_ref() as &dyn #path, index)
                     }
                     fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
-                        (self.#id.lock().unwrap().as_ref() as &dyn #path).supertraits()
+                        ::vessels::reflection::Trait::<dyn #path>::supertraits(self.#id.lock().unwrap().as_ref() as &dyn #path)
                     }
                     fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::UpcastError> {
-                        (::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as ::std::boxed::Box<dyn #path>).upcast(ty)
+                        ::vessels::reflection::Trait::<dyn #path>::upcast(::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as ::std::boxed::Box<dyn #path>, ty)
                     }
                 }
             });
