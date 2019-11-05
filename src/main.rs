@@ -1,4 +1,4 @@
-use vessels::{kind::Future, object, reflection::Trait};
+use vessels::{kind::Future, object, reflection::{Trait, Upcasted}};
 
 use futures::executor::block_on;
 
@@ -35,6 +35,8 @@ impl Test for Shim {
 fn main() {
     let trait_object = Box::new(Shim) as Box<dyn Test>;
     let method_index = trait_object.by_name("test").unwrap();
-    println!("{:?}", trait_object.supertraits());
-    println!("{}", block_on(*Box::<dyn Any + Send>::downcast::<Future<u32>>(trait_object.call(method_index, vec![Box::new("four".to_owned())]).unwrap()).unwrap()));
+    let supertraits = trait_object.supertraits();
+    println!("{:?}", supertraits);
+    let upcast_object: Upcasted<dyn Supertrait> = *Box::<dyn Any + Send>::downcast(trait_object.upcast(supertraits[0]).unwrap()).unwrap();
+    println!("{}", block_on(*Box::<dyn Any + Send>::downcast::<Future<u32>>(upcast_object.get().call(method_index, vec![Box::new("four".to_owned())]).unwrap()).unwrap()));
 }
