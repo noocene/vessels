@@ -156,4 +156,5 @@ pub trait Trait<T: Reflected + ?Sized> {
     /// For a `TypeId` that is `TypeId::of<dyn SomeTrait>` returns the erasure of a concrete type
     /// `Upcasted<dyn SomeTrait>` which can then be downcasted and, if necessary, moved out to obtain a `Box<dyn SomeTrait>`.
     fn upcast(self: Box<Self>, ty: TypeId) -> Result<Box<dyn Erased>, UpcastError>;
+    fn erase(self: Box<Self>) -> Box<dyn Erased>;
 }
