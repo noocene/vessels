@@ -205,6 +205,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 #shim_items
             }
             impl<#kind_bounded_params> ::vessels::reflection::Reflected for dyn #ident<#params> {
+                type Shim = _DERIVED_Shim<#params>;
                 const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: () = ();
             }
             impl<#kind_bounded_params DERIVEPARAM: Send + ::vessels::reflection::Trait<dyn #ident<#params>>> #ident<#params> for DERIVEPARAM {
