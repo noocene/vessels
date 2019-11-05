@@ -274,8 +274,8 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
                         ::vessels::reflection::Trait::<dyn #path>::supertraits(self.#id.lock().unwrap().as_ref() as &dyn #path)
                     }
-                    fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::CastError> {
-                        ::vessels::reflection::Trait::<dyn #path>::upcast(::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as ::std::boxed::Box<dyn #path>, ty)
+                    fn upcast_erased(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::CastError> {
+                        ::vessels::reflection::Trait::<dyn #path>::upcast_erased(::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as ::std::boxed::Box<dyn #path>, ty)
                     }
                     fn erase(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn ::vessels::reflection::Erased> {
                         ::vessels::reflection::Trait::<dyn #path>::erase(::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as ::std::boxed::Box<dyn #path>)
@@ -378,8 +378,8 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
                     ::vessels::reflection::Trait::supertraits(self.0.as_ref())
                 }
-                fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::CastError> {
-                    ::vessels::reflection::Trait::upcast(self, ty)
+                fn upcast_erased(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::CastError> {
+                    ::vessels::reflection::Trait::upcast_erased(self, ty)
                 }
                 fn erase(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn ::vessels::reflection::Erased> {
                     ::vessels::reflection::Trait::erase(self)
@@ -455,7 +455,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
                     vec![#supertrait_ids]
                 }
-                fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::CastError> {
+                fn upcast_erased(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::CastError> {
                     #upcast_arms
                     Err(::vessels::reflection::CastError {
                         target: ty,
