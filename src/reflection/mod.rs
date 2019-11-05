@@ -4,7 +4,6 @@ use failure::Fail;
 use std::{
     any::{Any, TypeId},
     fmt::{self, Display, Formatter},
-    ops::{Deref, DerefMut},
 };
 
 pub type MethodIndex = u8;
@@ -112,28 +111,6 @@ impl Receiver {
     }
 }
 
-pub struct Upcasted<T: Reflected + ?Sized>(pub Box<T>);
-
-impl<T: Reflected + ?Sized> Upcasted<T> {
-    pub fn get(self) -> Box<T> {
-        self.0
-    }
-}
-
-impl<T: Reflected + ?Sized> Deref for Upcasted<T> {
-    type Target = Box<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T: Reflected + ?Sized> DerefMut for Upcasted<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 pub enum SomeTrait {}
 
 impl Reflected for SomeTrait {
@@ -171,6 +148,8 @@ pub trait Trait<T: Reflected + ?Sized> {
     fn by_name(&self, name: &'_ str) -> Result<MethodIndex, NameError>;
     fn count(&self) -> MethodIndex;
     fn name_of(&self, index: MethodIndex) -> Result<String, OutOfRangeError>;
+    fn this(&self) -> TypeId;
+    fn name(&self) -> String;
     fn types(&self, index: MethodIndex) -> Result<MethodTypes, OutOfRangeError>;
     /// Returns all supertraits in the form `TypeId::of<dyn SomeTrait>` for each supertrait `SomeTrait`.
     fn supertraits(&self) -> Vec<TypeId>;
