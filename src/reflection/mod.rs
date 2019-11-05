@@ -1,3 +1,4 @@
+use crate::Kind;
 use failure::Fail;
 use std::{
     any::{Any, TypeId},
@@ -66,6 +67,7 @@ pub struct NameError {
 /// Moreover, any type that implements `Trait<dyn SomeTrait>` where `dyn SomeTrait: Reflected` will
 /// have a generated implementation allowing it to satisfy `SomeTrait`.
 pub trait Reflected {
+    type Shim: Kind;
     const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: ();
 }
 
