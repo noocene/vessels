@@ -126,7 +126,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         name_arms.extend(quote! {
             #name => {
                 Ok(#idx)
-            }
+            },
         });
         let mut arg_stream = TokenStream::new();
         for (idx, arg) in args.iter().enumerate() {
@@ -152,13 +152,13 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         let fail_arm = quote! {
             #idx => {
                 Err(::vessels::reflection::CallError::IncorrectReceiver(#mutability))
-            }
+            },
         };
         if mutability {
             receiver_arms.extend(quote! {
                 #idx => {
                     Ok(Mutable)
-                }
+                },
             });
             call_mut_arms.extend(arm);
             call_arms.extend(fail_arm);
@@ -166,7 +166,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             receiver_arms.extend(quote! {
                 #idx => {
                     Ok(Immutable)
-                }
+                },
             });
             call_arms.extend(arm);
             call_mut_arms.extend(fail_arm);
@@ -174,7 +174,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         index_name_arms.extend(quote! {
             #idx => {
                 Ok(#name.to_owned())
-            }
+            },
         })
     }
     let mut supertrait_impls = TokenStream::new();
@@ -248,7 +248,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 _marker: ::std::marker::PhantomData<(#params)>
             }
             impl<#kind_bounded_params> _DERIVED_Shim<#params> {
-                pub fn from_instance<T: ?Sized + #ident<#params> + 'static>(object: ::std::sync::Arc<::std::sync::Mutex<::std::boxed::Box<T>>>) -> Self {
+                pub fn from_instance<DERIVEPARAM: ?Sized + #ident<#params> + 'static>(object: ::std::sync::Arc<::std::sync::Mutex<::std::boxed::Box<DERIVEPARAM>>>) -> Self {
                     _DERIVED_Shim {
                        #from_fields
                        _marker: ::std::marker::PhantomData
@@ -260,10 +260,10 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 #shim_items
             }
             impl<#kind_bounded_params> ::vessels::reflection::Reflected for dyn #ident<#params> {
-                type Shim = _DERIVED_Shim;
+                type Shim = _DERIVED_Shim<#params>;
                 const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: () = ();
             }
-            impl<#kind_bounded_params DERIVEPARAM: Send + ::vessels::reflection::Trait<dyn #ident<#params>> #derive_param_bounds> #ident<#params> for DERIVEPARAM {
+            impl<DERIVEPARAMD: Send + ::vessels::reflection::Trait<dyn #ident<#params>> #derive_param_bounds, #kind_bounded_params> #ident<#params> for DERIVEPARAMD {
                 #reflected_items
             }
             impl<#kind_bounded_params> ::vessels::reflection::Trait<dyn #ident<#params>> for dyn #ident<#params> {
