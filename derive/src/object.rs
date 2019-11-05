@@ -274,7 +274,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
                         ::vessels::reflection::Trait::<dyn #path>::supertraits(self.#id.lock().unwrap().as_ref() as &dyn #path)
                     }
-                    fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::UpcastError> {
+                    fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::CastError> {
                         ::vessels::reflection::Trait::<dyn #path>::upcast(::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as ::std::boxed::Box<dyn #path>, ty)
                     }
                     fn erase(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn ::vessels::reflection::Erased> {
@@ -336,7 +336,17 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 #reflected_items
             }
             pub struct _DERIVED_ErasedShim<#kind_bounded_params>(Box<dyn #ident<#params>>);
-            impl<#kind_bounded_params> ::vessels::reflection::Erased for _DERIVED_ErasedShim<#params> {}
+            impl<#kind_bounded_params> ::vessels::reflection::Erased for _DERIVED_ErasedShim<#params> {
+                fn cast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CastError> {
+                    if ty == ::std::any::TypeId::of::<dyn #ident<#params>>() {
+                        Ok(::std::boxed::Box::new(::vessels::reflection::Casted::<dyn #ident<#params>>(self.0)) as ::std::boxed::Box<dyn ::std::any::Any + Send>)
+                    } else {
+                        Err(::vessels::reflection::CastError {
+                            target: ty,
+                        })
+                    }
+                }
+            }
             impl<#kind_bounded_params> ::vessels::reflection::Trait<::vessels::reflection::SomeTrait> for _DERIVED_ErasedShim<#params> {
                 fn call(&self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
                     ::vessels::reflection::Trait::call(self.0.as_ref(), index, args)
@@ -368,7 +378,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
                     ::vessels::reflection::Trait::supertraits(self.0.as_ref())
                 }
-                fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::UpcastError> {
+                fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::CastError> {
                     ::vessels::reflection::Trait::upcast(self, ty)
                 }
                 fn erase(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn ::vessels::reflection::Erased> {
@@ -445,10 +455,10 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
                     vec![#supertrait_ids]
                 }
-                fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::UpcastError> {
+                fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflection::Erased>, ::vessels::reflection::CastError> {
                     #upcast_arms
-                    Err(::vessels::reflection::UpcastError {
-                        supertrait: ty,
+                    Err(::vessels::reflection::CastError {
+                        target: ty,
                     })
                 }
                 fn erase(self: ::std::boxed::Box<Self>) -> Box<dyn ::vessels::reflection::Erased> {
