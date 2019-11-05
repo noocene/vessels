@@ -227,8 +227,13 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 + #path
             });
             supertrait_ids.extend(quote! {
-                ::std::any::TypeId::of::<dyn #path>()
+                ::std::any::TypeId::of::<dyn #path>(),
             });
+            upcast_arms.extend(quote! {
+                if ty == ::std::any::TypeId::of::<dyn #path>() {
+                    return Ok(::std::boxed::Box::new(::vessels::reflection::Upcasted::<dyn #path>(Box::new(<dyn #path as ::vessels::reflection::Reflected>::Shim::from_instance(::std::sync::Arc::new(::std::sync::Mutex::new(self)))))) as ::std::boxed::Box<dyn ::std::any::Any + Send>);
+                }
+            })
         }
     }
     item.supertraits.push(parse_quote!(::std::marker::Send));
@@ -328,14 +333,10 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     vec![#supertrait_ids]
                 }
                 fn upcast(self: Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::UpcastError> {
-                    match ty {
-                        #upcast_arms
-                        _ => {
-                            Err(::vessels::reflection::UpcastError {
-                                supertrait: ty,
-                            })
-                        }
-                    }
+                    #upcast_arms
+                    Err(::vessels::reflection::UpcastError {
+                        supertrait: ty,
+                    })
                 }
             }
             impl<#kind_bounded_params> ::vessels::Kind for ::std::boxed::Box<dyn #ident<#params>> {
