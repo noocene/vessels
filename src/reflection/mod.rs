@@ -11,6 +11,7 @@ pub type MethodIndex = u8;
 pub struct MethodTypes {
     pub arguments: Vec<TypeId>,
     pub output: TypeId,
+    pub receiver: Receiver,
 }
 
 #[derive(Debug, Fail)]
@@ -18,7 +19,7 @@ pub enum CallError {
     Type(u8),
     ArgumentCount(ArgumentCountError),
     OutOfRange(OutOfRangeError),
-    IncorrectReceiver(bool),
+    IncorrectReceiver(Receiver),
 }
 
 impl Display for CallError {
@@ -32,11 +33,7 @@ impl Display for CallError {
                 Type(position) => format!("invalid type for argument {}", position),
                 OutOfRange(error) => format!("{}", error),
                 ArgumentCount(error) => format!("{}", error),
-                IncorrectReceiver(mutable) => format!(
-                    "expected {} receiver, found {}",
-                    if *mutable { "mutable" } else { "immutable" },
-                    if *mutable { "immutable" } else { "mutable" },
-                ),
+                IncorrectReceiver(expected) => format!("expected {} receiver", expected),
             }
         )
     }
@@ -83,6 +80,23 @@ pub trait Reflected {
 pub enum Receiver {
     Mutable,
     Immutable,
+    Owned,
+}
+
+impl Display for Receiver {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        use Receiver::{Immutable, Mutable, Owned};
+
+        write!(
+            f,
+            "{}",
+            match self {
+                Immutable => "an immutable",
+                Mutable => "a mutable",
+                Owned => "an owned",
+            }
+        )
+    }
 }
 
 impl Receiver {
@@ -129,11 +143,15 @@ pub trait Trait<T: Reflected + ?Sized> {
         index: MethodIndex,
         args: Vec<Box<dyn Any + Send>>,
     ) -> Result<Box<dyn Any + Send>, CallError>;
+    fn call_move(
+        self: Box<Self>,
+        index: MethodIndex,
+        args: Vec<Box<dyn Any + Send>>,
+    ) -> Result<Box<dyn Any + Send>, CallError>;
     fn by_name(&self, name: &'_ str) -> Result<MethodIndex, NameError>;
     fn count(&self) -> MethodIndex;
     fn name_of(&self, index: MethodIndex) -> Result<String, OutOfRangeError>;
     fn types(&self, index: MethodIndex) -> Result<MethodTypes, OutOfRangeError>;
-    fn receiver(&self, index: MethodIndex) -> Result<Receiver, OutOfRangeError>;
     /// Returns all supertraits in the form `TypeId::of<dyn SomeTrait>` for each supertrait `SomeTrait`.
     fn supertraits(&self) -> Vec<TypeId>;
     /// For a `TypeId` that is `TypeId::of<dyn SomeTrait>` returns the erasure of a concrete type
