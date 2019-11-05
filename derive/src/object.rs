@@ -265,6 +265,12 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     fn types(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::vessels::reflection::MethodTypes, ::vessels::reflection::OutOfRangeError> {
                         ::vessels::reflection::Trait::<dyn #path>::types(self.#id.lock().unwrap().as_ref() as &dyn #path, index)
                     }
+                    fn this(&self) -> ::std::any::TypeId {
+                        ::vessels::reflection::Trait::<dyn #path>::this(self.#id.lock().unwrap().as_ref() as &dyn #path)
+                    }
+                    fn name(&self) -> ::std::string::String {
+                        ::vessels::reflection::Trait::<dyn #path>::name(self.#id.lock().unwrap().as_ref() as &dyn #path)
+                    }
                     fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
                         ::vessels::reflection::Trait::<dyn #path>::supertraits(self.#id.lock().unwrap().as_ref() as &dyn #path)
                     }
@@ -290,6 +296,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         }
     }
     item.supertraits.push(parse_quote!(::std::marker::Send));
+    let name = ident.to_string();
     quote! {
         #[allow(non_upper_case_globals)]
         #[allow(non_snake_case)]
@@ -344,6 +351,12 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 }
                 fn name_of(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::std::string::String, ::vessels::reflection::OutOfRangeError> {
                     ::vessels::reflection::Trait::name_of(self.0.as_ref(), index)
+                }
+                fn this(&self) -> ::std::any::TypeId {
+                    ::vessels::reflection::Trait::this(self.0.as_ref())
+                }
+                fn name(&self) -> ::std::string::String {
+                    ::vessels::reflection::Trait::name(self.0.as_ref())
                 }
                 fn types(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::vessels::reflection::MethodTypes, ::vessels::reflection::OutOfRangeError> {
                     ::vessels::reflection::Trait::types(self.0.as_ref(), index)
@@ -415,6 +428,12 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                             })
                         }
                     }
+                }
+                fn this(&self) -> ::std::any::TypeId {
+                    ::std::any::TypeId::of::<dyn #ident<#params>>()
+                }
+                fn name(&self) -> ::std::string::String {
+                    #name.to_owned()
                 }
                 fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
                     vec![#supertrait_ids]
