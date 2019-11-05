@@ -190,7 +190,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 #id: ::std::sync::Arc<::std::sync::Mutex<::std::boxed::Box<<dyn #path as ::vessels::reflection::Reflected>::Shim>>>,
             });
             supertrait_impls.extend(quote! {
-                impl<#kind_bounded_params> ::vessels::reflection::Trait<dyn #path> for _DERIVED_Shim {
+                impl<#kind_bounded_params> ::vessels::reflection::Trait<dyn #path> for _DERIVED_Shim<#params> {
                     fn call(&self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
                         (self.#id.lock().unwrap().as_ref() as &dyn #path).call(index, args)
                     }
