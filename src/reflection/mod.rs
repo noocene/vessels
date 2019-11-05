@@ -127,8 +127,6 @@ pub trait Erased: Send + Trait<SomeTrait> + Downcast {}
 
 impl_downcast!(Erased);
 
-impl<T: Send + Trait<SomeTrait> + 'static> Erased for T {}
-
 pub trait Trait<T: Reflected + ?Sized> {
     fn call(
         &self,
