@@ -324,19 +324,20 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             }
             impl<#kind_bounded_params> ::vessels::reflection::Reflected for dyn #ident<#params> {
                 type Shim = _DERIVED_Shim<#params>;
-                type ErasedShim = _DERIVE_ErasedShim<#params>;
+                type ErasedShim = _DERIVED_ErasedShim<#params>;
                 const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: () = ();
             }
-            impl<#kind_bounded_params> From<Box<dyn #ident<#params>>> for _DERIVE_ErasedShim<#params> {
-                fn from(input: Box<dyn #ident<#params>>) -> _DERIVE_ErasedShim<#params> {
-                    _DERIVE_ErasedShim(input)
+            impl<#kind_bounded_params> From<Box<dyn #ident<#params>>> for _DERIVED_ErasedShim<#params> {
+                fn from(input: Box<dyn #ident<#params>>) -> _DERIVED_ErasedShim<#params> {
+                    _DERIVED_ErasedShim(input)
                 }
             }
             impl<DERIVEPARAM: 'static + Send + ::vessels::reflection::Trait<dyn #ident<#params>> #derive_param_bounds, #kind_bounded_params> #ident<#params> for DERIVEPARAM {
                 #reflected_items
             }
-            pub struct _DERIVE_ErasedShim<#kind_bounded_params>(Box<dyn #ident<#params>>);
-            impl<#kind_bounded_params> ::vessels::reflection::Trait<::vessels::reflection::SomeTrait> for _DERIVE_ErasedShim<#params> {
+            pub struct _DERIVED_ErasedShim<#kind_bounded_params>(Box<dyn #ident<#params>>);
+            impl<#kind_bounded_params> ::vessels::reflection::Erased for _DERIVED_ErasedShim<#params> {}
+            impl<#kind_bounded_params> ::vessels::reflection::Trait<::vessels::reflection::SomeTrait> for _DERIVED_ErasedShim<#params> {
                 fn call(&self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
                     ::vessels::reflection::Trait::call(self.0.as_ref(), index, args)
                 }
@@ -451,7 +452,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     })
                 }
                 fn erase(self: ::std::boxed::Box<Self>) -> Box<dyn ::vessels::reflection::Erased> {
-                    Box::new(_DERIVE_ErasedShim::from(self)) as ::std::boxed::Box<dyn ::vessels::reflection::Erased>
+                    Box::new(_DERIVED_ErasedShim::from(self)) as ::std::boxed::Box<dyn ::vessels::reflection::Erased>
                 }
             }
             impl<#kind_bounded_params> ::vessels::Kind for ::std::boxed::Box<dyn #ident<#params>> {
