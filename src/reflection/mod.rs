@@ -130,15 +130,41 @@ pub trait Erased: Send + Trait<SomeTrait> {
 
 pub trait Cast<T: ?Sized + Reflected> {
     fn downcast(self) -> Result<Box<T>, CastError>;
+    fn upcast(self) -> Result<Box<T>, CastError>;
 }
 
-impl<T: ?Sized + Reflected> Cast<T> for Box<dyn Erased> {
-    fn downcast(self) -> Result<Box<T>, CastError> {
-        self.cast(TypeId::of::<T>()).map(|erased| {
-            Box::<dyn Any + Send>::downcast::<Casted<T>>(erased)
+impl<S: ?Sized + Reflected> Cast<S> for Box<dyn Erased> {
+    fn downcast(self) -> Result<Box<S>, CastError> {
+        self.cast(TypeId::of::<S>()).map(|erased| {
+            Box::<dyn Any + Send>::downcast::<Casted<S>>(erased)
                 .map_err(|_| panic!("could downcast after successful reinterpretation"))
                 .unwrap()
                 .0
+        })
+    }
+    fn upcast(self) -> Result<Box<S>, CastError> {
+        Trait::<SomeTrait>::upcast_erased(self, TypeId::of::<S>()).map(|erased| {
+            erased
+                .downcast()
+                .expect("could not downcast after successful upcast")
+        })
+    }
+}
+
+impl<T: ?Sized + Reflected + Trait<T>, S: ?Sized + Reflected> Cast<S> for Box<T> {
+    fn downcast(self) -> Result<Box<S>, CastError> {
+        self.erase().cast(TypeId::of::<S>()).map(|erased| {
+            Box::<dyn Any + Send>::downcast::<Casted<S>>(erased)
+                .map_err(|_| panic!("could downcast after successful reinterpretation"))
+                .unwrap()
+                .0
+        })
+    }
+    fn upcast(self) -> Result<Box<S>, CastError> {
+        Trait::<T>::upcast_erased(self, TypeId::of::<S>()).map(|erased| {
+            erased
+                .downcast()
+                .expect("could not downcast after successful upcast")
         })
     }
 }
@@ -169,6 +195,6 @@ pub trait Trait<T: Reflected + ?Sized> {
     fn supertraits(&self) -> Vec<TypeId>;
     /// For a `TypeId` that is `TypeId::of<dyn SomeTrait>` returns the erasure of a concrete type
     /// `Upcasted<dyn SomeTrait>` which can then be downcasted and, if necessary, moved out to obtain a `Box<dyn SomeTrait>`.
-    fn upcast(self: Box<Self>, ty: TypeId) -> Result<Box<dyn Erased>, CastError>;
+    fn upcast_erased(self: Box<Self>, ty: TypeId) -> Result<Box<dyn Erased>, CastError>;
     fn erase(self: Box<Self>) -> Box<dyn Erased>;
 }
