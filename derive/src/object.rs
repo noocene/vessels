@@ -2,13 +2,12 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
     parse_quote, punctuated::Punctuated, spanned::Spanned, FnArg, GenericParam, ItemTrait,
-    ReturnType, Token, TraitItem,
+    ReturnType, Token, TraitItem, TypeParamBound,
 };
 
 type MethodIndex = u8;
 
 pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
-    item.supertraits.push(parse_quote!(::std::marker::Send));
     let mut params = TokenStream::new();
     let ident = &item.ident;
     let hygiene = format_ident!("_IMPLEMENT_PROTOCOL_FOR_{}", ident);
@@ -138,15 +137,10 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         }
         let args_len = args.len();
         let mutability = method.3.mutability.is_some();
-        let ref_call = if mutability {
-            quote!(as_mut())
-        } else {
-            quote!(as_ref())
-        };
         let arm = quote! {
             #idx => {
                 if args.len() == #args_len {
-                    Ok(Box::new(self.#ref_call.#ident(#arg_stream)) as Box<dyn ::std::any::Any + Send>)
+                    Ok(Box::new(self.#ident(#arg_stream)) as Box<dyn ::std::any::Any + Send>)
                 } else {
                     Err(::vessels::reflection::CallError::ArgumentCount(::vessels::reflection::ArgumentCountError {
                         got: args.len(),
@@ -183,8 +177,53 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             }
         })
     }
+    let mut supertrait_impls = TokenStream::new();
+    let mut derive_param_bounds = TokenStream::new();
+    for (idx, supertrait) in item.supertraits.iter().enumerate() {
+        use TypeParamBound::Trait;
+        if let Trait(supertrait) = supertrait {
+            let id = format_ident!("_SUPERTRAIT_{}_", idx);
+            let path = supertrait.path.clone();
+            fields.extend(quote! {
+                #id: ::std::sync::Arc<::std::sync::Mutex<::std::boxed::Box<<dyn #path as ::vessels::reflection::Reflected>::Shim>>>,
+            });
+            supertrait_impls.extend(quote! {
+                impl<#kind_bounded_params> ::vessels::reflection::Trait<dyn #path> for _DERIVED_Shim {
+                    fn call(&self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
+                        (self.#id.lock().unwrap().as_ref() as &dyn #path).call(index, args)
+                    }
+                    fn call_mut(&mut self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
+                        (self.#id.lock().unwrap().as_mut() as &mut dyn #path).call_mut(index, args)
+                    }
+                    fn by_name(&self, name: &'_ str) -> ::std::result::Result<::vessels::reflection::MethodIndex, ::vessels::reflection::NameError> {
+                        (self.#id.lock().unwrap().as_ref() as &dyn #path).by_name(name)
+                    }
+                    fn count(&self) -> ::vessels::reflection::MethodIndex {
+                        (self.#id.lock().unwrap().as_ref() as &dyn #path).count()
+                    }
+                    fn receiver(&self, index: ::vessels::reflection::MethodIndex) -> Result<::vessels::reflection::Receiver, ::vessels::reflection::OutOfRangeError> {
+                        (self.#id.lock().unwrap().as_ref() as &dyn #path).receiver(index)
+                    }
+                    fn name_of(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::std::string::String, ::vessels::reflection::OutOfRangeError> {
+                        (self.#id.lock().unwrap().as_ref() as &dyn #path).name_of(index)
+                    }
+                    fn types(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::vessels::reflection::MethodTypes, ::vessels::reflection::OutOfRangeError> {
+                        (self.#id.lock().unwrap().as_ref() as &dyn #path).types(index)
+                    }
+                }
+            });
+            from_fields.extend(quote! {
+                #id: ::std::sync::Arc::new(::std::sync::Mutex::new(Box::new(<dyn #path as ::vessels::reflection::Reflected>::Shim::from_instance(object)))),
+            });
+            derive_param_bounds.extend(quote! {
+                + #path
+            });
+        }
+    }
+    item.supertraits.push(parse_quote!(::std::marker::Send));
     quote! {
         #[allow(non_upper_case_globals)]
+        #[allow(non_snake_case)]
         #[allow(non_camel_case_types)]
         const #hygiene: () = {
             #[derive(::vessels::Kind)]
@@ -193,25 +232,25 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 _marker: ::std::marker::PhantomData<(#params)>
             }
             impl<#kind_bounded_params> _DERIVED_Shim<#params> {
-                fn from_object(object: ::std::boxed::Box<dyn #ident<#params>>) -> Self {
-                    let object = ::std::sync::Arc::new(::std::sync::Mutex::new(object));
+                pub fn from_instance<T: ?Sized + #ident<#params> + 'static>(object: ::std::sync::Arc<::std::sync::Mutex<Box<T>>>) -> Self {
                     _DERIVED_Shim {
                        #from_fields
                        _marker: ::std::marker::PhantomData
                     }
                 }
             }
+            #supertrait_impls
             impl<#kind_bounded_params> #ident<#params> for _DERIVED_Shim<#params> {
                 #shim_items
             }
             impl<#kind_bounded_params> ::vessels::reflection::Reflected for dyn #ident<#params> {
-                type Shim = _DERIVED_Shim<#params>;
+                type Shim = _DERIVED_Shim;
                 const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: () = ();
             }
-            impl<#kind_bounded_params DERIVEPARAM: Send + ::vessels::reflection::Trait<dyn #ident<#params>>> #ident<#params> for DERIVEPARAM {
+            impl<#kind_bounded_params DERIVEPARAM: Send + ::vessels::reflection::Trait<dyn #ident<#params>> #derive_param_bounds> #ident<#params> for DERIVEPARAM {
                 #reflected_items
             }
-            impl<#kind_bounded_params> ::vessels::reflection::Trait<dyn #ident<#params>> for ::std::boxed::Box<dyn #ident<#params>> {
+            impl<#kind_bounded_params> ::vessels::reflection::Trait<dyn #ident<#params>> for dyn #ident<#params> {
                 fn call(&self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
                     args.reverse();
                     match index {
@@ -289,7 +328,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 ) -> <Self as ::vessels::Kind>::DeconstructFuture {
                     use ::vessels::futures::{SinkExt, TryFutureExt};
                     ::std::boxed::Box::pin(async move {
-                        channel.send(channel.fork::<_DERIVED_Shim<#params>>(_DERIVED_Shim::from_object(self)).await.unwrap()).unwrap_or_else(|_| panic!()).await;
+                        channel.send(channel.fork::<_DERIVED_Shim<#params>>(_DERIVED_Shim::from_instance(::std::sync::Arc::new(::std::sync::Mutex::new(self)))).await.unwrap()).unwrap_or_else(|_| panic!()).await;
                         Ok(())
                     })
                 }
