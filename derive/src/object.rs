@@ -1,11 +1,26 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
-    parse_quote, punctuated::Punctuated, spanned::Spanned, FnArg, GenericParam, ItemTrait,
-    ReturnType, Token, TraitItem, TypeParamBound,
+    parse_quote, punctuated::Punctuated, spanned::Spanned, FnArg, GenericParam, ItemTrait, PatType,
+    Receiver, ReturnType, Token, TraitItem, TypeParamBound,
 };
 
 type MethodIndex = u8;
+
+enum Recv {
+    Reference(Receiver),
+    Move(PatType),
+}
+
+impl Recv {
+    fn is_mutable(&self) -> Option<bool> {
+        use Recv::{Move, Reference};
+        match self {
+            Reference(receiver) => Some(receiver.mutability.is_some()),
+            Move(_) => None,
+        }
+    }
+}
 
 pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
     let mut params = TokenStream::new();
@@ -41,29 +56,54 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             let mut receiver = None;
             let mut args = TokenStream::new();
             let inputs = &method.sig.inputs;
+            let boxed_receiver: PatType = if let FnArg::Typed(ty) = parse_quote!(self: Box<Self>) {
+                ty
+            } else {
+                panic!("could not parse hard-coded move receiver")
+            };
             for input in inputs {
                 use FnArg::{Receiver, Typed};
                 if let Typed(ty) = input {
+                    if ty == &boxed_receiver {
+                        receiver = Some(Recv::Move(ty.clone()));
+                        continue;
+                    }
                     let ty = &ty.ty;
                     arg_types.push(ty.into_token_stream());
                     args.extend(quote!(#ty,));
                 } else if let Receiver(r) = input {
-                    receiver = Some(r.clone());
+                    receiver = Some(Recv::Reference(r.clone()));
                 }
             }
             if receiver.is_none() {
-                return quote_spanned!(method.span() => const #hygiene: () = { compile_error!("object-safe trait methods must have a borrowed receiver") };);
+                return quote_spanned!(method.span() => const #hygiene: () = { compile_error!("object-safe trait methods must have a borrowed or `Box<Self>` receiver") };);
             }
             let receiver = receiver.unwrap();
             let output = &method.sig.output;
+            let ty;
+            let lock;
+            if receiver.is_mutable().is_some() {
+                lock = quote!(object.lock().unwrap());
+                ty = quote!(Fn(#args));
+            } else {
+                lock = quote!(::std::sync::Arc::try_unwrap(object)
+                    .map_err(|_| panic!("arc is not held exclusively"))
+                    .unwrap()
+                    .into_inner()
+                    .unwrap());
+                ty = quote!(FnOnce(#args));
+            }
             fields.extend(quote! {
-                #ident: ::std::boxed::Box<dyn Fn(#args) #output + Send + Sync>,
+                #ident: ::std::boxed::Box<dyn #ty #output + Send + Sync>,
             });
             let inputs: Punctuated<_, Token![,]> = inputs
                 .iter()
                 .filter_map(|arg| {
                     use FnArg::Typed;
                     if let Typed(ty) = arg {
+                        if ty == &boxed_receiver {
+                            return None;
+                        }
                         Some(ty.pat.clone())
                     } else {
                         None
@@ -71,7 +111,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 })
                 .collect();
             from_fields.extend(quote! {
-                #ident: { let object = object.clone(); ::std::boxed::Box::new(move |#inputs| object.lock().unwrap().#ident(#inputs)) },
+                #ident: { let object = object.clone(); ::std::boxed::Box::new(move |#inputs| #lock.#ident(#inputs)) },
             });
             shim_items.extend(quote! {
                 #sig {
@@ -79,10 +119,14 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 }
             });
             let idx = methods.len();
-            let call_method = if receiver.mutability.is_some() {
-                quote!(call_mut)
+            let call_method = if let Some(mutability) = receiver.is_mutable() {
+                if mutability {
+                    quote!(call_mut)
+                } else {
+                    quote!(call)
+                }
             } else {
-                quote!(call)
+                quote!(call_move)
             };
             let arg_idents: Vec<_> = inputs.iter().map(|arg| arg.clone()).collect();
             reflected_items.extend(quote! {
@@ -106,20 +150,32 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
     let mut types_arms = TokenStream::new();
     let mut call_arms = TokenStream::new();
     let mut call_mut_arms = TokenStream::new();
+    let mut call_move_arms = TokenStream::new();
     let mut name_arms = TokenStream::new();
     let mut index_name_arms = TokenStream::new();
-    let mut receiver_arms = TokenStream::new();
     for (idx, method) in methods.iter().enumerate() {
         let idx = idx as MethodIndex;
         let output = &method.1;
         let args = &method.0;
         let ident = &method.2;
         let name = &method.2.to_string();
+        let mutability = method.3.is_mutable();
+        let receiver;
+        if let Some(mutability) = mutability {
+            if mutability {
+                receiver = quote!(::vessels::reflection::Receiver::Mutable);
+            } else {
+                receiver = quote!(::vessels::reflection::Receiver::Immutable);
+            }
+        } else {
+            receiver = quote!(::vessels::reflection::Receiver::Owned);
+        }
         types_arms.extend(quote! {
             #idx => {
                 Ok(::vessels::reflection::MethodTypes {
                     arguments: vec![#(::std::any::TypeId::of::<#args>()),*],
-                    output: ::std::any::TypeId::of::<#output>()
+                    output: ::std::any::TypeId::of::<#output>(),
+                    receiver: #receiver
                 })
             },
         });
@@ -136,7 +192,6 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             })
         }
         let args_len = args.len();
-        let mutability = method.3.mutability.is_some();
         let arm = quote! {
             #idx => {
                 if args.len() == #args_len {
@@ -151,24 +206,22 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         };
         let fail_arm = quote! {
             #idx => {
-                Err(::vessels::reflection::CallError::IncorrectReceiver(#mutability))
+                Err(::vessels::reflection::CallError::IncorrectReceiver(#receiver))
             },
         };
-        if mutability {
-            receiver_arms.extend(quote! {
-                #idx => {
-                    Ok(Mutable)
-                },
-            });
-            call_mut_arms.extend(arm);
-            call_arms.extend(fail_arm);
+        if let Some(mutability) = mutability {
+            if mutability {
+                call_mut_arms.extend(arm);
+                call_arms.extend(fail_arm.clone());
+                call_move_arms.extend(fail_arm);
+            } else {
+                call_arms.extend(arm);
+                call_mut_arms.extend(fail_arm.clone());
+                call_move_arms.extend(fail_arm);
+            }
         } else {
-            receiver_arms.extend(quote! {
-                #idx => {
-                    Ok(Immutable)
-                },
-            });
-            call_arms.extend(arm);
+            call_move_arms.extend(arm);
+            call_arms.extend(fail_arm.clone());
             call_mut_arms.extend(fail_arm);
         }
         index_name_arms.extend(quote! {
@@ -197,14 +250,14 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     fn call_mut(&mut self, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
                         (self.#id.lock().unwrap().as_mut() as &mut dyn #path).call_mut(index, args)
                     }
+                    fn call_move(self: Box<Self>, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
+                        (::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as Box<dyn #path>).call_mut(index, args)
+                    }
                     fn by_name(&self, name: &'_ str) -> ::std::result::Result<::vessels::reflection::MethodIndex, ::vessels::reflection::NameError> {
                         (self.#id.lock().unwrap().as_ref() as &dyn #path).by_name(name)
                     }
                     fn count(&self) -> ::vessels::reflection::MethodIndex {
                         (self.#id.lock().unwrap().as_ref() as &dyn #path).count()
-                    }
-                    fn receiver(&self, index: ::vessels::reflection::MethodIndex) -> Result<::vessels::reflection::Receiver, ::vessels::reflection::OutOfRangeError> {
-                        (self.#id.lock().unwrap().as_ref() as &dyn #path).receiver(index)
                     }
                     fn name_of(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::std::string::String, ::vessels::reflection::OutOfRangeError> {
                         (self.#id.lock().unwrap().as_ref() as &dyn #path).name_of(index)
@@ -216,7 +269,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                         (self.#id.lock().unwrap().as_ref() as &dyn #path).supertraits()
                     }
                     fn upcast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::UpcastError> {
-                        (::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!()).unwrap().into_inner().unwrap() as ::std::boxed::Box<dyn #path>).upcast(ty)
+                        (::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as ::std::boxed::Box<dyn #path>).upcast(ty)
                     }
                 }
             });
@@ -263,7 +316,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 type Shim = _DERIVED_Shim<#params>;
                 const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: () = ();
             }
-            impl<DERIVEPARAMD: Send + ::vessels::reflection::Trait<dyn #ident<#params>> #derive_param_bounds, #kind_bounded_params> #ident<#params> for DERIVEPARAMD {
+            impl<DERIVEPARAM: 'static + Send + ::vessels::reflection::Trait<dyn #ident<#params>> #derive_param_bounds, #kind_bounded_params> #ident<#params> for DERIVEPARAM {
                 #reflected_items
             }
             impl<#kind_bounded_params> ::vessels::reflection::Trait<dyn #ident<#params>> for dyn #ident<#params> {
@@ -285,6 +338,15 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                         })),
                     }
                 }
+                fn call_move(self: Box<Self>, index: ::vessels::reflection::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CallError> {
+                    args.reverse();
+                    match index {
+                        #call_move_arms
+                        _ => Err(::vessels::reflection::CallError::OutOfRange(::vessels::reflection::OutOfRangeError {
+                            index,
+                        })),
+                    }
+                }
                 fn by_name(&self, name: &'_ str) -> ::std::result::Result<::vessels::reflection::MethodIndex, ::vessels::reflection::NameError> {
                     match name {
                         #name_arms
@@ -297,17 +359,6 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 }
                 fn count(&self) -> ::vessels::reflection::MethodIndex {
                     #methods_count as ::vessels::reflection::MethodIndex
-                }
-                fn receiver(&self, index: ::vessels::reflection::MethodIndex) -> Result<::vessels::reflection::Receiver, ::vessels::reflection::OutOfRangeError> {
-                    use ::vessels::reflection::Receiver::{Mutable, Immutable};
-                    match index {
-                        #receiver_arms
-                        _ => {
-                            Err(::vessels::reflection::OutOfRangeError {
-                                index,
-                            })
-                        }
-                    }
                 }
                 fn name_of(&self, index: ::vessels::reflection::MethodIndex) -> ::std::result::Result<::std::string::String, ::vessels::reflection::OutOfRangeError> {
                     match index {
@@ -353,7 +404,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 ) -> <Self as ::vessels::Kind>::DeconstructFuture {
                     use ::vessels::futures::{SinkExt, TryFutureExt};
                     ::std::boxed::Box::pin(async move {
-                        channel.send(channel.fork::<_DERIVED_Shim<#params>>(_DERIVED_Shim::from_instance(::std::sync::Arc::new(::std::sync::Mutex::new(self)))).await.unwrap()).unwrap_or_else(|_| panic!()).await;
+                        channel.send(channel.fork::<_DERIVED_Shim<#params>>(_DERIVED_Shim::from_instance(::std::sync::Arc::new(::std::sync::Mutex::new(self)))).await.unwrap()).unwrap_or_else(|_| panic!("arc is not held exclusively")).await;
                         Ok(())
                     })
                 }
