@@ -2,7 +2,7 @@ use vessels::{
     kind::Future,
     object,
     reflection::{Trait, Upcasted},
-    Kind
+    Kind,
 };
 
 use futures::executor::block_on;
@@ -16,7 +16,7 @@ pub trait Supertrait {
 
 #[object]
 pub trait Test<T: Kind>: Supertrait {
-    fn test(&self, hello: String) -> Future<u32>;
+    fn test(&self) -> Future<u32>;
 }
 
 impl Supertrait for Shim {
@@ -28,8 +28,8 @@ impl Supertrait for Shim {
 struct Shim;
 
 impl Test<u32> for Shim {
-    fn test(&self, hello: String) -> Future<u32> {
-        Box::pin(async move { hello.len() as u32 })
+    fn test(&self) -> Future<u32> {
+        Box::pin(async move { 3u32 })
     }
 }
 
@@ -38,7 +38,7 @@ fn main() {
     let supertraits = trait_object.supertraits();
     println!("{:?}", supertraits);
     let upcast_object: Upcasted<dyn Supertrait> =
-     *Box::<dyn Any + Send>::downcast(trait_object.upcast(supertraits[0]).unwrap()).unwrap();
+        *Box::<dyn Any + Send>::downcast(trait_object.upcast(supertraits[0]).unwrap()).unwrap();
     let method_index = upcast_object.by_name("super_test").unwrap();
     println!(
         "{}",
