@@ -46,7 +46,10 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
     let mut shim_items = TokenStream::new();
     let mut reflected_items = TokenStream::new();
     for item in &item.items {
-        use TraitItem::Method;
+        use TraitItem::{Method, Type};
+        if let Type(_) = item {
+            return quote_spanned!(item.span() => const #hygiene: () = { compile_error!("associated types are not supported") };);
+        }
         if let Method(method) = item {
             let mut arg_types = vec![];
             if methods.len() == 255 {
