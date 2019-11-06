@@ -12,3 +12,6 @@ proc-macro2 = "1.0.6"
 syn = { features = ["full"], version = "1.0.7" }
 quote = "1.0.2"
 synstructure = "0.12.1"
+
+[features]
+core = []
