@@ -4,7 +4,6 @@ pub mod default;
 mod functions;
 mod future;
 pub mod iterator;
-mod ops_assign;
 mod option;
 mod phantom_data;
 mod primitives;
