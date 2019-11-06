@@ -1,3 +1,5 @@
 use vessels::export;
 
-export! {}
+export! {
+    "test".to_owned()
+}
