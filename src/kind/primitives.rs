@@ -1,5 +1,5 @@
 use std::{
-    ffi::{CString, OsString},
+    ffi::CString,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     num::{
         NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
@@ -68,7 +68,6 @@ primitive_impl!(
     SocketAddrV6,
     SocketAddr,
     SystemTime,
-    OsString,
     Ipv6Addr,
     Duration,
     NonZeroU8,
@@ -82,3 +81,8 @@ primitive_impl!(
     NonZeroI64,
     NonZeroIsize
 );
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::ffi::OsString;
+#[cfg(not(target_arch = "wasm32"))]
+primitive_impl!(OsString);
