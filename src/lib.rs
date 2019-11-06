@@ -98,6 +98,8 @@ pub use derive::object;
 /// ```
 pub use derive::Kind;
 
+pub use derive::export;
+
 #[doc(hidden)]
 pub use futures;
 #[doc(hidden)]
