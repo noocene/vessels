@@ -11,8 +11,7 @@ members = [".", "./derive"]
 cbor = ["serde_cbor"]
 json = ["serde_json"]
 bincode = ["serde_bincode"]
-core = ["wasm-bindgen", "web-sys", "wasmer-runtime"]
-default = ["core"]
+core = ["wasm-bindgen", "web-sys", "wasmer-runtime", "derive/core"]
 
 [dependencies]
 futures-preview = { version = "=0.3.0-alpha.19", features = ["async-await"] }
