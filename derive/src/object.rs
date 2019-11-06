@@ -25,6 +25,7 @@ impl Recv {
 pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
     let mut params = TokenStream::new();
     let ident = &item.ident;
+    let vis = &item.vis;
     let hygiene = format_ident!("_IMPLEMENT_PROTOCOL_FOR_{}", ident);
     let mut kind_bounded_params = item.generics.params.clone();
     for parameter in &mut kind_bounded_params {
@@ -306,12 +307,12 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         #[allow(non_camel_case_types)]
         const #hygiene: () = {
             #[derive(::vessels::Kind)]
-            pub struct _DERIVED_Shim<#kind_bounded_params> {
+            #vis struct _DERIVED_Shim<#kind_bounded_params> {
                 #fields
                 _marker: ::std::marker::PhantomData<(#params)>
             }
             impl<#kind_bounded_params> _DERIVED_Shim<#params> {
-                pub fn from_instance<DERIVEPARAM: ?Sized + #ident<#params> + 'static>(object: ::std::sync::Arc<::std::sync::Mutex<::std::boxed::Box<DERIVEPARAM>>>) -> Self {
+                #vis fn from_instance<DERIVEPARAM: ?Sized + #ident<#params> + 'static>(object: ::std::sync::Arc<::std::sync::Mutex<::std::boxed::Box<DERIVEPARAM>>>) -> Self {
                     _DERIVED_Shim {
                        #from_fields
                        _marker: ::std::marker::PhantomData
@@ -335,7 +336,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             impl<DERIVEPARAM: 'static + Send + ::vessels::reflection::Trait<dyn #ident<#params>> #derive_param_bounds, #kind_bounded_params> #ident<#params> for DERIVEPARAM {
                 #reflected_items
             }
-            pub struct _DERIVED_ErasedShim<#kind_bounded_params>(Box<dyn #ident<#params>>);
+            #vis struct _DERIVED_ErasedShim<#kind_bounded_params>(Box<dyn #ident<#params>>);
             impl<#kind_bounded_params> ::vessels::reflection::Erased for _DERIVED_ErasedShim<#params> {
                 fn cast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::std::any::Any + Send>, ::vessels::reflection::CastError> {
                     if ty == ::std::any::TypeId::of::<dyn #ident<#params>>() {
