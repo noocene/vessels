@@ -28,7 +28,7 @@ pub fn build(block: TokenStream) -> TokenStream {
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn _EXPORT_input(data: *mut u8) {
-            use std::{mem::size_of, slice};
+            use ::std::{mem::size_of, slice};
             unsafe {
                 let len = Box::from_raw(data.sub(size_of::<usize>()) as *mut usize);
                 let data = slice::from_raw_parts_mut(data, *len);
@@ -53,8 +53,13 @@ pub fn build(block: TokenStream) -> TokenStream {
                 }
                 export(_export_initializer);
             };
-            let test_data = vec![230u8, 104u8];
-            _EXPORT_safe_output(test_data);
+            async move {
+                use ::vessels::{channel::IdChannel, OnTo, futures::{StreamExt, SinkExt}, format::{ApplyEncode, Cbor}};
+                let (mut sink, mut stream) = _export_initializer().on_to::<IdChannel>().await.encode::<Cbor>().split();
+                while let Some(item) = stream.next().await {
+                    _EXPORT_safe_output(item);
+                }
+            };
         }
 
         fn main() {}
