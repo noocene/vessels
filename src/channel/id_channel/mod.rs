@@ -8,7 +8,6 @@ use id::REGISTRY;
 
 use futures::{
     channel::mpsc::{unbounded, SendError, UnboundedReceiver, UnboundedSender},
-    executor::ThreadPool,
     future::{lazy, ok, BoxFuture},
     task::Context as FContext,
     Future, FutureExt, Poll, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
@@ -20,6 +19,8 @@ use std::collections::HashMap;
 
 use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle},
+    core,
+    core::{executor::Spawn, Executor},
     Kind, SerdeAny, Target,
 };
 
@@ -157,9 +158,9 @@ impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
         };
         let fork = channel.get_fork::<K>(ForkHandle(0));
         let (receiver, sender) = channel.split();
-        let pool = ThreadPool::new().unwrap();
-        pool.spawn_ok(sender.map(Ok).forward(sink).unwrap_or_else(|_| panic!()));
-        pool.spawn_ok(
+        let mut executor = core::<Executor>().unwrap();
+        executor.spawn(sender.map(Ok).forward(sink).unwrap_or_else(|_| panic!()));
+        executor.spawn(
             stream
                 .map(Ok)
                 .forward(receiver)
@@ -191,7 +192,7 @@ impl IdChannelHandle {
 
         Box::pin(
             IdChannelFork::new(kind, self.clone()).map(move |(sender, receiver)| {
-                ThreadPool::new().unwrap().spawn_ok(
+                core::<Executor>().unwrap().spawn(
                     receiver
                         .map(move |v| Ok(Item::new(id, Box::new(v), context.clone())))
                         .forward(out_channel)
@@ -240,7 +241,7 @@ impl IdChannelHandle {
         let ct = self.context.clone();
         let ireceiver = ireceiver
             .map(move |item: K::DeconstructItem| Item::new(fork_ref, Box::new(item), ct.clone()));
-        ThreadPool::new().unwrap().spawn_ok(
+        core::<Executor>().unwrap().spawn(
             ireceiver
                 .map(Ok)
                 .forward(out_channel)
@@ -287,7 +288,7 @@ impl IdChannel {
         let ct = self.context.clone();
         let ireceiver = ireceiver
             .map(move |item: K::DeconstructItem| Item::new(fork_ref, Box::new(item), ct.clone()));
-        ThreadPool::new().unwrap().spawn_ok(
+        core::<Executor>().unwrap().spawn(
             ireceiver
                 .map(Ok)
                 .forward(out_channel)
@@ -379,7 +380,7 @@ impl<
         lazy(move |_| {
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
             let (oi, receiver): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
-            ThreadPool::new().unwrap().spawn_ok(
+            core::<Executor>().unwrap().spawn(
                 kind.deconstruct(IdChannelFork {
                     o: Box::pin(oi),
                     i: Box::pin(oo),
@@ -425,14 +426,14 @@ impl<
                 context,
                 in_channels: Arc::new(Mutex::new(in_channels)),
             };
-            let pool = ThreadPool::new().unwrap();
-            pool.spawn_ok(
+            let mut executor = core::<Executor>().unwrap();
+            executor.spawn(
                 receiver
                     .map(move |v| Ok(Item::new(handle, Box::new(v), ct.clone())))
                     .forward(csender)
                     .unwrap_or_else(|_| panic!()),
             );
-            pool.spawn_ok(
+            executor.spawn(
                 kind.deconstruct(IdChannelFork {
                     o: Box::pin(oi),
                     i: Box::pin(oo),
