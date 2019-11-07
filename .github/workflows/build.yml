@@ -1,0 +1,35 @@
+name: Build 
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install dependencies
+      run: |
+        rustup default beta
+        rustup target add wasm32-unknown-unknown
+    - name: Build for native
+      run: cargo build --verbose --release
+    - name: Build for web
+      run: cargo build --verbose --release --target wasm32-unknown-unknown --features core
+    - name: Build for vessels
+      run: cargo build --verbose --release --target wasm32-unknown-unknown
+    - name: Build documentation
+      run: |
+        cargo rustdoc
+        mv target/doc/vessels target/doc/docs
+        echo "<!DOCTYPE html><html><head><script>window.location.replace(\"/vessels/docs\");</script></head></html>" > target/doc/index.html
+    - name: Deploy documentation
+      uses: JamesIves/github-pages-deploy-action@2.0.3
+      env:
+        ACCESS_TOKEN: ${{ secrets.GH_PAT }}
+        BASE_BRANCH: master
+        BRANCH: gh-pages
+        FOLDER: target/doc
