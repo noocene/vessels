@@ -16,17 +16,19 @@ impl Spawn for Executor {
 
 pub type Executor = Box<dyn Spawner>;
 
-#[cfg(not(any(feature = "core", target_feature = "atomics")))]
+#[cfg(all(not(feature = "core"), target_arch = "wasm32"))]
 #[doc(hidden)]
 mod sequential_inner;
 
-#[cfg(not(not(any(feature = "core", target_feature = "atomics"))))]
+#[cfg(not(target_arch = "wasm32"))]
 #[doc(hidden)]
 mod threadpool_inner;
 
 pub(crate) fn new_executor() -> Result<Executor, super::UnimplementedError> {
-    #[cfg(not(any(feature = "core", target_feature = "atomics")))]
+    #[cfg(all(not(feature = "core"), target_arch = "wasm32"))]
     return Ok(Box::new(sequential_inner::Executor::new()));
-    #[cfg(not(not(any(feature = "core", target_feature = "atomics"))))]
+    #[cfg(not(target_arch = "wasm32"))]
     return Ok(Box::new(threadpool_inner::Executor::new()));
+    #[cfg(all(feature = "core", target_arch = "wasm32"))]
+    unimplemented!()
 }
