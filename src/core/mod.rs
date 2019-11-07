@@ -43,6 +43,10 @@ mod private {
     impl Sealed for dyn Executor {}
 }
 
+/// A type retrievable from `core`.
+///
+/// This trait is implemented for any reflected (i.e. `object`-ified) trait object as well as the special-cased executor trait objects
+/// that do not also implement `Kind`. It is bounded on a sealed trait and therefore cannot be implemented by third-party crates.
 pub trait CoreValue: private::Sealed {}
 
 impl<T: ?Sized> CoreValue for T where T: private::Sealed {}
