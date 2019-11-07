@@ -147,7 +147,7 @@ pub type DeconstructResult<K> = Result<(), <K as Kind>::DeconstructError>;
 /// well as futures, streams, a variety of boxed function types, and more.
 ///
 /// Vessels also provides a derive macro that automatically generates `Kind` implementations for
-/// structs and enums in addition to the [object] macro for generating `Kind` implementations for
+/// structs and enums in addition to the `object` macro for generating `Kind` implementations for
 /// trait objects of user-defined traits.
 ///
 /// Authors of third-party crates are encouraged to derive or implement Kind or Kind providers for
