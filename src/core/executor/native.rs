@@ -1,19 +1,19 @@
-use super::Spawner;
+use super::Executor;
 use futures::{executor::ThreadPool, future::BoxFuture};
 
-pub(crate) struct Executor {
+pub(crate) struct Spawner {
     inner: ThreadPool,
 }
 
-impl Spawner for Executor {
+impl Executor for Spawner {
     fn spawn_boxed(&mut self, future: BoxFuture<'static, ()>) {
         self.inner.spawn_ok(future)
     }
 }
 
-impl Executor {
+impl Spawner {
     pub fn new() -> Self {
-        Executor {
+        Spawner {
             inner: ThreadPool::new().unwrap(),
         }
     }

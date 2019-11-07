@@ -33,9 +33,23 @@ impl Display for CoreError {
     }
 }
 
-pub fn core<T: Any>() -> Result<T, CoreError> {
+mod private {
+    use super::Executor;
+    use crate::reflection::Reflected;
+
+    pub trait Sealed {}
+
+    impl<T: Reflected + ?Sized> Sealed for T {}
+    impl Sealed for dyn Executor {}
+}
+
+pub trait CoreValue: private::Sealed {}
+
+impl<T: ?Sized> CoreValue for T where T: private::Sealed {}
+
+pub fn core<T: Any + ?Sized + CoreValue>() -> Result<Box<T>, CoreError> {
     let ty = TypeId::of::<T>();
-    if ty == TypeId::of::<Executor>() {
+    if ty == TypeId::of::<dyn Executor>() {
         return executor::new_executor()
             .map(|executor| *Box::<dyn Any>::downcast(Box::new(executor) as Box<dyn Any>).unwrap())
             .map_err(CoreError::Unimplemented);
