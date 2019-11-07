@@ -1,5 +1,8 @@
-use vessels::export;
+use vessels::{core, core::Executor, export};
 
 export! {
-    "test".to_owned()
+    let mut executor = core::<Executor>().unwrap();
+    executor.spawn(Box::pin(async move {
+        _EXPORT_safe_output(vec![202, 253]);
+    }));
 }

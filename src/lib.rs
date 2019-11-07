@@ -8,7 +8,10 @@ use channel::{Channel, Target};
 pub mod format;
 #[doc(inline)]
 pub use format::{ApplyDecode, ApplyEncode};
+pub mod core;
 pub mod kind;
+#[doc(inline)]
+pub use crate::core::core;
 pub mod reflection;
 
 use downcast_rs::{impl_downcast, Downcast};
