@@ -101,6 +101,22 @@ pub use derive::object;
 /// ```
 pub use derive::Kind;
 
+/// Generates the entry point of a vessel.
+///
+/// ```
+/// use vessels::export;
+///
+/// export! {
+///     "test".to_owned()
+/// }
+/// ```
+///
+/// `export` wraps a block that returns a `Kind` and generates the entry point for a vessel providing that `Kind`.
+/// `export` should be used in a `bin` target of a crate i.e. for the default cargo configuration `main.rs`.
+/// No `main` function is necessary when `export` is used, in fact the presence of a `main` function will cause an
+/// exported vessel to fail to compile due to a symbol conflict. Finally, `export` cannot be used on non-wasm
+/// targets or on wasm when the `core` feature is enabled, as neither of those compilation states are valid
+/// for the compilation of a vessel.
 pub use derive::export;
 
 #[doc(hidden)]
