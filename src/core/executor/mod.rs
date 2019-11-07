@@ -1,7 +1,17 @@
-use futures::future::BoxFuture;
+use futures::{future::BoxFuture, Future};
 
 pub trait Spawner {
-    fn spawn(&mut self, fut: BoxFuture<'static, ()>);
+    fn spawn_boxed(&mut self, fut: BoxFuture<'static, ()>);
+}
+
+pub trait Spawn {
+    fn spawn<F: Send + 'static + Future<Output = ()>>(&mut self, future: F);
+}
+
+impl Spawn for Executor {
+    fn spawn<F: Send + 'static + Future<Output = ()>>(&mut self, future: F) {
+        self.spawn_boxed(Box::pin(future));
+    }
 }
 
 pub type Executor = Box<dyn Spawner>;
