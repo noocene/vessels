@@ -38,8 +38,12 @@ use std::any::Any;
 /// ```
 /// The above will generate an implementation of Kind for `Box<dyn Object<T>>` where `T: Kind`.
 /// Generic parameters are, as thereby evidenced, supported. Functions with between zero and sixteen arguments
-/// not including receiver are supported where all arguments implement `Kind`. Associated types are currently not supported,
-/// nor are annotated wrapper Kinds as with the primary derive macro, though support is planned for both.
+/// not including receiver are supported where all arguments implement `Kind`. Annotated wrapper Kinds as with
+/// the primary derive macro are not supported, though support is planned.
+///
+/// Associated type parameters are not permitted, they offer no advantage on trait objects as they must be
+/// statically described therein. Moreover, they would require additional parametrization of `Trait` which would
+/// come at an ergonomics cost without any benefit.
 pub use derive::object;
 
 /// Generates an implementation of `Kind` for a struct or enum.
