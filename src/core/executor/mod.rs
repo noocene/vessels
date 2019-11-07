@@ -17,14 +17,14 @@ impl Spawn for Executor {
 pub type Executor = Box<dyn Spawner>;
 
 #[cfg(target_arch = "wasm32")]
-mod sequential_inner;
+mod web_sequential;
 
 #[cfg(not(target_arch = "wasm32"))]
-mod threadpool_inner;
+mod native;
 
 pub(crate) fn new_executor() -> Result<Executor, super::UnimplementedError> {
     #[cfg(target_arch = "wasm32")]
-    return Ok(Box::new(sequential_inner::Executor::new()));
+    return Ok(Box::new(web_sequential::Executor::new()));
     #[cfg(not(target_arch = "wasm32"))]
-    return Ok(Box::new(threadpool_inner::Executor::new()));
+    return Ok(Box::new(native::Executor::new()));
 }
