@@ -53,9 +53,10 @@ pub fn build(block: TokenStream) -> TokenStream {
                 }
                 export(_export_initializer);
             };
+            let data =  _export_initializer();
             async move {
                 use ::vessels::{channel::IdChannel, OnTo, futures::{StreamExt, SinkExt}, format::{ApplyEncode, Cbor}};
-                let (mut sink, mut stream) = _export_initializer().on_to::<IdChannel>().await.encode::<Cbor>().split();
+                let (mut sink, mut stream) = data.on_to::<IdChannel>().await.encode::<Cbor>().split();
                 while let Some(item) = stream.next().await {
                     _EXPORT_safe_output(item);
                 }
