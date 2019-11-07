@@ -20,9 +20,13 @@ pub type Executor = Box<dyn Spawner>;
 #[doc(hidden)]
 mod sequential_inner;
 
+#[cfg(not(not(any(feature = "core", target_feature = "atomics"))))]
+#[doc(hidden)]
+mod threadpool_inner;
+
 pub(crate) fn new_executor() -> Result<Executor, super::UnimplementedError> {
     #[cfg(not(any(feature = "core", target_feature = "atomics")))]
     return Ok(Box::new(sequential_inner::Executor::new()));
     #[cfg(not(not(any(feature = "core", target_feature = "atomics"))))]
-    return;
+    return Ok(Box::new(threadpool_inner::Executor::new()));
 }
