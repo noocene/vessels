@@ -1,4 +1,5 @@
-use futures::executor::ThreadPool;
+use super::Spawner;
+use futures::{executor::ThreadPool, future::BoxFuture};
 
 pub(crate) struct Executor {
     inner: ThreadPool,
