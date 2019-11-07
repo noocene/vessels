@@ -16,7 +16,7 @@ jobs:
         rustup default beta
         rustup target add wasm32-unknown-unknown
     - name: Build for native
-      run: cargo build --verbose --release
+      run: cargo build --verbose --release --features core
     - name: Build for web
       run: cargo build --verbose --release --target wasm32-unknown-unknown --features core
     - name: Build for vessels
