@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate erased_serde;
 
+extern crate self as vessels;
+
 pub mod channel;
 #[doc(inline)]
 pub use channel::OnTo;
