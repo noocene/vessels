@@ -1,11 +1,17 @@
+#[cfg(feature = "core")]
+use js_sys::Promise;
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
+#[cfg(feature = "core")]
+use wasm_bindgen::{closure::Closure, JsValue};
 
+#[cfg(not(feature = "core"))]
 extern "C" {
     fn _EXPORT_enqueue();
 }
 
+#[cfg(not(feature = "core"))]
 #[no_mangle]
 pub extern "C" fn _EXPORT_handle() {
     QUEUE.with(|queue| queue.run_all())
@@ -32,13 +38,22 @@ impl QueueState {
 
 pub(crate) struct Queue {
     state: Rc<QueueState>,
+    #[cfg(feature = "core")]
+    promise: Promise,
+    #[cfg(feature = "core")]
+    closure: Closure<dyn FnMut(JsValue)>,
 }
 
 impl Queue {
     pub(crate) fn push_task(&self, task: Rc<super::task::Task>) {
         self.state.tasks.borrow_mut().push_back(task);
         if !self.state.is_spinning.replace(true) {
-            unsafe { _EXPORT_enqueue() };
+            #[cfg(not(feature = "core"))]
+            unsafe {
+                _EXPORT_enqueue()
+            };
+            #[cfg(feature = "core")]
+            self.promise.then(&self.closure);
         }
     }
     fn run_all(&self) {
@@ -53,7 +68,16 @@ impl Queue {
             tasks: RefCell::new(VecDeque::new()),
         });
 
-        Queue { state }
+        Queue {
+            #[cfg(feature = "core")]
+            promise: Promise::resolve(&JsValue::undefined()),
+            #[cfg(feature = "core")]
+            closure: {
+                let state = Rc::clone(&state);
+                Closure::wrap(Box::new(move |_| state.run_all()))
+            },
+            state,
+        }
     }
 }
 
