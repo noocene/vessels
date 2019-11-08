@@ -36,7 +36,7 @@ pub trait Shim<'a, T: Target<'a, K>, K: Kind>:
     Context<'a, Item = <T as Context<'a>>::Item>
 {
     fn complete<
-        C: Stream<Item = <T as Context<'a>>::Item> + Sink<<T as Context<'a>>::Item> + 'static,
+        C: Send + Stream<Item = <T as Context<'a>>::Item> + Sink<<T as Context<'a>>::Item> + 'static,
     >(
         self,
         input: C,

@@ -1,6 +1,5 @@
 use vessels::{
     channel::IdChannel,
-    log,
     core,
     core::{
         executor::Spawn,
@@ -8,6 +7,7 @@ use vessels::{
         Executor,
     },
     format::{ApplyDecode, Cbor},
+    log,
 };
 use wasm_bindgen::prelude::*;
 
