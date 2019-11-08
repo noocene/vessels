@@ -9,6 +9,10 @@ pub use executor::Executor;
 
 pub mod orchestrator;
 
+pub trait Log {
+    fn info(&self, message: String);
+}
+
 #[derive(Fail, Debug)]
 #[fail(display = "{} is unimplemented on this target", feature)]
 pub struct UnimplementedError {
@@ -35,14 +39,28 @@ impl Display for CoreError {
     }
 }
 
+struct Logger;
+
+impl Log for Logger {
+    fn info(&self, message: String) {
+        #[cfg(all(target_arch = "wasm32", feature = "core"))]
+        web_sys::console::log_1(&message.into());
+        #[cfg(all(target_arch = "wasm32", not(feature = "core")))]
+        unimplemented!();
+        #[cfg(not(target_arch = "wasm32"))]
+        println!("{}", message);
+    }
+}
+
 mod private {
-    use super::Executor;
+    use super::{Executor, Log};
     use crate::reflection::Reflected;
 
     pub trait Sealed {}
 
     impl<T: Reflected + ?Sized> Sealed for T {}
     impl Sealed for dyn Executor {}
+    impl Sealed for dyn Log {}
 }
 
 /// A type retrievable from `core`.
@@ -59,6 +77,17 @@ pub fn core<T: Any + ?Sized + CoreValue>() -> Result<Box<T>, CoreError> {
         return executor::new_executor()
             .map(|executor| *Box::<dyn Any>::downcast(Box::new(executor) as Box<dyn Any>).unwrap())
             .map_err(CoreError::Unimplemented);
+    }
+    if ty == TypeId::of::<dyn Log>() {
+        #[cfg(all(target_arch = "wasm32", not(feature = "core")))]
+        return Err(CoreError::Unimplemented(UnimplementedError {
+            feature: "logging".to_string(),
+        }));
+        #[cfg(not(all(target_arch = "wasm32", not(feature = "core"))))]
+        return Ok(*Box::<dyn Any>::downcast(
+            Box::new(Box::new(Logger) as Box<dyn Log>) as Box<dyn Any>
+        )
+        .unwrap());
     }
     Err(CoreError::Unavailable)
 }
