@@ -7,6 +7,8 @@ use std::{
 pub mod executor;
 pub use executor::Executor;
 
+pub mod orchestrator;
+
 #[derive(Fail, Debug)]
 #[fail(display = "{} is unimplemented on this target", feature)]
 pub struct UnimplementedError {

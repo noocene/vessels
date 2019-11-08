@@ -2,7 +2,15 @@
 <html>
 
 <body>
-    <script src="vessels.js"></script>
+    <script type="module">
+        import init from './core_test.js';
+
+        async function run() {
+            await init();
+        }
+
+        run();
+    </script>
 </body>
 
 </html>

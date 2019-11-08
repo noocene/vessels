@@ -4,7 +4,7 @@ use serde::{de::DeserializeSeed, Serialize};
 
 use futures::{
     channel::oneshot::{channel, Receiver},
-    future::BoxFuture,
+    future::LocalBoxFuture,
     TryFutureExt,
 };
 
@@ -31,7 +31,7 @@ impl Format for Cbor {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
+    ) -> LocalBoxFuture<'static, Result<T::Value, Self::Error>>
     where
         T::Value: Send + 'static,
         T: Send + 'static,

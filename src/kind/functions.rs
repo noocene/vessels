@@ -91,8 +91,8 @@ impl<U: Kind> Kind for Box<dyn Fn() -> BoxStream<'static, U> + Send + Sync> {
                                 .await
                                 .expect("test3")
                         }
-                            .into_stream()
-                            .flatten(),
+                        .into_stream()
+                        .flatten(),
                     )
                 });
             Ok(closure)
@@ -180,8 +180,8 @@ impl<U: Kind> Kind for Box<dyn FnMut() -> BoxStream<'static, U> + Send + Sync> {
                                 .await
                                 .expect("test3")
                         }
-                            .into_stream()
-                            .flatten(),
+                        .into_stream()
+                        .flatten(),
                     )
                 });
             Ok(closure)
@@ -263,8 +263,8 @@ impl<U: Kind> Kind for Box<dyn FnOnce() -> BoxStream<'static, U> + Send + Sync> 
                                 .await
                                 .expect("test3")
                         }
-                            .into_stream()
-                            .flatten(),
+                        .into_stream()
+                        .flatten(),
                     )
                 });
             Ok(closure)
