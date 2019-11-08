@@ -145,7 +145,7 @@ pub struct Shim<K: Kind> {
 }
 
 impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
-    fn complete<C: Stream<Item = Item> + Sink<Item> + Send + 'static>(
+    fn complete<C: Stream<Item = Item> + Sink<Item> + 'static>(
         self,
         input: C,
     ) -> BoxFuture<'static, Result<K, K::ConstructError>> {

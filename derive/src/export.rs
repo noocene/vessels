@@ -39,7 +39,7 @@ pub fn build(block: TokenStream) -> TokenStream {
         }
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
-        pub extern "C" fn initialize() {
+        pub extern "C" fn _EXPORT_initialize() {
             let _export_initializer: fn() -> _ = || {
                 #block
             };
