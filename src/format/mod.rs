@@ -15,8 +15,8 @@ pub mod bincode;
 pub use bincode::Bincode;
 
 use futures::{
-    future::{ok, LocalBoxFuture},
-    stream::LocalBoxStream,
+    future::{ok, BoxFuture},
+    stream::BoxStream,
     task::Context as FContext,
     Future, FutureExt, Poll, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
 };
@@ -37,8 +37,8 @@ use failure::Fail;
 
 #[doc(hidden)]
 pub struct StreamSink<T, U, E>(
-    pub(crate) LocalBoxStream<'static, T>,
-    pub(crate) Pin<Box<dyn Sink<U, Error = E>>>,
+    pub(crate) BoxStream<'static, T>,
+    pub(crate) Pin<Box<dyn Sink<U, Error = E> + Send>>,
 );
 
 impl<T, U, E> Sink<U> for StreamSink<T, U, E> {
@@ -106,7 +106,7 @@ pub trait Format {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> LocalBoxFuture<'static, Result<T::Value, Self::Error>>
+    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
     where
         Self: Sized,
         T::Value: Send + 'static,
@@ -133,7 +133,7 @@ pub trait ApplyDecode<'de, K: Kind> {
         self,
     ) -> <F as Decode<'de, Self, K>>::Output
     where
-        Self: UniformStreamSink<F::Representation> + Sized + 'static,
+        Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
         F::Representation: Send + 'static,
         <Self as Sink<F::Representation>>::Error: Send,
         T::Item: Send + 'static;
@@ -144,7 +144,7 @@ impl<'de, U, K: Kind> ApplyDecode<'de, K> for U {
         self,
     ) -> <F as Decode<'de, Self, K>>::Output
     where
-        Self: UniformStreamSink<F::Representation> + Sized + 'static,
+        Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
         F::Representation: Send,
         <Self as Sink<F::Representation>>::Error: Send,
         T::Item: Send,
@@ -174,7 +174,7 @@ pub trait Encode<'de, C: UniformStreamSink<<C as Context<'de>>::Item> + Context<
 
 impl<
         'de,
-        C: UniformStreamSink<<Self as Format>::Representation> + 'static,
+        C: Send + UniformStreamSink<<Self as Format>::Representation> + 'static,
         T: Format + 'static,
         K: Kind,
     > Decode<'de, C, K> for T
@@ -182,7 +182,7 @@ where
     Self::Representation: Send,
     <C as Sink<<Self as Format>::Representation>>::Error: Send,
 {
-    type Output = LocalBoxFuture<'static, Result<K, K::ConstructError>>;
+    type Output = BoxFuture<'static, Result<K, K::ConstructError>>;
 
     fn decode<U: Target<'de, K> + Send + 'static>(input: C) -> Self::Output
     where

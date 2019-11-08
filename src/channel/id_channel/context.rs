@@ -74,6 +74,11 @@ impl Context {
         }
     }
 
+    pub(crate) fn get(&self, id: ForkHandle) -> Option<TypeId> {
+        let state = self.state.read().unwrap();
+        state.channel_types.get(&id).cloned()
+    }
+
     pub(crate) fn new() -> Self {
         Context {
             state: Arc::new(RwLock::new(ContextState {

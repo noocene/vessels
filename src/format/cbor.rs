@@ -2,11 +2,7 @@ use super::Format;
 
 use serde::{de::DeserializeSeed, Serialize};
 
-use futures::{
-    channel::oneshot::{channel, Receiver},
-    future::LocalBoxFuture,
-    TryFutureExt,
-};
+use futures::future::BoxFuture;
 
 /// A format implementing the Compact Binary Object Representation.
 ///
@@ -31,19 +27,14 @@ impl Format for Cbor {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> LocalBoxFuture<'static, Result<T::Value, Self::Error>>
+    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
     where
         T::Value: Send + 'static,
         T: Send + 'static,
     {
-        let (sender, receiver): (_, Receiver<Result<T::Value, Self::Error>>) = channel();
-        std::thread::spawn(move || {
+        Box::pin(async move {
             let mut deserializer = serde_cbor::Deserializer::from_reader(item.as_slice());
-            sender
-                .send(context.deserialize(&mut deserializer))
-                .map_err(|e| panic!(e))
-                .unwrap();
-        });
-        Box::pin(receiver.unwrap_or_else(|e| panic!(e)))
+            context.deserialize(&mut deserializer)
+        })
     }
 }
