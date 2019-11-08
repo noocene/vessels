@@ -7,7 +7,7 @@ use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver},
     future::LocalBoxFuture,
     task::Context,
-    Poll, Sink, SinkExt, Stream, TryFutureExt,
+    Future, Poll, Sink, SinkExt, Stream, TryFutureExt,
 };
 use js_sys::{
     Function, Number, Uint8Array,
@@ -17,6 +17,11 @@ use std::{cell::RefCell, pin::Pin, rc::Rc};
 use void::Void;
 use wasm_bindgen::{closure::Closure, JsCast};
 use wasm_bindgen_futures::JsFuture;
+
+#[cfg(not(target_feature = "atomics"))]
+unsafe impl Send for WebInstance {}
+#[cfg(not(target_feature = "atomics"))]
+unsafe impl Sync for WebInstance {}
 
 pub struct WebInstance {
     state: InstanceStateWrite,
@@ -112,24 +117,65 @@ impl InstanceHelper for Rc<RefCell<Option<InstanceStateRead>>> {
     }
 }
 
-impl Containers for WebContainers {
-    type Module = Module;
-    type Instance = WebInstance;
+#[cfg(not(target_feature = "atomics"))]
+unsafe impl Send for WebModule {}
+#[cfg(not(target_feature = "atomics"))]
+unsafe impl Sync for WebModule {}
 
-    fn compile<T: AsRef<[u8]>>(&mut self, data: T) -> LocalBoxFuture<'static, Self::Module> {
-        let data = data.as_ref().to_vec();
-        Box::pin(async move {
-            let data: Uint8Array = data.as_slice().into();
-            JsFuture::from(compile(&data.into()))
-                .await
-                .unwrap()
-                .dyn_into()
-                .unwrap()
-        })
+pub struct WebModule(Module);
+
+#[cfg(not(target_feature = "atomics"))]
+unsafe impl Send for Compile {}
+#[cfg(not(target_feature = "atomics"))]
+unsafe impl Sync for Compile {}
+
+pub struct Compile(LocalBoxFuture<'static, WebModule>);
+
+impl Future for Compile {
+    type Output = WebModule;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        self.0.as_mut().poll(cx)
     }
-    fn instantiate(&mut self, module: &Self::Module) -> LocalBoxFuture<'static, Self::Instance> {
-        let module = module.clone();
-        Box::pin(async move {
+}
+
+#[cfg(not(target_feature = "atomics"))]
+unsafe impl Send for Instantiate {}
+#[cfg(not(target_feature = "atomics"))]
+unsafe impl Sync for Instantiate {}
+
+pub struct Instantiate(LocalBoxFuture<'static, WebInstance>);
+
+impl Future for Instantiate {
+    type Output = WebInstance;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        self.0.as_mut().poll(cx)
+    }
+}
+
+impl Containers for WebContainers {
+    type Module = WebModule;
+    type Compile = Compile;
+    type Instance = WebInstance;
+    type Instantiate = Instantiate;
+
+    fn compile<T: AsRef<[u8]>>(&mut self, data: T) -> Compile {
+        let data = data.as_ref().to_vec();
+        Compile(Box::pin(async move {
+            let data: Uint8Array = data.as_slice().into();
+            WebModule(
+                JsFuture::from(compile(&data.into()))
+                    .await
+                    .unwrap()
+                    .dyn_into()
+                    .unwrap(),
+            )
+        }))
+    }
+    fn instantiate(&mut self, module: &Self::Module) -> Instantiate {
+        let module = module.0.clone();
+        Instantiate(Box::pin(async move {
             let (sender, receiver) = unbounded();
             let handle: Rc<RefCell<Option<InstanceStateRead>>> = Rc::new(RefCell::new(None));
             let imports = js_sys::Object::new();
@@ -210,6 +256,6 @@ impl Containers for WebContainers {
                 _enqueue: enqueue,
                 receiver: Box::pin(receiver),
             }
-        })
+        }))
     }
 }

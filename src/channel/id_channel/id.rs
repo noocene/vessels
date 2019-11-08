@@ -3,7 +3,7 @@ use super::Context;
 use crate::{channel::ForkHandle, Kind, SerdeAny};
 
 use serde::{
-    de::{self, DeserializeOwned, DeserializeSeed, Deserializer},
+    de::{DeserializeOwned, DeserializeSeed, Deserializer, Error},
     Serialize,
 };
 
@@ -15,7 +15,6 @@ use std::{
 };
 
 use futures::{
-    executor::LocalPool,
     future::{ready, BoxFuture},
     task::{AtomicWaker, Context as FContext},
     Future, Poll,
@@ -120,10 +119,11 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
     where
         D: Deserializer<'de>,
     {
-        let mut pool = LocalPool::new();
-        let ty = pool.run_until(self.1.wait_for(self.0));
         let mut deserializer = erased_serde::Deserializer::erase(deserializer);
-        (pool.run_until(REGISTRY.wait_for(ty)))(&mut deserializer).map_err(de::Error::custom)
+        (REGISTRY
+            .get(self.1.get(self.0).ok_or(Error::custom("blah"))?)
+            .ok_or(Error::custom("blah"))?)(&mut deserializer)
+        .map_err(Error::custom)
     }
 }
 
