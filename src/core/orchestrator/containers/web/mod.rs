@@ -72,13 +72,29 @@ struct InstanceStateWrite {
 }
 
 trait InstanceHelper {
-    fn handle(&self);
+    fn handle(&self) -> Handle;
     fn read(&self, ptr: u32, len: u32) -> Vec<u8>;
 }
 
+#[cfg(not(target_feature = "atomics"))]
+unsafe impl Send for Handle {}
+#[cfg(not(target_feature = "atomics"))]
+unsafe impl Sync for Handle {}
+
+pub struct Handle(LocalBoxFuture<'static, ()>);
+
+impl Future for Handle {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        self.0.as_mut().poll(cx)
+    }
+}
+
 impl InstanceStateRead {
-    fn handle(&self) {
-        self.handle.call0(&self.handle).unwrap();
+    fn handle(&self) -> Handle {
+        let handle = self.handle.clone();
+        Handle(Box::pin(async move { handle.call0(&handle).unwrap(); }))
     }
     fn read(&self, ptr: u32, len: u32) -> Vec<u8> {
         Uint8Array::new(&self.memory.buffer())
@@ -105,7 +121,7 @@ impl InstanceStateWrite {
 }
 
 impl InstanceHelper for Rc<RefCell<Option<InstanceStateRead>>> {
-    fn handle(&self) {
+    fn handle(&self) -> Handle {
         let cell = self.borrow();
         let cell = cell.as_ref().unwrap();
         cell.handle()
@@ -187,8 +203,9 @@ impl Containers for WebContainers {
                 executor.spawn(async move { sender.send(data).unwrap_or_else(|_| panic!()).await });
             }) as Box<dyn FnMut(_, _)>);
             let h_2 = handle.clone();
+            let mut handle_executor = core::<dyn Executor>().unwrap();
             let enqueue = Closure::wrap(Box::new(move || {
-                h_2.handle();
+                handle_executor.spawn(h_2.handle());
             }) as Box<dyn FnMut()>);
             js_sys::Reflect::set(
                 &imports,
