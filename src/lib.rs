@@ -197,6 +197,15 @@ serialize_trait_object!(SerdeAny);
 
 impl<T: ?Sized> SerdeAny for T where T: ErasedSerialize + Downcast + Send {}
 
+/// Logs information to a target-appropriate console.
+///
+/// `log!` uses the same syntax as `format!`, `println!`, etc. and delegates to `format!` under the hood.
+/// ```
+/// use vessels::log;
+///
+/// log!("the answer is {}", 12);
+/// ```
+/// Currently not supported inside individual vessels.
 #[macro_export]
 macro_rules! log {
     ($($args:tt),*) => (
