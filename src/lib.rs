@@ -196,3 +196,15 @@ impl_downcast!(SerdeAny);
 serialize_trait_object!(SerdeAny);
 
 impl<T: ?Sized> SerdeAny for T where T: ErasedSerialize + Downcast + Send {}
+
+#[macro_export]
+macro_rules! log {
+    ($($args:tt),*) => (
+        let formatted = format!($($args,)*);
+        $crate::core::<dyn $crate::core::Log>().unwrap().info(formatted)
+    );
+    ($($args:tt,)*) => (
+        let formatted = format!($($args,)*);
+        $crate::core::<dyn $crate::core::Log>().unwrap().info(formatted)
+    );
+}

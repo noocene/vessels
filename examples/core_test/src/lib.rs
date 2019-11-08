@@ -1,5 +1,6 @@
 use vessels::{
     channel::IdChannel,
+    log,
     core,
     core::{
         executor::Spawn,
@@ -9,7 +10,6 @@ use vessels::{
     format::{ApplyDecode, Cbor},
 };
 use wasm_bindgen::prelude::*;
-use web_sys::console::log_1;
 
 const WASM_DATA: &'static [u8] =
     include_bytes!("../../../target/wasm32-unknown-unknown/debug/examples/test_vessel.wasm");
@@ -22,6 +22,6 @@ pub fn main() {
         let module = containers.compile(WASM_DATA).await;
         let instance = containers.instantiate(&module).await;
         let data: String = instance.decode::<IdChannel, Cbor>().await.unwrap();
-        log_1(&format!("{}", data).into());
+        log!("{}", data);
     });
 }
