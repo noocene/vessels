@@ -19,7 +19,7 @@ use wasm_bindgen::{closure::Closure, JsCast};
 use wasm_bindgen_futures::JsFuture;
 
 pub struct WebInstance {
-    instance: WasmInstance,
+    state: InstanceStateWrite,
     _output: Closure<dyn FnMut(u32, u32)>,
     _enqueue: Closure<dyn FnMut()>,
     receiver: Pin<Box<UnboundedReceiver<Vec<u8>>>>,
@@ -38,57 +38,77 @@ impl Stream for WebInstance {
 impl Sink<Vec<u8>> for WebInstance {
     type Error = Void;
 
-    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
     fn start_send(self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
+        (*self.as_ref()).state.write(item);
         Ok(())
     }
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+    fn poll_flush(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+    fn poll_close(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 }
 
 pub struct WebContainers;
 
-struct InstanceState {
+struct InstanceStateRead {
     handle: Function,
+    memory: Memory,
+}
+
+struct InstanceStateWrite {
     make_buffer: Function,
     memory: Memory,
+    input: Function,
 }
 
 trait InstanceHelper {
     fn handle(&self);
-    fn make_buffer(&self, size: u32) -> u32;
     fn read(&self, ptr: u32, len: u32) -> Vec<u8>;
 }
 
-impl InstanceHelper for Rc<RefCell<Option<InstanceState>>> {
+impl InstanceStateRead {
     fn handle(&self) {
-        let cell = self.borrow();
-        let cell = cell.as_ref().unwrap();
-        cell.handle.call0(&cell.handle).unwrap();
+        self.handle.call0(&self.handle).unwrap();
     }
+    fn read(&self, ptr: u32, len: u32) -> Vec<u8> {
+        Uint8Array::new(&self.memory.buffer())
+            .slice(ptr, ptr + len)
+            .to_vec()
+    }
+}
+
+impl InstanceStateWrite {
     fn make_buffer(&self, size: u32) -> u32 {
-        let cell = self.borrow();
-        let cell = cell.as_ref().unwrap();
         f64::from(
-            cell.handle
-                .call1(&cell.handle, &size.into())
+            self.make_buffer
+                .call1(&self.make_buffer, &size.into())
                 .unwrap()
                 .dyn_into::<Number>()
                 .unwrap(),
         ) as u32
     }
+    fn write(&self, data: Vec<u8>) {
+        let ptr = self.make_buffer(data.len() as u32);
+        Uint8Array::new(&self.memory.buffer()).set(&Uint8Array::from(data.as_slice()), ptr);
+        self.input.call0(&self.input).unwrap();
+    }
+}
+
+impl InstanceHelper for Rc<RefCell<Option<InstanceStateRead>>> {
+    fn handle(&self) {
+        let cell = self.borrow();
+        let cell = cell.as_ref().unwrap();
+        cell.handle()
+    }
     fn read(&self, ptr: u32, len: u32) -> Vec<u8> {
         let cell = self.borrow();
         let cell = cell.as_ref().unwrap();
-        Uint8Array::new(&cell.memory.buffer())
-            .slice(ptr, ptr + len)
-            .to_vec()
+        cell.read(ptr, len)
     }
 }
 
@@ -111,7 +131,7 @@ impl Containers for WebContainers {
         let module = module.clone();
         Box::pin(async move {
             let (sender, receiver) = unbounded();
-            let handle: Rc<RefCell<Option<InstanceState>>> = Rc::new(RefCell::new(None));
+            let handle: Rc<RefCell<Option<InstanceStateRead>>> = Rc::new(RefCell::new(None));
             let imports = js_sys::Object::new();
             let h = handle.clone();
             let mut executor = core::<dyn Executor>().unwrap();
@@ -165,17 +185,27 @@ impl Containers for WebContainers {
                     .unwrap()
                     .dyn_into::<Function>()
                     .unwrap();
-            handle.replace(Some(InstanceState {
+            let input = js_sys::Reflect::get(&instance.exports(), &"_EXPORT_input".into())
+                .unwrap()
+                .dyn_into::<Function>()
+                .unwrap();
+            let memory: Memory = js_sys::Reflect::get(&instance.exports(), &"memory".into())
+                .unwrap()
+                .dyn_into()
+                .unwrap();
+            let read = InstanceStateRead {
                 handle: handle_func,
+                memory: memory.clone(),
+            };
+            let write = InstanceStateWrite {
+                input,
+                memory,
                 make_buffer,
-                memory: js_sys::Reflect::get(&instance.exports(), &"memory".into())
-                    .unwrap()
-                    .dyn_into()
-                    .unwrap(),
-            }));
+            };
+            handle.replace(Some(read));
             initializer.call0(&initializer).unwrap();
             WebInstance {
-                instance,
+                state: write,
                 _output: output,
                 _enqueue: enqueue,
                 receiver: Box::pin(receiver),
