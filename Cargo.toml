@@ -12,7 +12,7 @@ cbor = ["serde_cbor"]
 json = ["serde_json"]
 bincode = ["serde_bincode"]
 core = ["wasm-bindgen", "web-sys", "wasmer-runtime", "derive/core", "js-sys", "wasm-bindgen-futures"]
-default = ["cbor"]
+default = ["cbor", "json", "bincode"]
 
 [dependencies]
 futures-preview = { version = "=0.3.0-alpha.19", features = ["async-await"] }

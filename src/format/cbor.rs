@@ -25,11 +25,7 @@ impl Format for Cbor {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> Result<T::Value, Self::Error>
-    where
-        T::Value: Send + 'static,
-        T: Send + 'static,
-    {
+    ) -> Result<T::Value, Self::Error> {
         let mut deserializer = serde_cbor::Deserializer::from_reader(item.as_slice());
         context.deserialize(&mut deserializer)
     }
