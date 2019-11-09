@@ -15,12 +15,11 @@ const WASM_DATA: &'static [u8] =
 
 pub fn main() {
     let mut executor = core::<dyn Executor>().unwrap();
-    executor.spawn(async move {
+    executor.run(async move {
         let mut containers = NativeContainers;
         let module = containers.compile(WASM_DATA).await;
         let instance = containers.instantiate(&module).await;
         let data: String = instance.decode::<IdChannel, Cbor>().await.unwrap();
         log!("{}", data);
     });
-    core::event_loop();
 }
