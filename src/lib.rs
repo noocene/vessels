@@ -208,11 +208,11 @@ impl<T: ?Sized> SerdeAny for T where T: ErasedSerialize + Downcast + Send {}
 /// Currently not supported inside individual vessels.
 #[macro_export]
 macro_rules! log {
-    ($($args:tt),*) => (
+    ($($args:expr),*) => (
         let formatted = format!($($args,)*);
         $crate::core::<dyn $crate::core::Log>().unwrap().info(formatted)
     );
-    ($($args:tt,)*) => (
+    ($($args:expr,)*) => (
         let formatted = format!($($args,)*);
         $crate::core::<dyn $crate::core::Log>().unwrap().info(formatted)
     );
