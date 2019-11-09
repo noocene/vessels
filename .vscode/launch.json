@@ -44,6 +44,24 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug executable 'native_core_test'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=native_core_test",
+                    "--package=native_core_test",
+                ],
+                "filter": {
+                    "name": "native_core_test",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}/examples/native_core_test"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests in executable 'vessels'",
             "cargo": {
                 "args": [
