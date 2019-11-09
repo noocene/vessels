@@ -1,16 +1,32 @@
 use super::{Containers, Instance};
-use futures::{future::BoxFuture, Sink, Stream, Poll, task::Context, channel::mpsc::{UnboundedSender, UnboundedReceiver, unbounded}, SinkExt, lock};
-use wasmer_runtime::{compile, Module, Instance as WasmInstance, wasm::Value, Memory, memory::MemoryView, imports, Export, func, Ctx};
+use crate::{
+    core,
+    core::{executor::Spawn, Executor},
+};
+use futures::{
+    channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
+    future::BoxFuture,
+    lock,
+    task::Context,
+    Poll, Sink, SinkExt, Stream,
+};
+use std::{
+    ffi::c_void,
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 use void::Void;
-use std::{pin::Pin, ffi::c_void, sync::{Arc, Mutex}};
-use crate::{core, core::{Executor, executor::Spawn}};
+use wasmer_runtime::{
+    compile, func, imports, memory::MemoryView, wasm::Value, Ctx, Export, Instance as WasmInstance,
+    Memory, Module,
+};
 
 pub struct NativeContainers;
 
 pub struct NativeInstance {
     instance: Arc<Mutex<WasmInstance>>,
     memory: Memory,
-    receiver: Pin<Box<UnboundedReceiver<Vec<u8>>>>
+    receiver: Pin<Box<UnboundedReceiver<Vec<u8>>>>,
 }
 
 impl NativeInstance {
@@ -89,7 +105,6 @@ fn output(cx: &mut Ctx, ptr: i32, len: i32) {
         state.lock().await.output.send(buffer).await.unwrap();
         Box::leak(state);
     });
-    
 }
 
 impl Containers for NativeContainers {
@@ -100,9 +115,7 @@ impl Containers for NativeContainers {
 
     fn compile<T: AsRef<[u8]>>(&mut self, data: T) -> Self::Compile {
         let data = data.as_ref().to_vec();
-        Box::pin(async move {
-            compile(data.as_ref()).unwrap()
-        })
+        Box::pin(async move { compile(data.as_ref()).unwrap() })
     }
 
     fn instantiate(&mut self, module: &Self::Module) -> Self::Instantiate {
@@ -125,7 +138,9 @@ impl Containers for NativeContainers {
                 handle: Box::new(move || {
                     let inst = inst.clone();
                     let mut executor = core::<dyn Executor>().unwrap();
-                    executor.spawn(async move { inst.lock().unwrap().call("_EXPORT_handle", &[]).unwrap(); });
+                    executor.spawn(async move {
+                        inst.lock().unwrap().call("_EXPORT_handle", &[]).unwrap();
+                    });
                 }),
                 output: sender,
             });
@@ -133,11 +148,16 @@ impl Containers for NativeContainers {
             ctx.data_finalizer = Some(|ptr| {
                 drop(unsafe { Box::from_raw(ptr as *mut lock::Mutex<State>) });
             });
-            let ret = if let Export::Memory(memory) = instance.exports().find(|(name, _)| name == "memory").unwrap().1 {
+            let ret = if let Export::Memory(memory) = instance
+                .exports()
+                .find(|(name, _)| name == "memory")
+                .unwrap()
+                .1
+            {
                 NativeInstance {
                     instance: inst_2,
                     memory,
-                    receiver: Box::pin(receiver)
+                    receiver: Box::pin(receiver),
                 }
             } else {
                 panic!("no memory in module")

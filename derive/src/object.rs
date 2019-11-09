@@ -37,6 +37,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             let ident = &parameter.ident;
             parameter.bounds.push(parse_quote!('static));
             parameter.bounds.push(parse_quote!(Send));
+            parameter.bounds.push(parse_quote!(Sync));
             params.extend(quote!(#ident,));
         }
     }

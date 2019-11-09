@@ -94,7 +94,9 @@ impl Future for Handle {
 impl InstanceStateRead {
     fn handle(&self) -> Handle {
         let handle = self.handle.clone();
-        Handle(Box::pin(async move { handle.call0(&handle).unwrap(); }))
+        Handle(Box::pin(async move {
+            handle.call0(&handle).unwrap();
+        }))
     }
     fn read(&self, ptr: u32, len: u32) -> Vec<u8> {
         Uint8Array::new(&self.memory.buffer())

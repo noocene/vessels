@@ -1,7 +1,7 @@
 use vessels::{
-    core,
-    core::{Executor, executor::Spawn},
     channel::IdChannel,
+    core,
+    core::{executor::Spawn, Executor},
     format::{ApplyDecode, ApplyEncode, Cbor},
     log, OnTo,
 };
