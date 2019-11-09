@@ -1,13 +1,13 @@
 use vessels::{
+    core,
+    core::{Executor, executor::Spawn},
     channel::IdChannel,
     format::{ApplyDecode, ApplyEncode, Cbor},
     log, OnTo,
 };
 
-use vessels::futures::executor::LocalPool;
-
 fn main() {
-    LocalPool::new().run_until(async move {
+    core::<dyn Executor>().unwrap().run(async move {
         let encoded = "Hello there"
             .to_owned()
             .on_to::<IdChannel>()

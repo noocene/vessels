@@ -1,6 +1,4 @@
 use failure::Fail;
-#[cfg(not(target_arch = "wasm32"))]
-use futures::future::pending;
 use std::{
     any::{Any, TypeId},
     fmt::{self, Display, Formatter},
@@ -10,14 +8,6 @@ pub mod executor;
 pub use executor::Executor;
 
 pub mod orchestrator;
-
-#[doc(hidden)]
-pub fn event_loop() {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        executor::native::POOL.clone().run(pending::<()>());
-    }
-}
 
 pub trait Log {
     fn info(&self, message: String);

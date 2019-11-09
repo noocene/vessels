@@ -2,15 +2,20 @@ use futures::{future::BoxFuture, Future};
 
 pub trait Executor {
     fn spawn_boxed(&mut self, fut: BoxFuture<'static, ()>);
+    fn run_boxed(&mut self, fut: BoxFuture<'static, ()>);
 }
 
 pub trait Spawn {
     fn spawn<F: Send + 'static + Future<Output = ()>>(&mut self, future: F);
+    fn run<F: Send + 'static + Future<Output = ()>>(&mut self, future: F);
 }
 
 impl Spawn for Box<dyn Executor> {
     fn spawn<F: Send + 'static + Future<Output = ()>>(&mut self, future: F) {
         self.spawn_boxed(Box::pin(future));
+    }
+    fn run<F: Send + 'static + Future<Output = ()>>(&mut self, future: F) {
+        self.run_boxed(Box::pin(future));
     }
 }
 
