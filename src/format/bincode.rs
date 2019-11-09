@@ -2,12 +2,6 @@ use super::Format;
 
 use serde::{de::DeserializeSeed, Serialize};
 
-use futures::{
-    channel::oneshot::{channel, Receiver},
-    future::BoxFuture,
-    TryFutureExt,
-};
-
 /// A format implementing `bincode`.
 ///
 /// bincode is a Rust-specific compact binary over-the-wire format with the unique guarantee of providing
@@ -32,17 +26,7 @@ impl Format for Bincode {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
-    where
-        T::Value: Send + 'static,
-        T: Send + 'static,
-    {
-        let (sender, receiver): (_, Receiver<Result<T::Value, Self::Error>>) = channel();
-        std::thread::spawn(move || {
-            sender
-                .send(serde_bincode::config().deserialize_from_seed(context, item.as_slice()))
-                .unwrap_or_else(|e| panic!(e))
-        });
-        Box::pin(receiver.unwrap_or_else(|e| panic!(e)))
+    ) -> Result<T::Value, Self::Error> {
+        serde_bincode::config().deserialize_from_seed(context, item.as_slice())
     }
 }

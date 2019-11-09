@@ -108,9 +108,7 @@ pub trait Format {
         context: T,
     ) -> Result<T::Value, Self::Error>
     where
-        Self: Sized,
-        T::Value: Send + 'static,
-        T: Send + 'static;
+        Self: Sized;
 }
 
 pub trait ApplyEncode<'de>:

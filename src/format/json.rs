@@ -2,12 +2,6 @@ use super::Format;
 
 use serde::{de::DeserializeSeed, Serialize};
 
-use futures::{
-    channel::oneshot::{channel, Receiver},
-    future::BoxFuture,
-    TryFutureExt,
-};
-
 /// A format implementing JavaScript Object Notation.
 ///
 /// JSON is a human readable object
@@ -28,19 +22,8 @@ impl Format for Json {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
-    where
-        T::Value: Send + 'static,
-        T: Send + 'static,
-    {
-        let (sender, receiver): (_, Receiver<Result<T::Value, Self::Error>>) = channel();
-        std::thread::spawn(move || {
-            let mut deserializer = serde_json::Deserializer::from_reader(item.as_bytes());
-            sender
-                .send(context.deserialize(&mut deserializer))
-                .map_err(|e| panic!(e))
-                .unwrap();
-        });
-        Box::pin(receiver.unwrap_or_else(|e| panic!(e)))
+    ) -> Result<T::Value, Self::Error> {
+        let mut deserializer = serde_json::Deserializer::from_reader(item.as_bytes());
+        context.deserialize(&mut deserializer)
     }
 }
