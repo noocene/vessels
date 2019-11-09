@@ -239,6 +239,7 @@ pub fn derive(mut s: Structure) -> TokenStream {
         stream
     };
     (quote! {
+        #[allow(unused_parens)]
         #[allow(non_upper_case_globals)]
         const #hygiene: () = {
             #stream

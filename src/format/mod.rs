@@ -196,7 +196,8 @@ where
                 Box::pin(
                     stream
                         .map(move |item| {
-                            Self::deserialize(item, context.clone()).unwrap_or_else(|_| panic!())
+                            Self::deserialize(item, context.clone())
+                                .unwrap_or_else(|e| panic!(format!("{:?}", e)))
                         })
                         .buffer_unordered(std::usize::MAX),
                 ),
