@@ -14,6 +14,9 @@ impl Executor for Spawner {
     fn spawn_boxed(&mut self, future: BoxFuture<'static, ()>) {
         self.inner.spawn_ok(future)
     }
+    fn run_boxed(&mut self, future: BoxFuture<'static, ()>) {
+        self.inner.run(future)
+    }
 }
 
 impl Spawner {

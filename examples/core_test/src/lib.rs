@@ -16,8 +16,7 @@ const WASM_DATA: &'static [u8] =
 
 #[wasm_bindgen(start)]
 pub fn main() {
-    let mut executor = core::<dyn Executor>().unwrap();
-    executor.spawn(async move {
+    core::<dyn Executor>().unwrap().run(async move {
         let mut containers = WebContainers;
         let module = containers.compile(WASM_DATA).await;
         let instance = containers.instantiate(&module).await;
