@@ -122,8 +122,6 @@ impl From<Box<SomeTrait>> for () {
     fn from(_: Box<SomeTrait>) {}
 }
 
-pub struct Casted<T: ?Sized + Reflected>(pub Box<T>);
-
 pub trait Erased: Send + Trait<SomeTrait> {
     fn cast(self: Box<Self>, ty: TypeId) -> Result<Box<dyn Any + Send>, CastError>;
 }
@@ -136,10 +134,9 @@ pub trait Cast<T: ?Sized + Reflected> {
 impl<S: ?Sized + Reflected> Cast<S> for Box<dyn Erased> {
     fn downcast(self) -> Result<Box<S>, CastError> {
         self.cast(TypeId::of::<S>()).map(|erased| {
-            Box::<dyn Any + Send>::downcast::<Casted<S>>(erased)
+            *Box::<dyn Any + Send>::downcast::<Box<S>>(erased)
                 .map_err(|_| panic!("could not downcast after successful reinterpretation"))
                 .unwrap()
-                .0
         })
     }
     fn upcast(self) -> Result<Box<S>, CastError> {
@@ -154,10 +151,9 @@ impl<S: ?Sized + Reflected> Cast<S> for Box<dyn Erased> {
 impl<T: ?Sized + Reflected + Trait<T>, S: ?Sized + Reflected> Cast<S> for Box<T> {
     fn downcast(self) -> Result<Box<S>, CastError> {
         self.erase().cast(TypeId::of::<S>()).map(|erased| {
-            Box::<dyn Any + Send>::downcast::<Casted<S>>(erased)
+            *Box::<dyn Any + Send>::downcast::<Box<S>>(erased)
                 .map_err(|_| panic!("could not downcast after successful reinterpretation"))
                 .unwrap()
-                .0
         })
     }
     fn upcast(self) -> Result<Box<S>, CastError> {
@@ -194,7 +190,7 @@ pub trait Trait<T: Reflected + ?Sized> {
     /// Returns all supertraits in the form `TypeId::of<dyn SomeTrait>` for each supertrait `SomeTrait`.
     fn supertraits(&self) -> Vec<TypeId>;
     /// For a `TypeId` that is `TypeId::of<dyn SomeTrait>` returns the erasure of a concrete type
-    /// `Upcasted<dyn SomeTrait>` which can then be downcasted and, if necessary, moved out to obtain a `Box<dyn SomeTrait>`.
+    /// `Box<dyn SomeTrait>` which can then be downcasted into.
     fn upcast_erased(self: Box<Self>, ty: TypeId) -> Result<Box<dyn Erased>, CastError>;
     fn erase(self: Box<Self>) -> Box<dyn Erased>;
 }
