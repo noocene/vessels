@@ -3,6 +3,9 @@ use futures::{Future, Sink, Stream};
 #[cfg(target_arch = "wasm32")]
 pub mod web;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod native;
+
 pub trait Instance: Stream<Item = Vec<u8>> + Sink<Vec<u8>> {}
 
 pub trait Containers {

@@ -1,5 +1,10 @@
 use super::Executor;
 use futures::{executor::ThreadPool, future::BoxFuture};
+use lazy_static::lazy_static;
+
+lazy_static! {
+    pub static ref POOL: ThreadPool = ThreadPool::new().unwrap();
+}
 
 pub(crate) struct Spawner {
     inner: ThreadPool,
@@ -14,7 +19,7 @@ impl Executor for Spawner {
 impl Spawner {
     pub fn new() -> Self {
         Spawner {
-            inner: ThreadPool::new().unwrap(),
+            inner: POOL.clone(),
         }
     }
 }
