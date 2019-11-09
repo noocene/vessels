@@ -4,8 +4,7 @@ use vessels::{
     core::{executor::Spawn, Executor},
     format::{ApplyDecode, ApplyEncode, Cbor},
     kind::Future,
-    log, object, OnTo,
-    Kind,
+    log, object, Kind, OnTo,
 };
 
 use std::fmt::Display;
@@ -29,7 +28,8 @@ fn main() {
             .on_to::<IdChannel>()
             .await
             .encode::<Cbor>();
-        let decoded: Box<dyn ExampleObject<String>> = encoded.decode::<IdChannel, Cbor>().await.unwrap();
+        let decoded: Box<dyn ExampleObject<String>> =
+            encoded.decode::<IdChannel, Cbor>().await.unwrap();
         log!("{}", decoded.test("four".to_owned()).await);
     });
 }
