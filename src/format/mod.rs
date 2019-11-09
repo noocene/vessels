@@ -15,10 +15,10 @@ pub mod bincode;
 pub use bincode::Bincode;
 
 use futures::{
-    future::{ok, BoxFuture},
+    future::{ok, ready, BoxFuture},
     stream::BoxStream,
     task::Context as FContext,
-    Future, FutureExt, Poll, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
+    Future, Poll, Sink, SinkExt, Stream, StreamExt,
 };
 
 use crate::{
@@ -106,7 +106,7 @@ pub trait Format {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
+    ) -> Result<T::Value, Self::Error>
     where
         Self: Sized,
         T::Value: Send + 'static,
@@ -193,14 +193,7 @@ where
         let (sink, stream) = input.split();
         Box::pin(
             shim.complete(StreamSink(
-                Box::pin(
-                    stream
-                        .map(move |item| {
-                            Self::deserialize(item, context.clone())
-                                .unwrap_or_else(|e| panic!(format!("{:?}", e)))
-                        })
-                        .buffer_unordered(std::usize::MAX),
-                ),
+                Box::pin(stream.map(move |item| Self::deserialize(item, context.clone()).unwrap())),
                 Box::pin(
                     sink.sink_map_err(|_| panic!())
                         .with::<_, _, _, ()>(|item: U::Item| ok(Self::serialize(item))),
@@ -271,6 +264,7 @@ impl<
 where
     T::Representation: Send,
     <C as Context<'de>>::Item: Send,
+    <C as Sink<<C as Context<'de>>::Item>>::Error: Send,
 {
     type Output = StreamSink<
         Self::Representation,
@@ -285,10 +279,11 @@ where
             Box::pin(stream.map(<Self as Format>::serialize)),
             Box::pin(
                 sink.sink_map_err(EncodeError::from_sink_error)
-                    .with_flat_map(move |data| {
-                        <Self as Format>::deserialize(data, ctx.clone())
-                            .map_err(EncodeError::from_format_error)
-                            .into_stream()
+                    .with(move |data| {
+                        ready(
+                            <Self as Format>::deserialize(data, ctx.clone())
+                                .map_err(EncodeError::from_format_error),
+                        )
                     }),
             ),
         )

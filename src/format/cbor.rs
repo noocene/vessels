@@ -2,8 +2,6 @@ use super::Format;
 
 use serde::{de::DeserializeSeed, Serialize};
 
-use futures::future::BoxFuture;
-
 /// A format implementing the Compact Binary Object Representation.
 ///
 /// CBOR is a binary over-the-wire format loosely based on JSON that is defined in
@@ -27,14 +25,12 @@ impl Format for Cbor {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
+    ) -> Result<T::Value, Self::Error>
     where
         T::Value: Send + 'static,
         T: Send + 'static,
     {
-        Box::pin(async move {
-            let mut deserializer = serde_cbor::Deserializer::from_reader(item.as_slice());
-            context.deserialize(&mut deserializer)
-        })
+        let mut deserializer = serde_cbor::Deserializer::from_reader(item.as_slice());
+        context.deserialize(&mut deserializer)
     }
 }
