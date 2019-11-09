@@ -18,7 +18,7 @@ impl Spawn for Box<dyn Executor> {
 mod web_sequential;
 
 #[cfg(not(target_arch = "wasm32"))]
-mod native;
+pub(crate) mod native;
 
 pub(crate) fn new_executor() -> Result<Box<dyn Executor>, super::UnimplementedError> {
     #[cfg(target_arch = "wasm32")]

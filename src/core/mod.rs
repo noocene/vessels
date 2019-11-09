@@ -1,4 +1,6 @@
 use failure::Fail;
+#[cfg(not(target_arch = "wasm32"))]
+use futures::future::pending;
 use std::{
     any::{Any, TypeId},
     fmt::{self, Display, Formatter},
@@ -8,6 +10,14 @@ pub mod executor;
 pub use executor::Executor;
 
 pub mod orchestrator;
+
+#[doc(hidden)]
+pub fn event_loop() {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        executor::native::POOL.clone().run(pending::<()>());
+    }
+}
 
 pub trait Log {
     fn info(&self, message: String);
@@ -42,13 +52,13 @@ impl Display for CoreError {
 struct Logger;
 
 impl Log for Logger {
-    fn info(&self, message: String) {
+    fn info(&self, _message: String) {
         #[cfg(all(target_arch = "wasm32", feature = "core"))]
-        web_sys::console::log_1(&message.into());
+        web_sys::console::log_1(&_message.into());
         #[cfg(all(target_arch = "wasm32", not(feature = "core")))]
         unimplemented!();
         #[cfg(not(target_arch = "wasm32"))]
-        println!("{}", message);
+        println!("{}", _message);
     }
 }
 
