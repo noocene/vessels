@@ -303,6 +303,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         }
     }
     item.supertraits.push(parse_quote!(::std::marker::Send));
+    item.supertraits.push(parse_quote!(::std::marker::Sync));
     let name = ident.to_string();
     quote! {
         #[allow(non_upper_case_globals)]
@@ -336,7 +337,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     _DERIVED_ErasedShim(input)
                 }
             }
-            impl<DERIVEPARAM: 'static + Send + ::vessels::reflection::Trait<dyn #ident<#params>> #derive_param_bounds, #kind_bounded_params> #ident<#params> for DERIVEPARAM {
+            impl<DERIVEPARAM: 'static + Sync + Send + ::vessels::reflection::Trait<dyn #ident<#params>> #derive_param_bounds, #kind_bounded_params> #ident<#params> for DERIVEPARAM {
                 #reflected_items
             }
             #vis struct _DERIVED_ErasedShim<#kind_bounded_params>(Box<dyn #ident<#params>>);
