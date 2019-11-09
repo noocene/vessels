@@ -7,20 +7,7 @@ use serde::{
     Serialize,
 };
 
-use std::{
-    any::TypeId,
-    collections::HashMap,
-    pin::Pin,
-    sync::{Arc, Mutex, RwLock, Weak},
-};
-
-use futures::{
-    future::{ready, BoxFuture},
-    task::{AtomicWaker, Context as FContext},
-    Future, Poll,
-};
-
-use weak_table::WeakValueHashMap;
+use std::{any::TypeId, collections::HashMap, sync::RwLock};
 
 use lazy_static::lazy_static;
 
@@ -29,27 +16,6 @@ type DeserializeFn =
 
 pub(crate) struct Registry {
     items: RwLock<HashMap<TypeId, DeserializeFn>>,
-    tasks: Mutex<WeakValueHashMap<TypeId, Weak<AtomicWaker>>>,
-}
-
-pub(crate) struct WaitFor {
-    task: Arc<AtomicWaker>,
-    registry: &'static Registry,
-    id: TypeId,
-}
-
-impl Future for WaitFor {
-    type Output = DeserializeFn;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Self::Output> {
-        self.registry.get(self.id).map_or_else(
-            || {
-                self.task.register(cx.waker());
-                Poll::Pending
-            },
-            Poll::Ready,
-        )
-    }
 }
 
 impl Registry {
@@ -69,9 +35,6 @@ impl Registry {
                     <T as ::serde::Deserialize>::deserialize(de)
                         .map(|v| Box::new(v) as Box<dyn SerdeAny>)
                 });
-                if let Some(task) = self.tasks.lock().unwrap().get(&TypeId::of::<T>()) {
-                    task.wake()
-                }
             }
         }
     }
@@ -79,34 +42,11 @@ impl Registry {
     fn get(&self, ty: TypeId) -> Option<DeserializeFn> {
         self.items.read().unwrap().get(&ty).copied()
     }
-
-    fn wait_for(&self, ty: TypeId) -> BoxFuture<'static, DeserializeFn> {
-        self.items
-            .read()
-            .unwrap()
-            .get(&ty)
-            .copied()
-            .map(|item| Box::pin(ready(item)) as BoxFuture<DeserializeFn>)
-            .unwrap_or_else(|| {
-                Box::pin(WaitFor {
-                    task: self
-                        .tasks
-                        .lock()
-                        .unwrap()
-                        .entry(ty)
-                        .or_insert_with(|| Arc::new(AtomicWaker::new()))
-                        .clone(),
-                    registry: &REGISTRY,
-                    id: ty,
-                })
-            })
-    }
 }
 
 lazy_static! {
     pub(crate) static ref REGISTRY: Registry = Registry {
         items: RwLock::new(HashMap::new()),
-        tasks: Mutex::new(WeakValueHashMap::new()),
     };
 }
 

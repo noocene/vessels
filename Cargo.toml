@@ -23,7 +23,6 @@ serde_json = { version = "1.0.41", optional = true }
 serde_cbor = { version = "0.10.2", optional = true }
 serde_bincode = {version = "1.2.0", optional = true, package = "bincode" }
 lazy_static = "1.4.0"
-weak-table = "0.2.3"
 void = "1.0.2"
 downcast-rs = "1.1.1"
 
