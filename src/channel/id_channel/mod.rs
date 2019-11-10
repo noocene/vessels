@@ -184,8 +184,8 @@ impl IdChannelHandle {
         &self,
         kind: K,
     ) -> BoxFuture<'static, Result<ForkHandle, K::DeconstructError>> {
-        let id = self.context.create::<K>();
         REGISTRY.add_deconstruct::<K>();
+        let id = self.context.create::<K>();
         let context = self.context.clone();
         let out_channel = self.out_channel.clone();
         let in_channels = self.in_channels.clone();
@@ -222,8 +222,8 @@ impl IdChannelHandle {
         fork_ref: ForkHandle,
     ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
         let out_channel = self.out_channel.clone();
-        self.context.add::<K>(fork_ref);
         REGISTRY.add_construct::<K>();
+        self.context.add::<K>(fork_ref);
         let (sender, ireceiver): (UnboundedSender<K::DeconstructItem>, _) = unbounded();
         let (isender, receiver): (UnboundedSender<K::ConstructItem>, _) = unbounded();
         let isender = isender
@@ -269,8 +269,8 @@ impl IdChannel {
         fork_ref: ForkHandle,
     ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
         let out_channel = self.out_channel.1.clone();
-        self.context.add::<K>(fork_ref);
         REGISTRY.add_construct::<K>();
+        self.context.add::<K>(fork_ref);
         let (sender, ireceiver): (UnboundedSender<K::DeconstructItem>, _) = unbounded();
         let (isender, receiver): (UnboundedSender<K::ConstructItem>, _) = unbounded();
         let isender = isender
