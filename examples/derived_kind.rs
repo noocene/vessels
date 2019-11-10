@@ -33,7 +33,8 @@ fn main() {
         }
         .on_to::<IdChannel>()
         .await
-        .encode::<Json>().inspect(|item| println!("{}", item));
+        .encode::<Json>()
+        .inspect(|item| println!("{}", item));
         let decoded: Enum<String> = encoded.decode::<IdChannel, Json>().await.unwrap();
         log!("{:?}", decoded);
     });

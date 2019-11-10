@@ -2,6 +2,8 @@ use super::Format;
 
 use serde::{de::DeserializeSeed, Serialize};
 
+use futures::future::BoxFuture;
+
 /// A format implementing JavaScript Object Notation.
 ///
 /// JSON is a human readable object
@@ -22,8 +24,13 @@ impl Format for Json {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> Result<T::Value, Self::Error> {
-        let mut deserializer = serde_json::Deserializer::from_reader(item.as_bytes());
-        context.deserialize(&mut deserializer)
+    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
+    where
+        T: Send + 'static,
+    {
+        Box::pin(async move {
+            let mut deserializer = serde_json::Deserializer::from_reader(item.as_bytes());
+            context.deserialize(&mut deserializer)
+        })
     }
 }
