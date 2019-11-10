@@ -2,13 +2,14 @@ pub mod id_channel;
 pub use id_channel::IdChannel;
 
 use serde::{
-    de::{DeserializeOwned, DeserializeSeed},
-    ser::{SerializeTupleStruct, Serializer},
+    de::{self, DeserializeOwned, DeserializeSeed, Deserializer, Visitor},
+    ser::Serializer,
     Deserialize, Serialize,
 };
 
 use std::{
     cmp::PartialEq,
+    fmt,
     hash::{Hash, Hasher},
     marker::Unpin,
     sync::{Arc, Mutex},
@@ -18,11 +19,8 @@ use crate::Kind;
 
 use futures::{channel::oneshot::Sender, future::BoxFuture, Sink, Stream};
 
-#[derive(Deserialize, Clone)]
-pub struct ForkHandle(
-    pub(crate) u32,
-    #[serde(skip)] pub Arc<Mutex<Option<Sender<()>>>>,
-);
+#[derive(Clone)]
+pub struct ForkHandle(pub(crate) u32, pub Arc<Mutex<Option<Sender<()>>>>);
 
 impl ForkHandle {
     pub fn new(idx: u32) -> Self {
@@ -44,9 +42,33 @@ impl Serialize for ForkHandle {
         S: Serializer,
     {
         self.send();
-        let mut ts = serializer.serialize_tuple_struct("ForkHandle", 1)?;
-        ts.serialize_field(&self.0)?;
-        ts.end()
+        serializer.serialize_u32(self.0)
+    }
+}
+
+struct ForkHandleVisitor;
+
+impl<'de> Visitor<'de> for ForkHandleVisitor {
+    type Value = ForkHandle;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a fork handle")
+    }
+
+    fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(ForkHandle::new(value))
+    }
+}
+
+impl<'de> Deserialize<'de> for ForkHandle {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_u32(ForkHandleVisitor)
     }
 }
 
