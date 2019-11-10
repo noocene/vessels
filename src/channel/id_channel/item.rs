@@ -52,11 +52,11 @@ impl<'de> Visitor<'de> for ItemVisitor {
     where
         A: SeqAccess<'de>,
     {
-        let channel: ForkHandle = seq
+        let channel = seq
             .next_element()?
             .ok_or_else(|| de::Error::invalid_length(0, &"two elements"))?;
         let data = seq
-            .next_element_seed(Id::new(&channel, &mut self.0))?
+            .next_element_seed(Id::new(channel, &mut self.0))?
             .ok_or_else(|| de::Error::invalid_length(1, &"two elements"))?;
         Ok(Item(channel, data, self.0))
     }
@@ -65,7 +65,7 @@ impl<'de> Visitor<'de> for ItemVisitor {
     where
         A: MapAccess<'de>,
     {
-        let mut channel: Option<ForkHandle> = None;
+        let mut channel = None;
         let mut data = None;
         while let Some(key) = map.next_key::<String>()? {
             match key.as_ref() {
@@ -79,8 +79,7 @@ impl<'de> Visitor<'de> for ItemVisitor {
                     if data.is_some() {
                         return Err(serde::de::Error::duplicate_field("data"));
                     }
-                    data =
-                        Some(map.next_value_seed(Id::new(channel.as_ref().unwrap(), &mut self.0))?);
+                    data = Some(map.next_value_seed(Id::new(channel.unwrap(), &mut self.0))?);
                 }
                 name => {
                     return Err(de::Error::unknown_field(name, &["data", "channel"]));
