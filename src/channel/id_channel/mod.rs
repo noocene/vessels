@@ -277,39 +277,7 @@ impl IdChannel {
         &self,
         fork_ref: ForkHandle,
     ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
-        let hash_clone = fork_ref.hash_clone();
-        let out_channel = self.out_channel.1.clone();
-        self.context.add::<K>(fork_ref);
-        REGISTRY.add_construct::<K>();
-        let (sender, ireceiver): (UnboundedSender<K::DeconstructItem>, _) = unbounded();
-        let (isender, receiver): (UnboundedSender<K::ConstructItem>, _) = unbounded();
-        let isender = isender
-            .sink_map_err(|e| panic!(e))
-            .with(|item: Box<dyn SerdeAny>| {
-                ok(*(match item.downcast::<K::ConstructItem>() {
-                    Ok(item) => item,
-                    Err(_) => panic!(),
-                }))
-            });
-        self.in_channels
-            .lock()
-            .unwrap()
-            .insert(hash_clone.hash_clone(), Box::pin(isender));
-        let ct = self.context.clone();
-        let ireceiver = ireceiver
-            .map(move |item: K::DeconstructItem| Item::new(hash_clone.hash_clone(), Box::new(item), ct.clone()));
-        core::<dyn Executor>().unwrap().spawn(
-            ireceiver
-                .map(Ok)
-                .forward(out_channel)
-                .unwrap_or_else(|_| panic!()),
-        );
-        Box::pin(K::construct(IdChannelFork {
-            o: Box::pin(sender),
-            i: Box::pin(receiver),
-            channel: self.clone(),
-            sink_item: PhantomData,
-        }))
+        self.clone().get_fork(fork_ref)
     }
 }
 
