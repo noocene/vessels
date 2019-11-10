@@ -64,7 +64,7 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
             .get(
                 self.1
                     .get(self.0)
-                    .ok_or(Error::custom("no type in context"))?,
+                    .ok_or(Error::custom(format!("no type for {} in context", self.0)))?,
             )
             .ok_or(Error::custom("no deserializer in registry"))?)(&mut deserializer)
         .map_err(Error::custom)

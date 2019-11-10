@@ -9,6 +9,7 @@ use serde::{
 
 use std::{
     cmp::PartialEq,
+    fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
     marker::Unpin,
     sync::{Arc, Mutex},
@@ -32,6 +33,12 @@ impl ForkHandle {
         if let Some(sender) = self.1.lock().unwrap().take() {
             let _ = sender.send(());
         }
+    }
+}
+
+impl Display for ForkHandle {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "channel {}", self.0)
     }
 }
 
