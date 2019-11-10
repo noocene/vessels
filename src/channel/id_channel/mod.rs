@@ -204,7 +204,8 @@ impl IdChannelHandle {
                             ))
                         })
                         .forward(out_channel)
-                        .unwrap_or_else(|_| panic!()).await
+                        .unwrap_or_else(|_| panic!())
+                        .await
                 });
                 let mut in_channels = in_channels.lock().unwrap();
                 in_channels.insert(
@@ -248,8 +249,9 @@ impl IdChannelHandle {
             .unwrap()
             .insert(hash_clone.hash_clone(), Box::pin(isender));
         let ct = self.context.clone();
-        let ireceiver = ireceiver
-            .map(move |item: K::DeconstructItem| Item::new(hash_clone.hash_clone(), Box::new(item), ct.clone()));
+        let ireceiver = ireceiver.map(move |item: K::DeconstructItem| {
+            Item::new(hash_clone.hash_clone(), Box::new(item), ct.clone())
+        });
         core::<dyn Executor>().unwrap().spawn(
             ireceiver
                 .map(Ok)
