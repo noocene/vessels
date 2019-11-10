@@ -156,7 +156,7 @@ impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
             context: self.context,
             in_channels: Arc::new(Mutex::new(HashMap::new())),
         };
-        let fork = channel.get_fork::<K>(ForkHandle(0));
+        let fork = channel.get_fork::<K>(ForkHandle::new(0));
         let (receiver, sender) = channel.split();
         let mut executor = core::<dyn Executor>().unwrap();
         executor.spawn(sender.map(Ok).forward(sink).unwrap_or_else(|_| panic!()));
@@ -184,23 +184,31 @@ impl IdChannelHandle {
         &self,
         kind: K,
     ) -> BoxFuture<'static, Result<ForkHandle, K::DeconstructError>> {
-        let id = self.context.create::<K>();
+        let (id, waiter) = self.context.create::<K>();
+        let hash_clone = id.hash_clone();
+        let item_hash_clone = id.hash_clone();
         REGISTRY.add_deconstruct::<K>();
         let context = self.context.clone();
         let out_channel = self.out_channel.clone();
         let in_channels = self.in_channels.clone();
-
         Box::pin(
             IdChannelFork::new(kind, self.clone()).map(move |(sender, receiver)| {
-                core::<dyn Executor>().unwrap().spawn(
+                core::<dyn Executor>().unwrap().spawn(async move {
+                    let _ = waiter.await;
                     receiver
-                        .map(move |v| Ok(Item::new(id, Box::new(v), context.clone())))
+                        .map(move |v| {
+                            Ok(Item::new(
+                                item_hash_clone.hash_clone(),
+                                Box::new(v),
+                                context.clone(),
+                            ))
+                        })
                         .forward(out_channel)
-                        .unwrap_or_else(|_| panic!()),
-                );
+                        .unwrap_or_else(|_| panic!()).await
+                });
                 let mut in_channels = in_channels.lock().unwrap();
                 in_channels.insert(
-                    id,
+                    hash_clone,
                     Box::pin(
                         sender
                             .sink_map_err(|e| panic!(e))
@@ -221,6 +229,7 @@ impl IdChannelHandle {
         &self,
         fork_ref: ForkHandle,
     ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
+        let hash_clone = fork_ref.hash_clone();
         let out_channel = self.out_channel.clone();
         self.context.add::<K>(fork_ref);
         REGISTRY.add_construct::<K>();
@@ -237,10 +246,10 @@ impl IdChannelHandle {
         self.in_channels
             .lock()
             .unwrap()
-            .insert(fork_ref, Box::pin(isender));
+            .insert(hash_clone.hash_clone(), Box::pin(isender));
         let ct = self.context.clone();
         let ireceiver = ireceiver
-            .map(move |item: K::DeconstructItem| Item::new(fork_ref, Box::new(item), ct.clone()));
+            .map(move |item: K::DeconstructItem| Item::new(hash_clone.hash_clone(), Box::new(item), ct.clone()));
         core::<dyn Executor>().unwrap().spawn(
             ireceiver
                 .map(Ok)
@@ -268,6 +277,7 @@ impl IdChannel {
         &self,
         fork_ref: ForkHandle,
     ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
+        let hash_clone = fork_ref.hash_clone();
         let out_channel = self.out_channel.1.clone();
         self.context.add::<K>(fork_ref);
         REGISTRY.add_construct::<K>();
@@ -284,10 +294,10 @@ impl IdChannel {
         self.in_channels
             .lock()
             .unwrap()
-            .insert(fork_ref, Box::pin(isender));
+            .insert(hash_clone.hash_clone(), Box::pin(isender));
         let ct = self.context.clone();
         let ireceiver = ireceiver
-            .map(move |item: K::DeconstructItem| Item::new(fork_ref, Box::new(item), ct.clone()));
+            .map(move |item: K::DeconstructItem| Item::new(hash_clone.hash_clone(), Box::new(item), ct.clone()));
         core::<dyn Executor>().unwrap().spawn(
             ireceiver
                 .map(Ok)
@@ -316,7 +326,7 @@ impl<'a, K: Kind> Target<'a, K> for IdChannel {
     fn new_shim() -> Self::Shim {
         REGISTRY.add_construct::<K>();
         let context = Context::new();
-        context.add::<K>(ForkHandle(0));
+        context.add::<K>(ForkHandle::new(0));
         Shim {
             context,
             _marker: PhantomData,
@@ -405,7 +415,7 @@ impl<
             let mut in_channels = HashMap::new();
             REGISTRY.add_deconstruct::<K>();
             in_channels.insert(
-                ForkHandle(0),
+                ForkHandle::new(0),
                 Box::pin(
                     sender
                         .sink_map_err(|e| panic!(e))
@@ -418,7 +428,7 @@ impl<
                 ) as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ()> + Send>>,
             );
             let context = Context::new();
-            let handle = context.create::<K>();
+            let handle = context.create::<K>().0;
             let ct = context.clone();
             let (csender, creceiver) = unbounded();
             let channel = IdChannel {
@@ -429,7 +439,7 @@ impl<
             let mut executor = core::<dyn Executor>().unwrap();
             executor.spawn(
                 receiver
-                    .map(move |v| Ok(Item::new(handle, Box::new(v), ct.clone())))
+                    .map(move |v| Ok(Item::new(handle.hash_clone(), Box::new(v), ct.clone())))
                     .forward(csender)
                     .unwrap_or_else(|_| panic!()),
             );

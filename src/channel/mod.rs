@@ -3,18 +3,66 @@ pub use id_channel::IdChannel;
 
 use serde::{
     de::{DeserializeOwned, DeserializeSeed},
+    ser::{SerializeTupleStruct, Serializer},
     Deserialize, Serialize,
 };
 
-use std::marker::Unpin;
+use std::{
+    cmp::PartialEq,
+    hash::{Hash, Hasher},
+    marker::Unpin,
+    sync::{Arc, Mutex},
+};
 
 use crate::Kind;
 
-use futures::{future::BoxFuture, Sink, Stream};
+use futures::{channel::oneshot::Sender, future::BoxFuture, Sink, Stream};
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, Copy)]
-#[repr(transparent)]
-pub struct ForkHandle(pub(crate) u32);
+#[derive(Deserialize, Clone)]
+pub struct ForkHandle(
+    pub(crate) u32,
+    #[serde(skip)] pub Arc<Mutex<Option<Sender<()>>>>,
+);
+
+impl ForkHandle {
+    pub fn new(idx: u32) -> Self {
+        ForkHandle(idx, Arc::new(Mutex::new(None)))
+    }
+    pub fn hash_clone(&self) -> Self {
+        ForkHandle(self.0, Arc::new(Mutex::new(None)))
+    }
+    pub fn send(&self) {
+        if let Some(sender) = self.1.lock().unwrap().take() {
+            let _ = sender.send(());
+        }
+    }
+}
+
+impl Serialize for ForkHandle {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.send();
+        let mut ts = serializer.serialize_tuple_struct("ForkHandle", 1)?;
+        ts.serialize_field(&self.0)?;
+        ts.end()
+    }
+}
+
+impl PartialEq for ForkHandle {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for ForkHandle {}
+
+impl Hash for ForkHandle {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
 
 pub trait Fork: Send + 'static {
     fn fork<K: Kind>(&self, kind: K)
