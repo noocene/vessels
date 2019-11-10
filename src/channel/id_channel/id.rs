@@ -50,7 +50,7 @@ lazy_static! {
     };
 }
 
-pub(crate) struct Id<'a>(&'a ForkHandle, &'a mut Context);
+pub(crate) struct Id<'a>(ForkHandle, &'a mut Context);
 
 impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
     type Value = Box<dyn SerdeAny>;
@@ -61,18 +61,17 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
     {
         let mut deserializer = erased_serde::Deserializer::erase(deserializer);
         (REGISTRY
-            .get(
-                self.1
-                    .get(self.0)
-                    .ok_or(Error::custom(format!("no type for {} in context", self.0)))?,
-            )
+            .get(self.1.get(self.0).ok_or(Error::custom(format!(
+                "no type for channel {} in context",
+                (self.0).0
+            )))?)
             .ok_or(Error::custom("no deserializer in registry"))?)(&mut deserializer)
         .map_err(Error::custom)
     }
 }
 
 impl<'a> Id<'a> {
-    pub(crate) fn new(channel: &'a ForkHandle, context: &'a mut Context) -> Self {
+    pub(crate) fn new(channel: ForkHandle, context: &'a mut Context) -> Self {
         Id(channel, context)
     }
 }
