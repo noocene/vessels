@@ -290,11 +290,12 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
+                    let mut handles = channel.next().await.unwrap();
+                    handles.reverse();
                     channel
                         .send(
                             channel
-                                .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+).await)
+                                .fork((self)($(channel.get_fork::<$name>(handles.pop().unwrap()).await.unwrap()),+).await)
                                 .await
                                 .unwrap(),
                         )
@@ -341,11 +342,12 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
+                    let mut handles = channel.next().await.unwrap();
+                    handles.reverse();
                     channel
                         .send(
                             channel
-                                .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+).await)
+                                .fork((self)($(channel.get_fork::<$name>(handles.pop().unwrap()).await.unwrap()),+).await)
                                 .await
                                 .unwrap(),
                         )
@@ -392,11 +394,12 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
+                    let mut handles = channel.next().await.unwrap();
+                    handles.reverse();
                     channel
                         .send(
                             channel
-                                .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+))
+                                .fork((self)($(channel.get_fork::<$name>(handles.pop().unwrap()).await.unwrap()),+))
                                 .await
                                 .unwrap(),
                         )
@@ -443,11 +446,12 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
+                    let mut handles = channel.next().await.unwrap();
+                    handles.reverse();
                     channel
                         .send(
                             channel
-                                .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+))
+                                .fork((self)($(channel.get_fork::<$name>(handles.pop().unwrap()).await.unwrap()),+))
                                 .await
                                 .unwrap(),
                         )
@@ -494,11 +498,12 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
+                    let mut handles = channel.next().await.unwrap();
+                    handles.reverse();
                     channel
                         .send(
                             channel
-                                .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+).await)
+                                .fork((self)($(channel.get_fork::<$name>(handles.pop().unwrap()).await.unwrap()),+).await)
                                 .await
                                 .unwrap(),
                         )
@@ -542,11 +547,12 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
+                    let mut handles = channel.next().await.unwrap();
+                    handles.reverse();
                     channel
                         .send(
                             channel
-                                .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+))
+                                .fork((self)($(channel.get_fork::<$name>(handles.pop().unwrap()).await.unwrap()),+))
                                 .await
                                 .unwrap(),
                         )
