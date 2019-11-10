@@ -65,9 +65,8 @@ macro_rules! tuple_impl {
                 mut channel: C,
             ) -> Self::ConstructFuture {
                 Box::pin(async move {
-                    let mut handles = channel.next().await.unwrap();
-                    handles.reverse();
-                    Ok(($(channel.get_fork::<$name>(handles.pop().unwrap()).await.unwrap()),+))
+                    let item = channel.next().await.unwrap();
+                    Ok(($(channel.get_fork::<$name>(item[$n]).await.unwrap()),+))
                 })
             }
         })+
