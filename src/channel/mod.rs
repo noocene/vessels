@@ -2,14 +2,13 @@ pub mod id_channel;
 pub use id_channel::IdChannel;
 
 use serde::{
-    de::{self, DeserializeOwned, DeserializeSeed, Deserializer, Visitor},
+    de::{DeserializeOwned, DeserializeSeed, Deserializer},
     ser::Serializer,
     Deserialize, Serialize,
 };
 
 use std::{
     cmp::PartialEq,
-    fmt,
     hash::{Hash, Hasher},
     marker::Unpin,
     sync::{Arc, Mutex},
@@ -46,29 +45,12 @@ impl Serialize for ForkHandle {
     }
 }
 
-struct ForkHandleVisitor;
-
-impl<'de> Visitor<'de> for ForkHandleVisitor {
-    type Value = ForkHandle;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a fork handle")
-    }
-
-    fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        Ok(ForkHandle::new(value))
-    }
-}
-
 impl<'de> Deserialize<'de> for ForkHandle {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_u32(ForkHandleVisitor)
+        Ok(ForkHandle::new(u32::deserialize(deserializer)?))
     }
 }
 
