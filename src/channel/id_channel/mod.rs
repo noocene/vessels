@@ -18,7 +18,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
 
 use crate::{
-    channel::{Channel, Context as IContext, Fork as IFork, ForkHandle},
+    channel::{Channel, Context as IContext, Fork as IFork, ForkHandle, Waiter},
     core,
     core::{executor::Spawn, Executor},
     Kind, SerdeAny, Target,
@@ -118,6 +118,12 @@ impl Sink<Item> for IdChannel {
         } else {
             Poll::Ready(Ok(()))
         }
+    }
+}
+
+impl Waiter for Context {
+    fn wait_for(&self, data: String) -> BoxFuture<'static, ()> {
+        Box::pin(self.wait_for(ForkHandle(data.parse().unwrap())))
     }
 }
 

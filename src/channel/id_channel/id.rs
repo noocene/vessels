@@ -61,10 +61,11 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
     {
         let mut deserializer = erased_serde::Deserializer::erase(deserializer);
         (REGISTRY
-            .get(self.1.get(self.0).ok_or(Error::custom(format!(
-                "no type for channel {} in context",
-                (self.0).0
-            )))?)
+            .get(
+                self.1
+                    .get(self.0)
+                    .ok_or(Error::custom(format!("ASYNC_WAIT {} ", (self.0).0)))?,
+            )
             .ok_or(Error::custom("no deserializer in registry"))?)(&mut deserializer)
         .map_err(Error::custom)
     }
