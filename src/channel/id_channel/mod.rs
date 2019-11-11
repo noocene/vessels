@@ -290,7 +290,7 @@ impl<'a, K: Kind> Target<'a, K> for IdChannel {
 
     fn new_shim() -> Self::Shim {
         REGISTRY.add_construct::<K>();
-        let context = Context::new();
+        let context = Context::new_shim();
         context.add::<K>(ForkHandle(0));
         Shim {
             context,
@@ -379,8 +379,10 @@ impl<
             let (oi, receiver): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
             let mut in_channels = HashMap::new();
             REGISTRY.add_deconstruct::<K>();
+            let context = Context::new();
+            let handle = context.create::<K>();
             in_channels.insert(
-                ForkHandle(0),
+                handle,
                 Box::pin(
                     sender
                         .sink_map_err(|e| panic!(e))
@@ -392,8 +394,6 @@ impl<
                         }),
                 ) as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ()> + Send>>,
             );
-            let context = Context::new();
-            let handle = context.create::<K>();
             let ct = context.clone();
             let (csender, creceiver) = unbounded();
             let channel = IdChannel {
