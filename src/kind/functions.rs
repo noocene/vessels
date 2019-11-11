@@ -208,7 +208,7 @@ impl<U: Kind> Kind for Box<dyn FnOnce() -> BoxFuture<'static, U> + Send + Sync> 
         Box::pin(async move {
             channel.next().await.unwrap();
             channel
-                .send(channel.fork((self)()).await.unwrap())
+                .send(channel.fork((self)().await).await.unwrap())
                 .unwrap_or_else(|_| panic!())
                 .await;
             Ok(())
