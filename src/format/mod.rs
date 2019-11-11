@@ -208,7 +208,7 @@ where
                                             );
                                         }
                                     }
-                                    panic!(e)
+                                    panic!(format!("{:?}", e))
                                 })
                                 .unwrap_or_else(|e| panic!(format!("{:?}", e)))
                         })
@@ -313,7 +313,7 @@ where
                                         });
                                     }
                                 }
-                                panic!(e)
+                                panic!(format!("{}", e))
                             })
                             .map_err(EncodeError::from_format_error)
                             .into_stream()
