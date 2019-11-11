@@ -294,16 +294,17 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
-                    channel
-                        .send(
-                            channel
-                                .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+).await)
-                                .await
-                                .unwrap(),
-                        )
-                        .unwrap_or_else(|_| panic!())
-                        .await;
+                    while let Some(handles) = channel.next().await {
+                        channel
+                            .send(
+                                channel
+                                    .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+).await)
+                                    .await
+                                    .unwrap(),
+                            )
+                            .unwrap_or_else(|_| panic!())
+                            .await;
+                    }
                     Ok(())
                 })
             }
@@ -345,16 +346,17 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
-                    channel
-                        .send(
-                            channel
-                                .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+).await)
-                                .await
-                                .unwrap(),
-                        )
-                        .unwrap_or_else(|_| panic!())
-                        .await;
+                    while let Some(handles) = channel.next().await {
+                        channel
+                            .send(
+                                channel
+                                    .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+).await)
+                                    .await
+                                    .unwrap(),
+                            )
+                            .unwrap_or_else(|_| panic!())
+                            .await;
+                    }
                     Ok(())
                 })
             }
@@ -396,16 +398,17 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
-                    channel
-                        .send(
-                            channel
-                                .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+))
-                                .await
-                                .unwrap(),
-                        )
-                        .unwrap_or_else(|_| panic!())
-                        .await;
+                    while let Some(handles) = channel.next().await {
+                        channel
+                            .send(
+                                channel
+                                    .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+))
+                                    .await
+                                    .unwrap(),
+                            )
+                            .unwrap_or_else(|_| panic!())
+                            .await;
+                    }
                     Ok(())
                 })
             }
@@ -447,16 +450,17 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
-                    channel
-                        .send(
-                            channel
-                                .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+))
-                                .await
-                                .unwrap(),
-                        )
-                        .unwrap_or_else(|_| panic!())
-                        .await;
+                    while let Some(handles) = channel.next().await {
+                        channel
+                            .send(
+                                channel
+                                    .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+))
+                                    .await
+                                    .unwrap(),
+                            )
+                            .unwrap_or_else(|_| panic!())
+                            .await;
+                    }
                     Ok(())
                 })
             }
