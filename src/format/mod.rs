@@ -15,6 +15,7 @@ pub mod bincode;
 pub use bincode::Bincode;
 
 use futures::{
+    channel::mpsc::{unbounded, UnboundedReceiver},
     future::{ok, BoxFuture},
     stream::BoxStream,
     task::Context as FContext,
@@ -23,6 +24,8 @@ use futures::{
 
 use crate::{
     channel::{Context, Shim, Target, Waiter},
+    core,
+    core::{executor::Spawn, Executor},
     Kind,
 };
 
@@ -295,30 +298,34 @@ where
     fn encode(input: C) -> Self::Output {
         let ctx = input.context();
         let (sink, stream) = input.split();
+        let (sender, receiver): (_, UnboundedReceiver<<Self as Format>::Representation>) =
+            unbounded();
+        let receiver = receiver
+            .map(move |item: <Self as Format>::Representation| {
+                let ct = ctx.clone();
+                Self::deserialize(item.clone(), ctx.clone()).or_else(move |e| {
+                    let context = ct.clone();
+                    let message = format!("{}", e);
+                    let mut data = message.split(" ");
+                    if data.next() == Some("ASYNC_WAIT") {
+                        if let Some(data) = data.next() {
+                            return context
+                                .wait_for(data.to_owned())
+                                .then(move |_| Self::deserialize(item, context.clone()));
+                        }
+                    }
+                    panic!(format!("{:?}", e))
+                })
+            })
+            .buffer_unordered(std::usize::MAX);
+        core::<dyn Executor>().unwrap().spawn(
+            receiver
+                .forward(sink.sink_map_err(|_| panic!()))
+                .unwrap_or_else(|_| panic!()),
+        );
         StreamSink(
             Box::pin(stream.map(<Self as Format>::serialize)),
-            Box::pin(
-                sink.sink_map_err(EncodeError::from_sink_error)
-                    .with_flat_map(move |item: <Self as Format>::Representation| {
-                        let ctx = ctx.clone();
-                        Self::deserialize(item.clone(), ctx.clone())
-                            .or_else(move |e| {
-                                let context = ctx.clone();
-                                let message = format!("{}", e);
-                                let mut data = message.split(" ");
-                                if data.next() == Some("ASYNC_WAIT") {
-                                    if let Some(data) = data.next() {
-                                        return context.wait_for(data.to_owned()).then(move |_| {
-                                            Self::deserialize(item, context.clone())
-                                        });
-                                    }
-                                }
-                                panic!(format!("{}", e))
-                            })
-                            .map_err(EncodeError::from_format_error)
-                            .into_stream()
-                    }),
-            ),
+            Box::pin(sender.sink_map_err(|_| panic!())),
         )
     }
 }
