@@ -24,11 +24,12 @@ impl<U: Kind> Kind for Box<dyn Fn() -> BoxFuture<'static, U> + Send + Sync> {
         mut channel: C,
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
-            channel.next().await.unwrap();
-            channel
-                .send(channel.fork((self)().await).await.unwrap())
-                .unwrap_or_else(|_| panic!())
-                .await;
+            while let Some(()) = channel.next().await {
+                channel
+                    .send(channel.fork((self)().await).await.unwrap())
+                    .unwrap_or_else(|_| panic!())
+                    .await;
+            }
             Ok(())
         })
     }
@@ -65,11 +66,12 @@ impl<U: Kind> Kind for Box<dyn Fn() -> BoxStream<'static, U> + Send + Sync> {
         mut channel: C,
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
-            channel.next().await.unwrap();
-            channel
-                .send(channel.fork((self)()).await.unwrap())
-                .unwrap_or_else(|_| panic!())
-                .await;
+            while let Some(()) = channel.next().await {
+                channel
+                    .send(channel.fork((self)()).await.unwrap())
+                    .unwrap_or_else(|_| panic!())
+                    .await;
+            }
             Ok(())
         })
     }
@@ -113,11 +115,12 @@ impl<U: Kind> Kind for Box<dyn FnMut() -> BoxFuture<'static, U> + Send + Sync> {
         mut channel: C,
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
-            channel.next().await.unwrap();
-            channel
-                .send(channel.fork((self)().await).await.unwrap())
-                .unwrap_or_else(|_| panic!())
-                .await;
+            while let Some(()) = channel.next().await {
+                channel
+                    .send(channel.fork((self)().await).await.unwrap())
+                    .unwrap_or_else(|_| panic!())
+                    .await;
+            }
             Ok(())
         })
     }
@@ -154,11 +157,12 @@ impl<U: Kind> Kind for Box<dyn FnMut() -> BoxStream<'static, U> + Send + Sync> {
         mut channel: C,
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
-            channel.next().await.unwrap();
-            channel
-                .send(channel.fork((self)()).await.unwrap())
-                .unwrap_or_else(|_| panic!())
-                .await;
+            while let Some(()) = channel.next().await {
+                channel
+                    .send(channel.fork((self)()).await.unwrap())
+                    .unwrap_or_else(|_| panic!())
+                    .await;
+            }
             Ok(())
         })
     }
