@@ -33,7 +33,7 @@ where
     ) -> Self::ConstructFuture {
         Box::pin(async move {
             let handle = channel.next().await.unwrap();
-            Ok(channel.get_fork(handle).await.unwrap())
+            Ok((channel.get_fork::<T>(handle).await.unwrap(),))
         })
     }
 }
