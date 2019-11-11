@@ -2,14 +2,12 @@ use vessels::{
     channel::IdChannel,
     core,
     core::{executor::Spawn, Executor},
-    format::{ApplyDecode, ApplyEncode, Json},
+    format::{ApplyDecode, ApplyEncode, Cbor},
     kind::using,
     log, Kind, OnTo,
 };
 
 use serde::{Deserialize, Serialize};
-
-use futures::StreamExt;
 
 #[derive(Serialize, Deserialize, Kind, Debug)]
 #[kind(using::Serde)]
@@ -33,9 +31,8 @@ fn main() {
         }
         .on_to::<IdChannel>()
         .await
-        .encode::<Json>()
-        .inspect(|item| println!("{}", item));
-        let decoded: Enum<String> = encoded.decode::<IdChannel, Json>().await.unwrap();
+        .encode::<Cbor>();
+        let decoded: Enum<String> = encoded.decode::<IdChannel, Cbor>().await.unwrap();
         log!("{:?}", decoded);
     });
 }
