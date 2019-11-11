@@ -90,6 +90,17 @@ impl Context {
         }
     }
 
+    pub(crate) fn new_shim() -> Self {
+        Context {
+            state: Arc::new(RwLock::new(ContextState {
+                channel_types: HashMap::new(),
+                next_index: ForkHandle(1),
+                unused_indices: vec![],
+            })),
+            tasks: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
     pub(crate) fn create<K: Kind>(&self) -> ForkHandle {
         let mut state = self.state.write().unwrap();
         let tasks = self.tasks.lock().unwrap();
@@ -99,7 +110,7 @@ impl Context {
             id
         } else {
             let id = state.next_index;
-            state.next_index = ForkHandle(state.next_index.0 + 1);
+            state.next_index = ForkHandle(state.next_index.0 + 2);
             state.channel_types.insert(id, d);
             id
         };
