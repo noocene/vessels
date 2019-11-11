@@ -53,9 +53,13 @@ pub trait Target<'a, K: Kind>: Context<'a> + Sized {
     fn new_shim() -> Self::Shim;
 }
 
+pub trait Waiter {
+    fn wait_for(&self, data: String) -> BoxFuture<'static, ()>;
+}
+
 pub trait Context<'de> {
     type Item: Serialize + 'static;
-    type Target: DeserializeSeed<'de, Value = Self::Item> + Clone + Send + 'static;
+    type Target: Waiter + DeserializeSeed<'de, Value = Self::Item> + Clone + Send + 'static;
 
     fn context(&self) -> Self::Target;
 }
