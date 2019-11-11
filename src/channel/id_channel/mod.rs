@@ -245,11 +245,11 @@ impl IdChannelHandle {
             .unwrap()
             .insert(fork_ref, Box::pin(isender));
         let ct = self.context.clone();
-        let ireceiver = ireceiver
-            .map(move |item: K::DeconstructItem| Item::new(fork_ref, Box::new(item), ct.clone()));
         core::<dyn Executor>().unwrap().spawn(
             ireceiver
-                .map(Ok)
+                .map(move |item: K::DeconstructItem| {
+                    Ok(Item::new(fork_ref, Box::new(item), ct.clone()))
+                })
                 .forward(out_channel)
                 .unwrap_or_else(|_| panic!()),
         );
