@@ -282,7 +282,7 @@ impl<
         C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de> + 'static + Send + Sized,
     > Encode<'de, C> for T
 where
-    T::Representation: Send,
+    T::Representation: Send + Clone,
     <C as Context<'de>>::Item: Send,
     <C as Sink<<C as Context<'de>>::Item>>::Error: Send,
 {
@@ -299,8 +299,22 @@ where
             Box::pin(stream.map(<Self as Format>::serialize)),
             Box::pin(
                 sink.sink_map_err(EncodeError::from_sink_error)
-                    .with_flat_map(move |data| {
-                        <Self as Format>::deserialize(data, ctx.clone())
+                    .with_flat_map(move |item: <Self as Format>::Representation| {
+                        let ctx = ctx.clone();
+                        Self::deserialize(item.clone(), ctx.clone())
+                            .or_else(move |e| {
+                                let context = ctx.clone();
+                                let message = format!("{}", e);
+                                let mut data = message.split(" ");
+                                if data.next() == Some("ASYNC_WAIT") {
+                                    if let Some(data) = data.next() {
+                                        return context.wait_for(data.to_owned()).then(move |_| {
+                                            Self::deserialize(item, context.clone())
+                                        });
+                                    }
+                                }
+                                panic!(e)
+                            })
                             .map_err(EncodeError::from_format_error)
                             .into_stream()
                     }),
