@@ -25,6 +25,7 @@ serde_bincode = {version = "1.2.0", optional = true, package = "bincode" }
 lazy_static = "1.4.0"
 void = "1.0.2"
 downcast-rs = "1.1.1"
+weak-table = "0.2.3"
 
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen = { version = "0.2.54", optional = true }

@@ -22,7 +22,7 @@ use futures::{
 };
 
 use crate::{
-    channel::{Context, Shim, Target},
+    channel::{Context, Shim, Target, Waiter},
     Kind,
 };
 
@@ -133,7 +133,7 @@ pub trait ApplyDecode<'de, K: Kind> {
     ) -> <F as Decode<'de, Self, K>>::Output
     where
         Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
-        F::Representation: Send + 'static,
+        F::Representation: Clone + Send + 'static,
         <Self as Sink<F::Representation>>::Error: Send,
         T::Item: Send + 'static;
 }
@@ -144,7 +144,7 @@ impl<'de, U, K: Kind> ApplyDecode<'de, K> for U {
     ) -> <F as Decode<'de, Self, K>>::Output
     where
         Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
-        F::Representation: Send,
+        F::Representation: Clone + Send,
         <Self as Sink<F::Representation>>::Error: Send,
         T::Item: Send,
     {
@@ -178,7 +178,7 @@ impl<
         K: Kind,
     > Decode<'de, C, K> for T
 where
-    Self::Representation: Send,
+    Self::Representation: Send + Clone,
     <C as Sink<<Self as Format>::Representation>>::Error: Send,
 {
     type Output = BoxFuture<'static, Result<K, K::ConstructError>>;
@@ -195,11 +195,24 @@ where
                 Box::pin(
                     stream
                         .map(move |item| {
-                            Self::deserialize(item, context.clone())
+                            let ct = context.clone();
+                            Self::deserialize(item.clone(), context.clone())
+                                .or_else(move |e| {
+                                    let context = ct.clone();
+                                    let message = format!("{}", e);
+                                    let mut data = message.split(" ");
+                                    if data.next() == Some("ASYNC_WAIT") {
+                                        if let Some(data) = data.next() {
+                                            return context.wait_for(data.to_owned()).then(
+                                                move |_| Self::deserialize(item, context.clone()),
+                                            );
+                                        }
+                                    }
+                                    panic!(e)
+                                })
                                 .unwrap_or_else(|e| panic!(format!("{:?}", e)))
-                                .into_stream()
                         })
-                        .flatten(),
+                        .buffer_unordered(std::usize::MAX),
                 ),
                 Box::pin(
                     sink.sink_map_err(|_| panic!())
