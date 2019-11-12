@@ -2,10 +2,9 @@ use vessels::{
     channel::IdChannel,
     core,
     core::{
-        Vessel,
         executor::Spawn,
         orchestrator::containers::{web::WebContainers, Containers},
-        Executor,
+        Executor, Vessel,
     },
     format::{ApplyDecode, Cbor},
     log,

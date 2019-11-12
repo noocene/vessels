@@ -4,7 +4,7 @@ use crate::{
     core::{executor::Spawn, Executor},
 };
 use futures::{
-    channel::{mpsc::{unbounded, UnboundedReceiver, UnboundedSender}},
+    channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
     future::BoxFuture,
     lock,
     task::Context,
@@ -15,11 +15,11 @@ use std::{
     pin::Pin,
     sync::{Arc, Mutex},
 };
+use void::Void;
 use wasmer_runtime::{
     compile, func, imports, memory::MemoryView, wasm::Value, Ctx, Export, Instance as WasmInstance,
     Memory, Module,
 };
-use void::Void;
 
 pub struct NativeContainers;
 
