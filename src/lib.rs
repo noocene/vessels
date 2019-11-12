@@ -128,6 +128,8 @@ pub use derive::export;
 #[doc(hidden)]
 pub use futures;
 #[doc(hidden)]
+pub use lazy_static;
+#[doc(hidden)]
 pub use serde;
 #[doc(hidden)]
 pub use void;
