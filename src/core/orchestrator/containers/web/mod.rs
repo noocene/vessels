@@ -26,6 +26,7 @@ unsafe impl Sync for WebInstance {}
 pub struct WebInstance {
     state: InstanceStateWrite,
     _output: Closure<dyn FnMut(u32, u32)>,
+    _panic: Closure<dyn FnMut(u32, u32)>,
     _enqueue: Closure<dyn FnMut()>,
     receiver: Pin<Box<UnboundedReceiver<Vec<u8>>>>,
 }
@@ -118,7 +119,7 @@ impl InstanceStateWrite {
     fn write(&self, data: Vec<u8>) {
         let ptr = self.make_buffer(data.len() as u32);
         Uint8Array::new(&self.memory.buffer()).set(&Uint8Array::from(data.as_slice()), ptr);
-        self.input.call0(&self.input).unwrap();
+        self.input.call1(&self.input, &ptr.into()).unwrap();
     }
 }
 
@@ -204,6 +205,15 @@ impl Containers for WebContainers {
                 let data = h.read(ptr, len);
                 executor.spawn(async move { sender.send(data).unwrap_or_else(|_| panic!()).await });
             }) as Box<dyn FnMut(_, _)>);
+            let h_3 = handle.clone();
+            let panic = Closure::wrap(Box::new(move |ptr: u32, len: u32| {
+                let data = h_3.read(ptr, len);
+                if let Some(item) = String::from_utf8(data).ok() {
+                    panic!(item);
+                } else {
+                    panic!();
+                }
+            }) as Box<dyn FnMut(_, _)>);
             let h_2 = handle.clone();
             let mut handle_executor = core::<dyn Executor>().unwrap();
             let enqueue = Closure::wrap(Box::new(move || {
@@ -224,6 +234,12 @@ impl Containers for WebContainers {
                         &env,
                         &"_EXPORT_enqueue".into(),
                         enqueue.as_ref().unchecked_ref(),
+                    )
+                    .unwrap();
+                    js_sys::Reflect::set(
+                        &env,
+                        &"_EXPORT_panic".into(),
+                        panic.as_ref().unchecked_ref(),
                     )
                     .unwrap();
                     env
@@ -272,6 +288,7 @@ impl Containers for WebContainers {
             WebInstance {
                 state: write,
                 _output: output,
+                _panic: panic,
                 _enqueue: enqueue,
                 receiver: Box::pin(receiver),
             }
