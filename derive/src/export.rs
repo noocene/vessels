@@ -6,6 +6,7 @@ pub fn build(block: TokenStream) -> TokenStream {
         #[cfg(target_arch = "wasm32")]
         extern "C" {
             fn _EXPORT_output(ptr: *const u8, len: usize);
+            fn _EXPORT_panic(ptr: *const u8, len: usize);
         }
         #[cfg(target_arch = "wasm32")]
         fn _EXPORT_safe_output<T: AsRef<[u8]>>(data: T) {
@@ -15,15 +16,16 @@ pub fn build(block: TokenStream) -> TokenStream {
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn _EXPORT_make_buffer(len: usize) -> *mut u8 {
-            use std::{mem::{size_of, forget}, ptr::write};
+            use ::std::{mem::{size_of, forget, align_of}, ptr::write, alloc::{alloc, Layout}};
             let len_size = size_of::<usize>();
-            let mut buf = vec![0u8; len + len_size].into_boxed_slice();
-            let ptr = unsafe { buf.as_mut_ptr() };
-            forget(buf);
             unsafe {
+                let ptr = alloc(Layout::from_size_align(len + len_size, align_of::<u8>()).unwrap());
                 write(ptr as *mut usize, len);
                 ptr.add(len_size)
             }
+        }
+        ::vessels::lazy_static::lazy_static! {
+            static ref DATA: ::vessels::futures::lock::Mutex<(::vessels::futures::channel::mpsc::UnboundedSender<Vec<u8>>, Option<::vessels::futures::channel::mpsc::UnboundedReceiver<Vec<u8>>>)> = { let (sender, receiver) = ::vessels::futures::channel::mpsc::unbounded(); ::vessels::futures::lock::Mutex::new((sender, Some(receiver))) };
         }
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
@@ -31,33 +33,48 @@ pub fn build(block: TokenStream) -> TokenStream {
             use ::std::{mem::size_of, slice};
             unsafe {
                 let len = Box::from_raw(data.sub(size_of::<usize>()) as *mut usize);
-                let data = slice::from_raw_parts_mut(data, *len);
-                let data: Box<[u8]> = Box::from_raw(data);
-                let data = data.into_vec();
-                _EXPORT_safe_output(data);
+                let data = slice::from_raw_parts_mut(data, *len).to_vec();
+                let mut executor = ::vessels::core::<::vessels::core::Executor>().unwrap();
+                use ::vessels::{core::executor::Spawn, futures::SinkExt};
+                executor.spawn(async move {
+                    DATA.lock().await.0.clone().send(data).await.unwrap();
+                });
             }
         }
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn _EXPORT_initialize() {
-            let _export_initializer: fn() -> _ = || {
+            std::panic::set_hook(Box::new(|info| {
+                use ::std::ops::Deref;
+                let cause = info.payload().downcast_ref::<String>().map(String::deref);
+                let cause = cause.unwrap_or_else(||
+                    info.payload().downcast_ref::<&str>().map(|s| *s)
+                        .unwrap_or("<cause unknown>")
+                );
+                let data = format!("panic {}: {}", info, cause);
+                unsafe { _EXPORT_panic(data.as_bytes().as_ptr(), data.len()) };
+            }));
+            let _export_initializer: fn() -> ::vessels::kind::Future<_> = || Box::pin(async {
                 #block
-            };
+            });
             let _test_shims: () = {
                 trait export_helper {
                     type Kind: ::vessels::Kind;
                 }
-                struct export<T: ::vessels::Kind>(fn() -> T);
+                struct export<T: ::vessels::Kind>(fn() -> ::vessels::kind::Future<T>);
                 impl<T: ::vessels::Kind> export_helper for export<T> {
                     type Kind = T;
                 }
                 export(_export_initializer);
             };
-            let data = _export_initializer();
-            use ::vessels::{channel::IdChannel, OnTo, futures::{StreamExt, SinkExt}, format::{ApplyEncode, Cbor}, core, core::{Executor, executor::Spawn}};
+            use ::vessels::{channel::IdChannel, OnTo, futures::{StreamExt, SinkExt, TryFutureExt}, format::{ApplyEncode, Cbor}, core, core::{Executor, executor::Spawn}};
             let mut executor = core::<Executor>().unwrap();
+            let vessel = Box::new(_export_initializer) as ::vessels::core::Vessel<_>;
             executor.spawn(async move {
-                let (mut sink, mut stream) = data.on_to::<IdChannel>().await.encode::<Cbor>().split();
+                let (sink, mut stream) = vessel.on_to::<IdChannel>().await.encode::<Cbor>().split();
+                let receiver = DATA.lock().await.1.take().unwrap();
+                let mut exec = core::<Executor>().unwrap();
+                exec.spawn(receiver.map(Ok).forward(sink).unwrap_or_else(|_| panic!()));
                 while let Some(item) = stream.next().await {
                     _EXPORT_safe_output(item);
                 }

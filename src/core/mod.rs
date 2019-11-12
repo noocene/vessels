@@ -4,10 +4,14 @@ use std::{
     fmt::{self, Display, Formatter},
 };
 
+use crate::kind::Future;
+
 pub mod executor;
 pub use executor::Executor;
 
 pub mod orchestrator;
+
+pub type Vessel<T> = Box<dyn FnOnce() -> Future<T> + Send + Sync>;
 
 pub trait Log {
     fn info(&self, message: String);

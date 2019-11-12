@@ -1,6 +1,6 @@
 use futures::{future::BoxFuture, Future};
 
-pub trait Executor {
+pub trait Executor: Send {
     fn spawn_boxed(&mut self, fut: BoxFuture<'static, ()>);
     fn run_boxed(&mut self, fut: BoxFuture<'static, ()>);
 }

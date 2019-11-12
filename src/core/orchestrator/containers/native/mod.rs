@@ -4,7 +4,7 @@ use crate::{
     core::{executor::Spawn, Executor},
 };
 use futures::{
-    channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
+    channel::{mpsc::{unbounded, UnboundedReceiver, UnboundedSender}},
     future::BoxFuture,
     lock,
     task::Context,
@@ -15,11 +15,11 @@ use std::{
     pin::Pin,
     sync::{Arc, Mutex},
 };
-use void::Void;
 use wasmer_runtime::{
     compile, func, imports, memory::MemoryView, wasm::Value, Ctx, Export, Instance as WasmInstance,
     Memory, Module,
 };
+use void::Void;
 
 pub struct NativeContainers;
 
@@ -39,7 +39,7 @@ impl NativeInstance {
             for (idx, byte) in data.into_iter().enumerate() {
                 view[ptr as usize + idx].set(byte)
             }
-            instance.call("_EXPORT_input", &[]).unwrap();
+            instance.call("_EXPORT_input", &[I32(ptr)]).unwrap();
         } else {
             panic!("bad write")
         }
@@ -107,6 +107,21 @@ fn output(cx: &mut Ctx, ptr: i32, len: i32) {
     });
 }
 
+fn panic(cx: &mut Ctx, ptr: i32, len: i32) {
+    let mem = cx.memory(0);
+    let mut buffer = vec![0u8; len as usize];
+    let view: MemoryView<u8> = mem.view();
+    let ptr = ptr as usize;
+    for (idx, byte) in buffer.iter_mut().enumerate() {
+        *byte = view[ptr + idx].get();
+    }
+    if let Some(item) = String::from_utf8(buffer).ok() {
+        panic!(item);
+    } else {
+        panic!();
+    }
+}
+
 impl Containers for NativeContainers {
     type Module = Module;
     type Compile = BoxFuture<'static, Module>;
@@ -125,6 +140,7 @@ impl Containers for NativeContainers {
                 "env" => {
                     "_EXPORT_enqueue" => func!(enqueue),
                     "_EXPORT_output" => func!(output),
+                    "_EXPORT_panic" => func!(panic),
                 },
             };
             let instance = module.instantiate(&import_object).unwrap();
