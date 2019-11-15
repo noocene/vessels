@@ -383,16 +383,14 @@ impl<
             let handle = context.create::<K>();
             in_channels.insert(
                 handle,
-                Box::pin(
-                    sender
-                        .sink_map_err(|e| panic!(e))
-                        .with(|item: Box<dyn SerdeAny>| {
-                            ok(*(item
-                                .downcast::<K::DeconstructItem>()
-                                .map_err(|_| panic!())
-                                .unwrap()))
-                        }),
-                ) as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ()> + Send>>,
+                Box::pin(sender.sink_map_err(|e| panic!(format!("{:?}", e))).with(
+                    |item: Box<dyn SerdeAny>| {
+                        ok(*(item
+                            .downcast::<K::DeconstructItem>()
+                            .map_err(|_| panic!())
+                            .unwrap()))
+                    },
+                )) as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ()> + Send>>,
             );
             let ct = context.clone();
             let (csender, creceiver) = unbounded();
