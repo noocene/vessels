@@ -13,7 +13,7 @@ impl<T> Kind for BoxStream<'static, T>
 where
     T: Kind,
 {
-    type ConstructItem = ForkHandle;
+    type ConstructItem = Option<ForkHandle>;
     type ConstructError = T::ConstructError;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
@@ -26,11 +26,12 @@ where
         Box::pin(async move {
             while let Some(item) = self.next().await {
                 channel
-                    .send(channel.fork(item).await.unwrap())
+                    .send(Some(channel.fork(item).await.unwrap()))
                     .await
                     .map_err(|_| panic!())
                     .unwrap()
             }
+            channel.send(None).await.map_err(|_| panic!()).unwrap();
             Ok(())
         })
     }
@@ -40,8 +41,11 @@ where
         Box::pin(async move {
             Ok(Box::pin(unfold(channel, |mut channel| {
                 async move {
-                    let handle = channel.next().await.unwrap();
-                    Some((channel.get_fork(handle).await.unwrap(), channel))
+                    if let Some(handle) = channel.next().await.unwrap() {
+                        Some((channel.get_fork(handle).await.unwrap(), channel))
+                    } else {
+                        None
+                    }
                 }
             })) as BoxStream<'static, T>)
         })
