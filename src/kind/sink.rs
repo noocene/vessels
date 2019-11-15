@@ -1,33 +1,33 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind::{Future, Sink},
     ConstructResult, DeconstructResult, Kind,
-    kind::{Sink, Future},
 };
 
 use futures::{
-    future::{BoxFuture, ready},
-    task::{Context, Poll},
+    future::{ready, BoxFuture},
     lock::Mutex,
-    SinkExt, StreamExt,Sink as ISink,
+    task::{Context, Poll},
+    Sink as ISink, SinkExt, StreamExt,
 };
 
-use std::{marker::PhantomData, pin::Pin, sync::{Arc}};
+use std::{marker::PhantomData, pin::Pin, sync::Arc};
 
 use void::Void;
 
 pub struct KindSink<T: Kind, E: Kind, C: Channel<ForkHandle, ForkHandle>> {
     channel: Arc<Mutex<C>>,
     _marker: PhantomData<(T, E)>,
-    item: Future<()>
+    item: Future<()>,
 }
 
-impl<T: Kind, E: Kind, C: Channel<ForkHandle, ForkHandle>> ISink<T> for KindSink<T, E, C> where Self: Unpin {
+impl<T: Kind, E: Kind, C: Channel<ForkHandle, ForkHandle>> ISink<T> for KindSink<T, E, C>
+where
+    Self: Unpin,
+{
     type Error = E;
 
-    fn poll_ready(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
         self.item.as_mut().poll(cx).map(Ok)
     }
 
@@ -41,17 +41,11 @@ impl<T: Kind, E: Kind, C: Channel<ForkHandle, ForkHandle>> ISink<T> for KindSink
         Ok(())
     }
 
-    fn poll_flush(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
         self.item.as_mut().poll(cx).map(Ok)
     }
 
-    fn poll_close(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
         self.item.as_mut().poll(cx).map(Ok)
     }
 }
@@ -59,7 +53,7 @@ impl<T: Kind, E: Kind, C: Channel<ForkHandle, ForkHandle>> ISink<T> for KindSink
 impl<T, E> Kind for Sink<T, E>
 where
     T: Kind + Unpin,
-    E: Kind + Unpin
+    E: Kind + Unpin,
 {
     type ConstructItem = ForkHandle;
     type ConstructError = Void;
@@ -73,7 +67,10 @@ where
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             while let Some(handle) = channel.next().await {
-                if let Err(error) = self.send(channel.get_fork::<T>(handle).await.unwrap()).await {
+                if let Err(error) = self
+                    .send(channel.get_fork::<T>(handle).await.unwrap())
+                    .await
+                {
                     let handle = channel.fork::<E>(error).await.unwrap();
                     channel.send(handle).await.unwrap_or_else(|_| panic!());
                 }
@@ -88,7 +85,7 @@ where
             Ok(Box::pin(KindSink {
                 channel: Arc::new(Mutex::new(channel)),
                 _marker: PhantomData,
-                item: Box::pin(ready(()))
+                item: Box::pin(ready(())),
             }) as Sink<T, E>)
         })
     }
