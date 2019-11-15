@@ -1,6 +1,8 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned};
-use syn::{parse2, parse_quote, parse_str, spanned::Spanned, Fields, Path, Type, WherePredicate};
+use syn::{
+    parse2, parse_quote, parse_str, spanned::Spanned, Data, Fields, Path, Type, WherePredicate,
+};
 use synstructure::{AddBounds, BindStyle, Structure};
 
 pub fn derive(mut s: Structure) -> TokenStream {
@@ -9,6 +11,12 @@ pub fn derive(mut s: Structure) -> TokenStream {
     let ref ident = ast.ident;
     let hygiene = format_ident!("_IMPLEMENT_KIND_FOR_{}", ident);
     let mut using_kinds = ast.attrs.iter().filter(|attr| attr.path == kind_attr);
+    use Data::Struct;
+    let is_struct = if let Struct(_) = ast.data {
+        true
+    } else {
+        false
+    };
     let stream = if let Some(ty) = using_kinds.next() {
         if let Ok(ty) = parse2::<Type>(ty.tokens.clone()) {
             if let Some(ty) = using_kinds.next() {
@@ -157,7 +165,11 @@ pub fn derive(mut s: Structure) -> TokenStream {
                 Unit => {
                     item_fields.extend(quote!(#ident,));
                     let id = &s.ast().ident;
-                    cons_arms.extend(quote!(_DERIVE_Items::#ident => #id::#ident,));
+                    if is_struct {
+                        cons_arms.extend(quote!(_DERIVE_Items::#ident => #id,));
+                    } else {
+                        cons_arms.extend(quote!(_DERIVE_Items::#ident => #id::#ident,));
+                    }
                     return quote! {
                         channel.send({
                             _DERIVE_Items::#ident
