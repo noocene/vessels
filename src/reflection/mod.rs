@@ -70,7 +70,9 @@ pub struct CastError {
 /// Moreover, any type that implements `Trait<dyn SomeTrait>` where `dyn SomeTrait: Reflected` will
 /// have a generated implementation allowing it to satisfy `SomeTrait`.
 pub trait Reflected: 'static {
+    #[doc(hidden)]
     type Shim: Kind;
+    #[doc(hidden)]
     type ErasedShim: From<Box<Self>>;
     #[doc(hidden)]
     const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: ();
