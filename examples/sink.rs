@@ -7,7 +7,7 @@ use vessels::{
     log, OnTo,
 };
 
-use futures::{stream::iter, future::pending, StreamExt,SinkExt, channel::mpsc::{channel}};
+use futures::{channel::mpsc::channel, future::pending, stream::iter, SinkExt, StreamExt};
 
 fn main() {
     let (sender, mut receiver) = channel(0);
