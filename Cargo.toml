@@ -5,13 +5,13 @@ authors = ["Izzy Swart <zenerboson@gmail.com>"]
 edition = "2018"
 
 [workspace]
-members = [".", "./derive", "examples/core_test", "examples/native_core_test"]
+members = [".", "./derive", "examples/vessel", "examples/native_vessel"]
 
 [features]
 cbor = ["serde_cbor"]
 json = ["serde_json"]
 bincode = ["serde_bincode"]
-core = ["wasm-bindgen", "web-sys", "wasmer-runtime", "derive/core", "js-sys", "wasm-bindgen-futures"]
+core = ["wasm-bindgen", "web-sys", "wasmer-runtime", "derive/core", "js-sys", "wasm-bindgen-futures", "ring"]
 default = ["cbor", "json", "bincode"]
 
 [dependencies]
@@ -29,12 +29,13 @@ weak-table = "0.2.3"
 
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen = { version = "0.2.54", optional = true }
-web-sys = { version = "0.3.30", optional = true, features = ["console"] }
+web-sys = { version = "0.3.30", optional = true, features = ["console", "Window", "Crypto"] }
 js-sys = { version = "0.3.30", optional = true }
 wasm-bindgen-futures = { version = "0.4.4", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 wasmer-runtime = { version = "0.9.0", optional = true }
+ring = { version = "0.16.9", optional = true }
 
 [dependencies.derive]
 path = "./derive"
