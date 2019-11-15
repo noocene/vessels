@@ -1,5 +1,6 @@
 use crate::{kind::Future, object, Kind};
 
+use failure::Fail;
 use std::net::SocketAddr;
 
 #[derive(Kind)]
@@ -13,7 +14,11 @@ pub struct StaticCandidate {
 #[object]
 pub trait Peer {}
 
+#[derive(Fail, Debug, Kind)]
+#[fail(display = "connection failed")]
+pub struct ConnectError;
+
 #[object]
 pub trait Network {
-    fn connect(&self, address: StaticCandidate) -> Future<Box<dyn Peer>>;
+    fn connect(&self, address: StaticCandidate) -> Future<Result<Box<dyn Peer>, ConnectError>>;
 }
