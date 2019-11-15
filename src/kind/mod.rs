@@ -9,6 +9,7 @@ mod phantom_data;
 mod primitives;
 mod result;
 pub mod serde;
+mod sink;
 mod stream;
 mod tuple;
 mod unit;
@@ -18,12 +19,15 @@ pub use self::serde::Serde;
 pub use default::Default;
 pub use iterator::Iterator;
 
-use futures::{future::BoxFuture, stream::BoxStream};
+use futures::{future::BoxFuture, stream::BoxStream, Sink as ISink};
+
+use std::pin::Pin;
 
 use crate::Kind;
 
 pub type Stream<T> = BoxStream<'static, T>;
 pub type Future<T> = BoxFuture<'static, T>;
+pub type Sink<T, E> = Pin<Box<dyn ISink<T, Error = E> + Send>>;
 
 pub trait AsKindMarker {}
 
