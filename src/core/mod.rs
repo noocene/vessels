@@ -9,6 +9,7 @@ use crate::kind::Future;
 pub mod executor;
 pub use executor::Executor;
 
+pub mod hal;
 pub mod orchestrator;
 
 pub type Vessel<T> = Box<dyn FnOnce() -> Future<T> + Send + Sync>;
