@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Kind)]
 pub struct StaticCandidate {
     pub ufrag: [u8; 3],
-    pub pwd: [u8; 16],
+    pub pwd: [u8; 24],
     pub fingerprint: [u8; 32],
     pub addr: SocketAddr,
 }

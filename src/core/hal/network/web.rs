@@ -31,33 +31,38 @@ impl<F: IFuture> IFuture for SendAssert<F> {
 struct SendAssert<F: IFuture>(Pin<Box<F>>);
 
 impl INetwork for Network {
-    fn connect(&mut self, candidate: StaticCandidate) -> Future<Result<Box<dyn IPeer>, ConnectError>> {
+    fn connect(
+        &mut self,
+        candidate: StaticCandidate,
+    ) -> Future<Result<Box<dyn IPeer>, ConnectError>> {
         Box::pin(SendAssert(Box::pin(async move {
             let mut fingerprint = String::new();
             for byte in candidate.fingerprint.iter() {
-                write!(fingerprint, "{:X}:", byte).unwrap();
+                write!(fingerprint, "{:02X}:", byte).unwrap();
             }
             fingerprint.pop();
             let sdp = format!(
-                "v=0
-            o=- 0 2 IN IP4 0.0.0.0
-            s=-
-            t=0 0
-            a=group:BUNDLE data
-            a=msid-semantic: WMS
-            m=application 9 DTLS/SCTP 5000
-            c=IN IP4 0.0.0.0
-            a=setup:passive
-            a=mid:data
-            a=ice-ufrag:{}
-            a=ice-pwd:{}
-            a=fingerprint:sha-256 {}",
+                r#"v=0
+o=- 0 2 IN IP4 0.0.0.0
+s=-
+t=0 0
+a=group:BUNDLE 0
+a=msid-semantic: WMS
+m=application 9 DTLS/SCTP 5000
+c=IN IP4 0.0.0.0
+a=setup:passive
+a=mid:0
+a=ice-ufrag:{}
+a=ice-pwd:{}
+a=fingerprint:sha-256 {}
+"#,
                 base64::encode(&candidate.ufrag),
                 base64::encode(&candidate.pwd),
                 fingerprint
             );
             let connection =
                 RtcPeerConnection::new().expect("could not instantiate peer connection");
+            connection.create_data_channel("signalling");
             let offer = JsFuture::from(connection.create_offer()).await.unwrap();
             JsFuture::from(connection.set_local_description(offer.dyn_ref().unwrap()))
                 .await
@@ -74,7 +79,7 @@ impl INetwork for Network {
                         candidate.addr.ip(),
                         candidate.addr.port()
                     ))
-                    .sdp_mid(Some("data"))
+                    .sdp_mid(Some("0"))
                     .sdp_m_line_index(Some(0)),
                 )),
             )

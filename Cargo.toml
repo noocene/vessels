@@ -5,7 +5,7 @@ authors = ["Izzy Swart <zenerboson@gmail.com>"]
 edition = "2018"
 
 [workspace]
-members = [".", "./derive", "examples/vessel", "examples/native_vessel"]
+members = [".", "./derive", "examples/vessel", "examples/native_vessel", "examples/network"]
 
 [features]
 cbor = ["serde_cbor"]
@@ -36,7 +36,8 @@ web-sys = { version = "0.3.30", optional = true, features = [
         "RtcPeerConnection", 
         "RtcSessionDescriptionInit",
         "RtcSdpType",
-        "RtcIceCandidateInit"
+        "RtcIceCandidateInit",
+        "RtcDataChannel"
     ] }
 js-sys = { version = "0.3.30", optional = true }
 wasm-bindgen-futures = { version = "0.4.4", optional = true }
