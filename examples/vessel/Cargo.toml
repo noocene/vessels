@@ -1,5 +1,5 @@
 [package]
-name = "core_test"
+name = "vessel"
 version = "0.1.0"
 authors = ["Izzy Swart <zenerboson@gmail.com>"]
 edition = "2018"
