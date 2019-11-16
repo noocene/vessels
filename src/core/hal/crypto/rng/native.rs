@@ -2,8 +2,8 @@ use super::Rng as IRng;
 
 use crate::kind::Future;
 
-use ring::rand::{SecureRandom, SystemRandom};
 use lazy_static::lazy_static;
+use ring::rand::{SecureRandom, SystemRandom};
 
 lazy_static! {
     pub(crate) static ref RNG: SystemRandom = SystemRandom::new();
