@@ -1,5 +1,5 @@
 [package]
-name = "native_core_test"
+name = "native_vessel"
 version = "0.1.0"
 authors = ["Izzy Swart <zenerboson@gmail.com>"]
 edition = "2018"
