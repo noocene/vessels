@@ -23,7 +23,7 @@ where
             channel
                 .send(match self {
                     None => None,
-                    Some(item) => Some(channel.fork(item).await.unwrap()),
+                    Some(item) => Some(channel.fork(item).await?),
                 })
                 .await
                 .map_err(|_| panic!())
@@ -34,7 +34,7 @@ where
     ) -> Self::ConstructFuture {
         Box::pin(async move {
             Ok(match channel.next().await.unwrap() {
-                Some(item) => Some(channel.get_fork(item).await.unwrap()),
+                Some(item) => Some(channel.get_fork(item).await?),
                 None => None,
             })
         })

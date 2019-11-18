@@ -26,12 +26,11 @@ where
         Box::pin(async move {
             while let Some(item) = self.next().await {
                 channel
-                    .send(Some(channel.fork(item).await.unwrap()))
+                    .send(Some(channel.fork(item).await?))
                     .await
-                    .map_err(|_| panic!())
-                    .unwrap()
+                    .unwrap_or_else(|_| panic!())
             }
-            channel.send(None).await.map_err(|_| panic!()).unwrap();
+            channel.send(None).await.unwrap_or_else(|_| panic!());
             Ok(())
         })
     }
