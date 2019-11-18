@@ -6,7 +6,10 @@ use serde::{
     Deserialize, Serialize,
 };
 
-use std::marker::Unpin;
+use std::{
+    fmt::{self, Display, Formatter},
+    marker::Unpin,
+};
 
 use crate::Kind;
 
@@ -15,6 +18,12 @@ use futures::{future::BoxFuture, Sink, Stream};
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, Copy)]
 #[repr(transparent)]
 pub struct ForkHandle(pub(crate) u32);
+
+impl Display for ForkHandle {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "{}", self.0)
+    }
+}
 
 pub trait Fork: Send + 'static {
     fn fork<K: Kind>(&self, kind: K)
