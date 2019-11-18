@@ -24,13 +24,13 @@ impl Format for Json {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
+    ) -> BoxFuture<'static, Result<T::Value, (Self::Error, Self::Representation)>>
     where
         T: Send + 'static,
     {
         Box::pin(async move {
             let mut deserializer = serde_json::Deserializer::from_reader(item.as_bytes());
-            context.deserialize(&mut deserializer)
+            context.deserialize(&mut deserializer).map_err(|e| (e, item))
         })
     }
 }

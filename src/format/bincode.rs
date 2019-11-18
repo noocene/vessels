@@ -28,12 +28,12 @@ impl Format for Bincode {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
+    ) -> BoxFuture<'static, Result<T::Value, (Self::Error, Self::Representation)>>
     where
         T: Send + 'static,
     {
         Box::pin(
-            async move { serde_bincode::config().deserialize_from_seed(context, item.as_slice()) },
+            async move { serde_bincode::config().deserialize_from_seed(context, item.as_slice()).map_err(|e| (e, item)) },
         )
     }
 }
