@@ -8,7 +8,7 @@ use crate::{
     ConstructResult, DeconstructResult, Kind,
 };
 
-use super::{using, AsKind};
+use super::{using, AsKind, ConstructError};
 
 use std::{iter::FromIterator, ops::Deref};
 
@@ -105,7 +105,7 @@ where
     T::IntoIter: Send,
 {
     type ConstructItem = Vec<ForkHandle>;
-    type ConstructError = <<T as IntoIterator>::Item as Kind>::ConstructError;
+    type ConstructError = ConstructError<<<T as IntoIterator>::Item as Kind>::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = <<T as IntoIterator>::Item as Kind>::DeconstructError;
@@ -118,10 +118,11 @@ where
         Box::pin(async move {
             channel
                 .send(
-                    try_join_all(self.0.into_iter().map(|entry| {
-                        channel
-                            .fork::<<T as IntoIterator>::Item>(entry)
-                    }))
+                    try_join_all(
+                        self.0
+                            .into_iter()
+                            .map(|entry| channel.fork::<<T as IntoIterator>::Item>(entry)),
+                    )
                     .await?,
                 )
                 .await
@@ -132,12 +133,16 @@ where
         mut channel: C,
     ) -> Self::ConstructFuture {
         Box::pin(async move {
-            let handles = channel.next().await.unwrap();
+            let handles = channel.next().await.ok_or(ConstructError::Insufficient {
+                got: 0,
+                expected: 1,
+            })?;
             Ok(Iterator(
-                try_join_all(handles.into_iter().map(|entry| {
-                    channel
-                        .get_fork::<<T as IntoIterator>::Item>(entry)
-                }))
+                try_join_all(
+                    handles
+                        .into_iter()
+                        .map(|entry| channel.get_fork::<<T as IntoIterator>::Item>(entry)),
+                )
                 .await?
                 .into_iter()
                 .collect(),

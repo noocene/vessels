@@ -6,6 +6,7 @@ mod id;
 pub(crate) use id::Id;
 use id::REGISTRY;
 
+use failure::{Error, Fail};
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
     future::{ok, BoxFuture},
@@ -19,7 +20,6 @@ use std::{
     pin::Pin,
     sync::{Arc, Mutex},
 };
-use failure::{Fail, Error};
 
 use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle, Waiter},
@@ -229,14 +229,12 @@ impl IdChannelHandle {
                 let mut in_channels = in_channels.lock().unwrap();
                 in_channels.insert(
                     id,
-                    Box::pin(sender.with(
-                        |item: Box<dyn SerdeAny>| {
-                            ok(*(item
-                                .downcast::<K::DeconstructItem>()
-                                .map_err(|e| panic!(e))
-                                .unwrap()))
-                        },
-                    )),
+                    Box::pin(sender.with(|item: Box<dyn SerdeAny>| {
+                        ok(*(item
+                            .downcast::<K::DeconstructItem>()
+                            .map_err(|e| panic!(e))
+                            .unwrap()))
+                    })),
                 );
                 Ok(id)
             }),
@@ -420,8 +418,7 @@ impl<
                         .downcast::<K::DeconstructItem>()
                         .map_err(|_| panic!())
                         .unwrap()))
-                }))
-                    as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = Error> + Send>>,
+                })) as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = Error> + Send>>,
             );
             let ct = context.clone();
             let (csender, creceiver) = unbounded();

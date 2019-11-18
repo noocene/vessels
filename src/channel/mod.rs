@@ -3,6 +3,7 @@ pub use id_channel::IdChannel;
 
 use crate::Kind;
 
+use failure::Error;
 use futures::{future::BoxFuture, Sink, Stream};
 use serde::{
     de::{DeserializeOwned, DeserializeSeed},
@@ -12,7 +13,6 @@ use std::{
     fmt::{self, Display, Formatter},
     marker::Unpin,
 };
-use failure::Error;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, Copy)]
 #[repr(transparent)]

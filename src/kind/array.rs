@@ -3,14 +3,15 @@ use crate::{
     ConstructResult, DeconstructResult, Kind,
 };
 
+use failure::Fail;
 use futures::{
     future::{ok, try_join_all, BoxFuture, Ready},
     FutureExt, SinkExt, StreamExt, TryFutureExt,
 };
-
 use std::{mem::MaybeUninit, ptr};
-
 use void::Void;
+
+use super::ConstructError;
 
 impl<T: Send + 'static> Kind for [T; 0] {
     type ConstructItem = ();
@@ -33,13 +34,21 @@ impl<T: Send + 'static> Kind for [T; 0] {
     }
 }
 
+#[derive(Fail, Debug)]
+pub enum ArrayError<T: Fail> {
+    #[fail(display = "{}", _0)]
+    Construct(T),
+    #[fail(display = "expected {} elements in array, got {}", expected, got)]
+    Length { got: usize, expected: usize },
+}
+
 macro_rules! array_impl {
     ($($len:expr => ($($n:tt $nn:ident)+))+) => {$(
         impl<T> Kind for [T; $len]
             where T: Kind
         {
             type ConstructItem = Vec<ForkHandle>;
-            type ConstructError = T::ConstructError;
+            type ConstructError = ConstructError<ArrayError<T::ConstructError>>;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
             type DeconstructError = T::DeconstructError;
@@ -63,22 +72,33 @@ macro_rules! array_impl {
                 Box::pin(
                     channel
                         .into_future()
-                        .then(move |(item, channel)| {
+                        .then(move |(item, channel)| async move {
                             try_join_all(
-                                item.unwrap()
+                                item.ok_or(ConstructError::Insufficient {
+                                    got: 0,
+                                    expected: 1
+                                })?
                                     .into_iter()
                                     .map(move |item| channel.get_fork::<T>(item)),
-                            ).map_ok(|items| {
-                                let len = items.len();
-                                if len != $len {
-                                    panic!("expected data with {} elements, got {}", $len, len)
+                            ).map_err(ArrayError::Construct).map(|items| {
+                                match items {
+                                    Ok(items) => {
+                                        let len = items.len();
+                                        if len != $len {
+                                            Err(ArrayError::Length {
+                                                got: len,
+                                                expected: $len
+                                            })?;
+                                        }
+                                        let mut arr = MaybeUninit::uninit();
+                                        for (i, item) in items.into_iter().enumerate() {
+                                            unsafe { ptr::write((arr.as_mut_ptr() as *mut T).add(i), item) };
+                                        }
+                                        unsafe { Ok(arr.assume_init()) }
+                                    }
+                                    Err(e) => Err(e)
                                 }
-                                let mut arr = MaybeUninit::uninit();
-                                for (i, item) in items.into_iter().enumerate() {
-                                    unsafe { ptr::write((arr.as_mut_ptr() as *mut T).add(i), item) };
-                                }
-                                unsafe { arr.assume_init() }
-                            })
+                            }).await.map_err(From::from)
                         })
                 )
             }

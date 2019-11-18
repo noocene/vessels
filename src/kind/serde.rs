@@ -4,7 +4,7 @@ use futures::{future::BoxFuture, SinkExt, StreamExt};
 
 use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
 
-use super::{using, AsKind};
+use super::{using, AsKind, ConstructError};
 
 use std::ops::Deref;
 
@@ -46,7 +46,7 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> AsKind<usi
 
 impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> Kind for Serde<T> {
     type ConstructItem = T;
-    type ConstructError = Void;
+    type ConstructError = ConstructError<Void>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = Void;
@@ -61,6 +61,13 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> Kind for S
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         mut channel: C,
     ) -> Self::ConstructFuture {
-        Box::pin(async move { Ok(Serde(channel.next().await.unwrap())) })
+        Box::pin(async move {
+            Ok(Serde(channel.next().await.ok_or(
+                ConstructError::Insufficient {
+                    got: 0,
+                    expected: 1,
+                },
+            )?))
+        })
     }
 }
