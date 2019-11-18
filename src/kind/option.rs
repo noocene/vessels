@@ -5,12 +5,14 @@ use crate::{
 
 use futures::{future::BoxFuture, SinkExt, StreamExt};
 
+use super::ConstructError;
+
 impl<T> Kind for Option<T>
 where
     T: Kind,
 {
     type ConstructItem = Option<ForkHandle>;
-    type ConstructError = T::ConstructError;
+    type ConstructError = ConstructError<T::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = T::DeconstructError;
@@ -33,10 +35,15 @@ where
         mut channel: C,
     ) -> Self::ConstructFuture {
         Box::pin(async move {
-            Ok(match channel.next().await.unwrap() {
-                Some(item) => Some(channel.get_fork(item).await?),
-                None => None,
-            })
+            Ok(
+                match channel.next().await.ok_or(ConstructError::Insufficient {
+                    got: 0,
+                    expected: 1,
+                })? {
+                    Some(item) => Some(channel.get_fork(item).await?),
+                    None => None,
+                },
+            )
         })
     }
 }

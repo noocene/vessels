@@ -13,13 +13,15 @@ use futures::{
     SinkExt, StreamExt, TryFutureExt,
 };
 
+use super::ConstructError;
+
 macro_rules! iterator_impl {
     ($($ty:ident < T $(: $tbound1:ident $(+ $tbound2:ident)*)* $(, $typaram:ident : $bound:ident)* >),+) => {$(
         impl<T $(, $typaram)*> Kind for $ty<T $(, $typaram)*>
             where T: Kind $(+ $tbound1 $(+ $tbound2)*)*, $($typaram: $bound,)*
         {
             type ConstructItem = Vec<ForkHandle>;
-            type ConstructError = T::ConstructError;
+            type ConstructError = ConstructError<T::ConstructError>;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
             type DeconstructError = T::DeconstructError;
@@ -39,13 +41,16 @@ macro_rules! iterator_impl {
                 mut channel: C,
             ) -> Self::ConstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
+                    let handles = channel.next().await.ok_or(ConstructError::<T::ConstructError>::Insufficient {
+                        got: 0,
+                        expected: 1
+                    })?;
                     try_join_all(
                         handles
                             .into_iter()
                             .map(|entry| channel.get_fork::<T>(entry)),
                     )
-                    .map_ok(|vec| vec.into_iter().collect()).await
+                    .map_ok(|vec| vec.into_iter().collect()).await.map_err(From::from)
                 })
             }
         }
@@ -68,7 +73,7 @@ macro_rules! map_impl {
             V: Kind
         {
             type ConstructItem = Vec<ForkHandle>;
-            type ConstructError = <(K, V) as Kind>::ConstructError;
+            type ConstructError = ConstructError<<(K, V) as Kind>::ConstructError>;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
             type DeconstructError = <(K, V) as Kind>::DeconstructError;
@@ -88,13 +93,16 @@ macro_rules! map_impl {
                 mut channel: C,
             ) -> Self::ConstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
+                    let handles = channel.next().await.ok_or(ConstructError::<<(K, V) as Kind>::ConstructError>::Insufficient {
+                        got: 0,
+                        expected: 1
+                    })?;
                     try_join_all(
                         handles
                             .into_iter()
                             .map(|entry| channel.get_fork::<(K, V)>(entry)),
                     )
-                    .map_ok(|vec| vec.into_iter().collect()).await
+                    .map_ok(|vec| vec.into_iter().collect()).await.map_err(From::from)
                 })
             }
         }
