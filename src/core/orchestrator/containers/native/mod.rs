@@ -7,8 +7,8 @@ use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
     future::BoxFuture,
     lock,
-    task::Context,
-    Poll, Sink, SinkExt, Stream,
+    task::{Context, Poll},
+    Sink, SinkExt, Stream,
 };
 use std::{
     ffi::c_void,

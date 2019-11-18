@@ -9,8 +9,8 @@ use id::REGISTRY;
 use futures::{
     channel::mpsc::{unbounded, SendError, UnboundedReceiver, UnboundedSender},
     future::{lazy, ok, BoxFuture},
-    task::Context as FContext,
-    Future, FutureExt, Poll, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
+    task::{Context as FContext, Poll},
+    Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
 };
 
 use serde::{de::DeserializeOwned, Serialize};
@@ -91,9 +91,9 @@ impl Sink<Item> for IdChannel {
             .lock()
             .unwrap()
             .values_mut()
-            .map(|item| item.as_mut().poll_flush(cx))
+            .map(|item| item.as_mut().poll_ready(cx))
             .find(|poll| match poll {
-                Poll::Ready(_) => false,
+                Poll::Ready(Ok(_)) => false,
                 _ => true,
             })
         {
@@ -108,9 +108,9 @@ impl Sink<Item> for IdChannel {
             .lock()
             .unwrap()
             .values_mut()
-            .map(|item| item.as_mut().poll_close(cx))
+            .map(|item| item.as_mut().poll_ready(cx))
             .find(|poll| match poll {
-                Poll::Ready(_) => false,
+                Poll::Ready(Ok(_)) => false,
                 _ => true,
             })
         {
@@ -207,16 +207,14 @@ impl IdChannelHandle {
                 let mut in_channels = in_channels.lock().unwrap();
                 in_channels.insert(
                     id,
-                    Box::pin(
-                        sender
-                            .sink_map_err(|e| panic!(e))
-                            .with(|item: Box<dyn SerdeAny>| {
-                                ok(*(item
-                                    .downcast::<K::DeconstructItem>()
-                                    .map_err(|e| panic!(e))
-                                    .unwrap()))
-                            }),
-                    ),
+                    Box::pin(sender.sink_map_err(|e| panic!(format!("{:?}", e))).with(
+                        |item: Box<dyn SerdeAny>| {
+                            ok(*(item
+                                .downcast::<K::DeconstructItem>()
+                                .map_err(|e| panic!(e))
+                                .unwrap()))
+                        },
+                    )),
                 );
                 Ok(id)
             }),
@@ -232,14 +230,15 @@ impl IdChannelHandle {
         self.context.add::<K>(fork_ref);
         let (sender, ireceiver): (UnboundedSender<K::DeconstructItem>, _) = unbounded();
         let (isender, receiver): (UnboundedSender<K::ConstructItem>, _) = unbounded();
-        let isender = isender
-            .sink_map_err(|e| panic!(e))
-            .with(|item: Box<dyn SerdeAny>| {
-                ok(*(match item.downcast::<K::ConstructItem>() {
-                    Ok(item) => item,
-                    Err(_) => panic!(),
-                }))
-            });
+        let isender =
+            isender
+                .sink_map_err(|e| panic!(format!("{:?}", e)))
+                .with(|item: Box<dyn SerdeAny>| {
+                    ok(*(match item.downcast::<K::ConstructItem>() {
+                        Ok(item) => item,
+                        Err(_) => panic!(),
+                    }))
+                });
         self.in_channels
             .lock()
             .unwrap()

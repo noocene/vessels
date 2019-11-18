@@ -6,8 +6,8 @@ use crate::{
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver},
     future::LocalBoxFuture,
-    task::Context,
-    Future, Poll, Sink, SinkExt, Stream, TryFutureExt,
+    task::{Context, Poll},
+    Future, Sink, SinkExt, Stream, TryFutureExt,
 };
 use js_sys::{
     Function, Number, Uint8Array,
