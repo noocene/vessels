@@ -20,7 +20,7 @@ fn main() {
         });
         let encoded = sender.on_to::<IdChannel>().await.encode::<Json>();
         let mut decoded: Sink<u32, ()> = encoded.decode::<IdChannel, Json>().await.unwrap();
-        decoded.send_all(&mut iter(1..10)).await.unwrap();
+        decoded.send_all(&mut iter(1..10).map(Ok)).await.unwrap();
         pending::<()>().await;
     });
 }

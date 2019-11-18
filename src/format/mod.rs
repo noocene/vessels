@@ -18,8 +18,8 @@ use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver},
     future::{ok, BoxFuture},
     stream::BoxStream,
-    task::Context as FContext,
-    Future, FutureExt, Poll, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
+    task::{Context as FContext, Poll},
+    Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
 };
 
 use crate::{
