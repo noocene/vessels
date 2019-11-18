@@ -30,6 +30,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use failure::Fail;
+
 use super::Shim as IShim;
 
 pub struct IdChannel {
@@ -38,16 +40,18 @@ pub struct IdChannel {
         Pin<Box<UnboundedSender<Item>>>,
     ),
     context: Context,
-    in_channels:
-        Arc<Mutex<HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ()> + Send>>>>>,
+    in_channels: Arc<
+        Mutex<HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = SendError> + Send>>>>,
+    >,
 }
 
 #[derive(Clone)]
 struct IdChannelHandle {
     out_channel: Pin<Box<UnboundedSender<Item>>>,
     context: Context,
-    in_channels:
-        Arc<Mutex<HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ()> + Send>>>>>,
+    in_channels: Arc<
+        Mutex<HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = SendError> + Send>>>>,
+    >,
 }
 
 impl Stream for IdChannel {
@@ -58,14 +62,27 @@ impl Stream for IdChannel {
     }
 }
 
+#[derive(Debug, Fail)]
+pub enum IdChannelError {
+    #[fail(display = "send on underlying channel {} failed: {}", _0, _1)]
+    Channel(ForkHandle, SendError),
+    #[fail(display = "underlying channel {} does not exist", _0)]
+    InvalidId(ForkHandle),
+}
+
 impl Sink<Item> for IdChannel {
-    type Error = ();
+    type Error = IdChannelError;
 
     fn start_send(self: Pin<&mut Self>, item: Item) -> Result<(), Self::Error> {
-        if let Some(channel) = self.in_channels.lock().unwrap().get_mut(&item.0) {
-            channel.as_mut().start_send(item.1)
-        } else {
-            Err(())
+        match self.in_channels.lock().unwrap().get_mut(&item.0) {
+            Some(channel) => {
+                let (id, data) = (item.0, item.1);
+                channel
+                    .as_mut()
+                    .start_send(data)
+                    .map_err(move |e| IdChannelError::Channel(id, e))
+            }
+            None => Err(IdChannelError::InvalidId(item.0)),
         }
     }
     fn poll_ready(self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
@@ -73,14 +90,15 @@ impl Sink<Item> for IdChannel {
             .in_channels
             .lock()
             .unwrap()
-            .values_mut()
-            .map(|item| item.as_mut().poll_ready(cx))
-            .find(|poll| match poll {
-                Poll::Ready(_) => false,
+            .iter_mut()
+            .map(|(k, item)| (k, item.as_mut().poll_ready(cx)))
+            .find(|(_, poll)| match poll {
+                Poll::Ready(Ok(_)) => false,
                 _ => true,
             })
         {
-            result
+            let (id, result) = result;
+            result.map_err(move |e| IdChannelError::Channel(*id, e))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -90,14 +108,15 @@ impl Sink<Item> for IdChannel {
             .in_channels
             .lock()
             .unwrap()
-            .values_mut()
-            .map(|item| item.as_mut().poll_ready(cx))
-            .find(|poll| match poll {
+            .iter_mut()
+            .map(|(k, item)| (k, item.as_mut().poll_ready(cx)))
+            .find(|(_, poll)| match poll {
                 Poll::Ready(Ok(_)) => false,
                 _ => true,
             })
         {
-            result
+            let (id, result) = result;
+            result.map_err(move |e| IdChannelError::Channel(*id, e))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -107,14 +126,15 @@ impl Sink<Item> for IdChannel {
             .in_channels
             .lock()
             .unwrap()
-            .values_mut()
-            .map(|item| item.as_mut().poll_ready(cx))
-            .find(|poll| match poll {
+            .iter_mut()
+            .map(|(k, item)| (k, item.as_mut().poll_ready(cx)))
+            .find(|(_, poll)| match poll {
                 Poll::Ready(Ok(_)) => false,
                 _ => true,
             })
         {
-            result
+            let (id, result) = result;
+            result.map_err(move |e| IdChannelError::Channel(*id, e))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -230,15 +250,12 @@ impl IdChannelHandle {
         self.context.add::<K>(fork_ref);
         let (sender, ireceiver): (UnboundedSender<K::DeconstructItem>, _) = unbounded();
         let (isender, receiver): (UnboundedSender<K::ConstructItem>, _) = unbounded();
-        let isender =
-            isender
-                .sink_map_err(|e| panic!(format!("{:?}", e)))
-                .with(|item: Box<dyn SerdeAny>| {
-                    ok(*(match item.downcast::<K::ConstructItem>() {
-                        Ok(item) => item,
-                        Err(_) => panic!(),
-                    }))
-                });
+        let isender = isender.with(|item: Box<dyn SerdeAny>| {
+            ok(*(match item.downcast::<K::ConstructItem>() {
+                Ok(item) => item,
+                Err(_) => panic!(),
+            }))
+        });
         self.in_channels
             .lock()
             .unwrap()
@@ -382,14 +399,13 @@ impl<
             let handle = context.create::<K>();
             in_channels.insert(
                 handle,
-                Box::pin(sender.sink_map_err(|e| panic!(format!("{:?}", e))).with(
-                    |item: Box<dyn SerdeAny>| {
-                        ok(*(item
-                            .downcast::<K::DeconstructItem>()
-                            .map_err(|_| panic!())
-                            .unwrap()))
-                    },
-                )) as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ()> + Send>>,
+                Box::pin(sender.with(|item: Box<dyn SerdeAny>| {
+                    ok(*(item
+                        .downcast::<K::DeconstructItem>()
+                        .map_err(|_| panic!())
+                        .unwrap()))
+                }))
+                    as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = SendError> + Send>>,
             );
             let ct = context.clone();
             let (csender, creceiver) = unbounded();
