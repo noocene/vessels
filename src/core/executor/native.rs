@@ -1,5 +1,8 @@
 use super::Executor;
-use futures::{executor::ThreadPool, future::BoxFuture};
+use futures::{
+    executor::{block_on, ThreadPool},
+    future::BoxFuture,
+};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -15,7 +18,7 @@ impl Executor for Spawner {
         self.inner.spawn_ok(future)
     }
     fn run_boxed(&mut self, future: BoxFuture<'static, ()>) {
-        self.inner.run(future)
+        block_on(future);
     }
 }
 

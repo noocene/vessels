@@ -33,7 +33,9 @@ impl dyn Network {
         #[cfg(all(target_arch = "wasm32", feature = "core"))]
         return Ok(web::Network::new());
         #[cfg(all(not(target_arch = "wasm32"), feature = "core"))]
-        return Ok(native::Rng::new());
+        return Err(UnimplementedError {
+            feature: "networking".to_owned(),
+        });
         #[cfg(not(feature = "core"))]
         return Err(UnimplementedError {
             feature: "networking".to_owned(),
