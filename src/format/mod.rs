@@ -137,7 +137,7 @@ pub trait ApplyDecode<'de, K: Kind> {
     where
         Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
         F::Representation: Clone + Send + 'static,
-        <Self as Sink<F::Representation>>::Error: Send,
+        <Self as Sink<F::Representation>>::Error: Fail,
         T::Item: Send + 'static;
 }
 
@@ -148,7 +148,7 @@ impl<'de, U, K: Kind> ApplyDecode<'de, K> for U {
     where
         Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
         F::Representation: Clone + Send,
-        <Self as Sink<F::Representation>>::Error: Send,
+        <Self as Sink<F::Representation>>::Error: Fail,
         T::Item: Send,
     {
         <F as Decode<'de, Self, K>>::decode::<T>(self)
@@ -182,7 +182,7 @@ impl<
     > Decode<'de, C, K> for T
 where
     Self::Representation: Send + Clone,
-    <C as Sink<<Self as Format>::Representation>>::Error: Send,
+    <C as Sink<<Self as Format>::Representation>>::Error: Fail,
 {
     type Output = BoxFuture<'static, Result<K, K::ConstructError>>;
 
@@ -233,15 +233,15 @@ pub enum EncodeError<T: Format, I, S: Sink<I>> {
 
 impl<I: 'static, T: Format + 'static, S: Sink<I> + 'static> Fail for EncodeError<T, I, S>
 where
-    T::Error: Send + Sync + Display + Debug,
-    S::Error: Send + Sync + Display + Debug,
+    T::Error: Fail,
+    S::Error: Fail,
 {
 }
 
 impl<T: Format, I, S: Sink<I>> Display for EncodeError<T, I, S>
 where
-    T::Error: Display,
-    S::Error: Display,
+    T::Error: Fail,
+    S::Error: Fail,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match *self {
@@ -255,8 +255,8 @@ where
 
 impl<T: Format, I, S: Sink<I>> Debug for EncodeError<T, I, S>
 where
-    T::Error: Debug,
-    S::Error: Debug,
+    T::Error: Fail,
+    S::Error: Fail,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match *self {
@@ -287,7 +287,7 @@ impl<
 where
     T::Representation: Send + Clone,
     <C as Context<'de>>::Item: Send,
-    <C as Sink<<C as Context<'de>>::Item>>::Error: Send,
+    <C as Sink<<C as Context<'de>>::Item>>::Error: Fail,
 {
     type Output = StreamSink<
         Self::Representation,
@@ -320,7 +320,7 @@ where
             .buffer_unordered(std::usize::MAX);
         core::<dyn Executor>().unwrap().spawn(
             receiver
-                .forward(sink.sink_map_err(|_| panic!()))
+                .forward(sink.sink_map_err(|e| panic!(format!("{}", e))))
                 .unwrap_or_else(|_| panic!()),
         );
         StreamSink(
