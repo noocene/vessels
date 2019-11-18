@@ -30,7 +30,9 @@ impl Format for Json {
     {
         Box::pin(async move {
             let mut deserializer = serde_json::Deserializer::from_reader(item.as_bytes());
-            context.deserialize(&mut deserializer).map_err(|e| (e, item))
+            context
+                .deserialize(&mut deserializer)
+                .map_err(|e| (e, item))
         })
     }
 }

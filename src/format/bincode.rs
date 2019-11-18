@@ -32,8 +32,10 @@ impl Format for Bincode {
     where
         T: Send + 'static,
     {
-        Box::pin(
-            async move { serde_bincode::config().deserialize_from_seed(context, item.as_slice()).map_err(|e| (e, item)) },
-        )
+        Box::pin(async move {
+            serde_bincode::config()
+                .deserialize_from_seed(context, item.as_slice())
+                .map_err(|e| (e, item))
+        })
     }
 }
