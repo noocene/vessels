@@ -27,13 +27,13 @@ impl Format for Cbor {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
+    ) -> BoxFuture<'static, Result<T::Value, (Self::Error, Self::Representation)>>
     where
         T: Send + 'static,
     {
         Box::pin(async move {
             let mut deserializer = serde_cbor::Deserializer::from_reader(item.as_slice());
-            context.deserialize(&mut deserializer)
+            context.deserialize(&mut deserializer).map_err(|e| (e, item))
         })
     }
 }

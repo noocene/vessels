@@ -76,22 +76,6 @@ impl<T, U> UniformStreamSink<T> for U where U: Sink<T> + Stream<Item = T> {}
 /// A serialization format used in the transport of `Kind`s.
 ///
 /// This is generally a minimal wrapper that encapsulates a `serde` format.
-/// Because the implementation of DeserializeSeed for `IdChannel`, the current
-/// principal transport format, blocks until type information is available
-/// it is necessary for `Format`s to handle the execution of this synchronous
-/// blocking operation in the context of another thread and provide a future of
-/// its completion. It is recognized that this is less than ideal for a number
-/// of reasons, chief among them the extreme performance cost of the current technique
-/// of spawning a proliferation of OS threads (due to the inability to block on a future
-/// on threads that have a currently running threaded executor), another key reason being
-/// the inavailability of threading or any sort of yield/wake scheduling in most browser
-/// environments.
-///
-/// The limiting factor in changing the method in which this deserialization occurs is the
-/// inability, due to the manner in which the `DeserializeSeed` trait is defined, to place
-/// additional bounds on the `Deserializer` used i.e. to require a Send bound or longer lifetime
-/// necessary to move the deserialization properly into an asynchronous context in and of itself i.e.
-/// to deserialize directly into a future.
 pub trait Format {
     /// The underlying representation used by this `Format`, i.e. `Vec<u8>` for most
     /// binary formats and `String` for those of a human-readable nature.
@@ -99,17 +83,15 @@ pub trait Format {
     /// The failure condition of this format. This may be encountered during deserialization.
     type Error: Fail;
 
-    /// Serializes the provided item. This operation is synchronous.
+    /// Serializes the provided item.
     fn serialize<T: Serialize>(item: T) -> Self::Representation
     where
         Self: Sized;
     /// Deserializes an item from the provided formatted representation.
-    /// This operation is currently asynchronous and requires the duplication of source for
-    /// a substantially less-than-ideal thread scheduling system, as discussed above.
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> BoxFuture<'static, Result<T::Value, Self::Error>>
+    ) -> BoxFuture<'static, Result<T::Value, (Self::Error, Self::Representation)>>
     where
         T: Send + 'static,
         Self: Sized;
@@ -199,8 +181,8 @@ where
                     stream
                         .map(move |item| {
                             let ct = context.clone();
-                            Self::deserialize(item.clone(), context.clone())
-                                .or_else(move |e| {
+                            Self::deserialize(item, context.clone())
+                                .or_else(move |(e, item)| {
                                     let context = ct.clone();
                                     let message = format!("{}", e);
                                     let mut data = message.split(" ");
@@ -213,7 +195,7 @@ where
                                     }
                                     panic!(format!("{:?}", e))
                                 })
-                                .unwrap_or_else(|e| panic!(format!("{:?}", e)))
+                                .unwrap_or_else(|e| panic!(format!("{:?}", e.0)))
                         })
                         .buffer_unordered(std::usize::MAX),
                 ),
@@ -303,7 +285,7 @@ where
         let receiver = receiver
             .map(move |item: <Self as Format>::Representation| {
                 let ct = ctx.clone();
-                Self::deserialize(item.clone(), ctx.clone()).or_else(move |e| {
+                Self::deserialize(item, ctx.clone()).or_else(move |(e, item)| {
                     let context = ct.clone();
                     let message = format!("{}", e);
                     let mut data = message.split(" ");
