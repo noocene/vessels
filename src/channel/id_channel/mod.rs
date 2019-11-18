@@ -7,7 +7,7 @@ pub(crate) use id::Id;
 use id::REGISTRY;
 
 use futures::{
-    channel::mpsc::{unbounded, SendError, UnboundedReceiver, UnboundedSender},
+    channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
     future::{ok, BoxFuture},
     task::{Context as FContext, Poll},
     Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
@@ -37,7 +37,7 @@ pub struct IdChannel {
     ),
     context: Context,
     in_channels: Arc<
-        Mutex<HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = SendError> + Send>>>>,
+        Mutex<HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = Error> + Send>>>>,
     >,
 }
 
@@ -46,7 +46,7 @@ struct IdChannelHandle {
     out_channel: Pin<Box<UnboundedSender<Item>>>,
     context: Context,
     in_channels: Arc<
-        Mutex<HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = SendError> + Send>>>>,
+        Mutex<HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = Error> + Send>>>>,
     >,
 }
 
@@ -67,7 +67,7 @@ impl Stream for IdChannel {
 #[derive(Debug, Fail)]
 pub enum IdChannelError {
     #[fail(display = "{}, send on underlying channel {} failed: {}", _2, _0, _1)]
-    Channel(u32, ForkHandle, SendError),
+    Channel(u32, ForkHandle, Error),
     #[fail(display = "underlying channel {} does not exist", _0)]
     InvalidId(ForkHandle),
 }
@@ -82,7 +82,7 @@ impl Sink<Item> for IdChannel {
                 channel
                     .as_mut()
                     .start_send(data)
-                    .map_err(move |e| IdChannelError::Channel(1, id, e))
+                    .map_err(move |e| IdChannelError::Channel(1, id, e.into()))
             }
             None => Err(IdChannelError::InvalidId(item.0)),
         }
@@ -100,7 +100,7 @@ impl Sink<Item> for IdChannel {
             })
         {
             let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(2, *id, e))
+            result.map_err(move |e| IdChannelError::Channel(2, *id, e.into()))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -118,7 +118,7 @@ impl Sink<Item> for IdChannel {
             })
         {
             let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(3, *id, e))
+            result.map_err(move |e| IdChannelError::Channel(3, *id, e.into()))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -136,7 +136,7 @@ impl Sink<Item> for IdChannel {
             })
         {
             let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(4, *id, e))
+            result.map_err(move |e| IdChannelError::Channel(4, *id, e.into()))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -229,7 +229,7 @@ impl IdChannelHandle {
                 let mut in_channels = in_channels.lock().unwrap();
                 in_channels.insert(
                     id,
-                    Box::pin(sender.sink_map_err(|e| panic!(format!("{:?}", e))).with(
+                    Box::pin(sender.with(
                         |item: Box<dyn SerdeAny>| {
                             ok(*(item
                                 .downcast::<K::DeconstructItem>()
@@ -421,7 +421,7 @@ impl<
                         .map_err(|_| panic!())
                         .unwrap()))
                 }))
-                    as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = SendError> + Send>>,
+                    as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = Error> + Send>>,
             );
             let ct = context.clone();
             let (csender, creceiver) = unbounded();
