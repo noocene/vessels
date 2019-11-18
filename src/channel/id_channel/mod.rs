@@ -54,6 +54,12 @@ struct IdChannelHandle {
     >,
 }
 
+impl IdChannelHandle {
+    fn remove_fork(&self, handle: ForkHandle) {
+        self.in_channels.lock().unwrap().remove(&handle);
+    }
+}
+
 impl Stream for IdChannel {
     type Item = Item;
 
@@ -64,8 +70,8 @@ impl Stream for IdChannel {
 
 #[derive(Debug, Fail)]
 pub enum IdChannelError {
-    #[fail(display = "send on underlying channel {} failed: {}", _0, _1)]
-    Channel(ForkHandle, SendError),
+    #[fail(display = "{}, send on underlying channel {} failed: {}", _2, _0, _1)]
+    Channel(u32, ForkHandle, SendError),
     #[fail(display = "underlying channel {} does not exist", _0)]
     InvalidId(ForkHandle),
 }
@@ -80,7 +86,7 @@ impl Sink<Item> for IdChannel {
                 channel
                     .as_mut()
                     .start_send(data)
-                    .map_err(move |e| IdChannelError::Channel(id, e))
+                    .map_err(move |e| IdChannelError::Channel(1, id, e))
             }
             None => Err(IdChannelError::InvalidId(item.0)),
         }
@@ -98,7 +104,7 @@ impl Sink<Item> for IdChannel {
             })
         {
             let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(*id, e))
+            result.map_err(move |e| IdChannelError::Channel(2, *id, e))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -116,7 +122,7 @@ impl Sink<Item> for IdChannel {
             })
         {
             let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(*id, e))
+            result.map_err(move |e| IdChannelError::Channel(3, *id, e))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -134,7 +140,7 @@ impl Sink<Item> for IdChannel {
             })
         {
             let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(*id, e))
+            result.map_err(move |e| IdChannelError::Channel(4, *id, e))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -217,7 +223,7 @@ impl IdChannelHandle {
         let in_channels = self.in_channels.clone();
 
         Box::pin(
-            IdChannelFork::new(kind, self.clone()).map(move |(sender, receiver)| {
+            IdChannelFork::new(kind, self.clone(), id).map(move |(sender, receiver)| {
                 core::<dyn Executor>().unwrap().spawn(
                     receiver
                         .map(move |v| Ok(Item::new(id, Box::new(v), context.clone())))
@@ -272,6 +278,7 @@ impl IdChannelHandle {
         Box::pin(K::construct(IdChannelFork {
             o: Box::pin(sender),
             i: Box::pin(receiver),
+            handle: fork_ref,
             channel: self.clone(),
             sink_item: PhantomData,
         }))
@@ -341,7 +348,18 @@ pub(crate) struct IdChannelFork<
     i: Pin<Box<UnboundedReceiver<I>>>,
     o: Pin<Box<UnboundedSender<O>>>,
     channel: IdChannelHandle,
+    handle: ForkHandle,
     sink_item: PhantomData<O>,
+}
+
+impl<
+        I: Serialize + DeserializeOwned + Send + 'static,
+        O: Serialize + DeserializeOwned + Send + Unpin + 'static,
+    > Drop for IdChannelFork<I, O>
+{
+    fn drop(&mut self) {
+        self.channel.remove_fork(self.handle);
+    }
 }
 
 impl<
@@ -364,6 +382,7 @@ impl<
     fn new<K: Kind<DeconstructItem = I, ConstructItem = O>>(
         kind: K,
         channel: IdChannelHandle,
+        handle: ForkHandle,
     ) -> impl Future<Output = (UnboundedSender<I>, UnboundedReceiver<O>)>
     where
         K::DeconstructFuture: Send + 'static,
@@ -375,6 +394,7 @@ impl<
                 kind.deconstruct(IdChannelFork {
                     o: Box::pin(oi),
                     i: Box::pin(oo),
+                    handle,
                     channel,
                     sink_item: PhantomData,
                 })
@@ -425,6 +445,7 @@ impl<
                 kind.deconstruct(IdChannelFork {
                     o: Box::pin(oi),
                     i: Box::pin(oo),
+                    handle,
                     channel: channel.clone(),
                     sink_item: PhantomData,
                 })
