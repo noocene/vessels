@@ -52,7 +52,7 @@ macro_rules! array_impl {
                 Box::pin(async move {
                     channel.send(
                         vec![
-                            $(channel.fork::<T>($nn).await.unwrap()),+
+                            $(channel.fork::<T>($nn).await?),+
                         ]
                     ).await.map_err(|_| panic!())
                 })

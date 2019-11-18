@@ -32,8 +32,7 @@ where
                                 .into_inner()
                                 .unwrap(),
                         )
-                        .await
-                        .unwrap(),
+                        .await?,
                 )
                 .await
                 .map_err(|_| panic!())
@@ -45,7 +44,7 @@ where
         Box::pin(async move {
             let handle = channel.next().await.unwrap();
             Ok(Arc::new(Mutex::new(
-                channel.get_fork(handle).await.unwrap(),
+                channel.get_fork(handle).await?,
             )))
         })
     }

@@ -9,7 +9,7 @@ use std::{
 };
 
 use futures::{
-    future::{join_all, try_join_all, BoxFuture},
+    future::{try_join_all, BoxFuture},
     SinkExt, StreamExt, TryFutureExt,
 };
 
@@ -29,10 +29,10 @@ macro_rules! iterator_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    channel.send(join_all(
+                    channel.send(try_join_all(
                         self.into_iter()
-                            .map(|entry| channel.fork::<T>(entry).unwrap_or_else(|_| panic!())),
-                    ).await).await.map_err(|_| panic!())
+                            .map(|entry| channel.fork::<T>(entry)),
+                    ).await?).await.map_err(|_| panic!())
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
@@ -78,10 +78,10 @@ macro_rules! map_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    channel.send(join_all(
+                    channel.send(try_join_all(
                         self.into_iter()
-                            .map(|entry| channel.fork::<(K, V)>(entry).unwrap_or_else(|_| panic!())),
-                    ).await).await.map_err(|_| panic!())
+                            .map(|entry| channel.fork::<(K, V)>(entry))
+                    ).await?).await.map_err(|_| panic!())
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

@@ -1,6 +1,6 @@
 use futures::{
-    future::{join_all, BoxFuture},
-    SinkExt, StreamExt, TryFutureExt,
+    future::{try_join_all, BoxFuture},
+    SinkExt, StreamExt,
 };
 
 use crate::{
@@ -11,8 +11,6 @@ use crate::{
 use super::{using, AsKind};
 
 use std::{iter::FromIterator, ops::Deref};
-
-use void::Void;
 
 #[derive(Clone, Debug, Copy, Hash, Eq, Ord, PartialOrd, PartialEq, Default)]
 pub struct Iterator<T: Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static>(
@@ -107,10 +105,10 @@ where
     T::IntoIter: Send,
 {
     type ConstructItem = Vec<ForkHandle>;
-    type ConstructError = Void;
+    type ConstructError = <<T as IntoIterator>::Item as Kind>::ConstructError;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = Void;
+    type DeconstructError = <<T as IntoIterator>::Item as Kind>::DeconstructError;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -120,12 +118,11 @@ where
         Box::pin(async move {
             channel
                 .send(
-                    join_all(self.0.into_iter().map(|entry| {
+                    try_join_all(self.0.into_iter().map(|entry| {
                         channel
                             .fork::<<T as IntoIterator>::Item>(entry)
-                            .unwrap_or_else(|_| panic!())
                     }))
-                    .await,
+                    .await?,
                 )
                 .await
                 .map_err(|_| panic!())
@@ -137,12 +134,11 @@ where
         Box::pin(async move {
             let handles = channel.next().await.unwrap();
             Ok(Iterator(
-                join_all(handles.into_iter().map(|entry| {
+                try_join_all(handles.into_iter().map(|entry| {
                     channel
                         .get_fork::<<T as IntoIterator>::Item>(entry)
-                        .unwrap_or_else(|_| panic!())
                 }))
-                .await
+                .await?
                 .into_iter()
                 .collect(),
             ))
