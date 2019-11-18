@@ -7,12 +7,14 @@ use futures::{future::BoxFuture, SinkExt, StreamExt};
 
 use std::sync::{Arc, Mutex};
 
+use super::ConstructError;
+
 impl<T> Kind for Arc<Mutex<T>>
 where
     T: Kind,
 {
     type ConstructItem = ForkHandle;
-    type ConstructError = T::ConstructError;
+    type ConstructError = ConstructError<T::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = T::DeconstructError;
@@ -42,10 +44,11 @@ where
         mut channel: C,
     ) -> Self::ConstructFuture {
         Box::pin(async move {
-            let handle = channel.next().await.unwrap();
-            Ok(Arc::new(Mutex::new(
-                channel.get_fork(handle).await?,
-            )))
+            let handle = channel.next().await.ok_or(ConstructError::Insufficient {
+                got: 0,
+                expected: 1,
+            })?;
+            Ok(Arc::new(Mutex::new(channel.get_fork(handle).await?)))
         })
     }
 }
@@ -55,7 +58,7 @@ where
     T: Kind,
 {
     type ConstructItem = ForkHandle;
-    type ConstructError = T::ConstructError;
+    type ConstructError = ConstructError<T::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = T::DeconstructError;
@@ -75,7 +78,10 @@ where
         mut channel: C,
     ) -> Self::ConstructFuture {
         Box::pin(async move {
-            let handle = channel.next().await.unwrap();
+            let handle = channel.next().await.ok_or(ConstructError::Insufficient {
+                got: 0,
+                expected: 1,
+            })?;
             Ok(Box::new(channel.get_fork(handle).await.unwrap()))
         })
     }

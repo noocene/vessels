@@ -5,6 +5,8 @@ use crate::{
 
 use futures::{future::BoxFuture, SinkExt, StreamExt};
 
+use super::ConstructError;
+
 use void::Void;
 
 impl<T> Kind for (T,)
@@ -12,7 +14,7 @@ where
     T: Kind,
 {
     type ConstructItem = ForkHandle;
-    type ConstructError = T::ConstructError;
+    type ConstructError = ConstructError<T::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = T::DeconstructError;
@@ -32,7 +34,10 @@ where
         mut channel: C,
     ) -> Self::ConstructFuture {
         Box::pin(async move {
-            let handle = channel.next().await.unwrap();
+            let handle = channel.next().await.ok_or(ConstructError::Insufficient {
+                got: 0,
+                expected: 1,
+            })?;
             Ok((channel.get_fork::<T>(handle).await?,))
         })
     }
@@ -44,7 +49,7 @@ macro_rules! tuple_impl {
             where $($name: Kind),+
         {
             type ConstructItem = Vec<ForkHandle>;
-            type ConstructError = Void;
+            type ConstructError = ConstructError<Void>;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
             type DeconstructError = Void;
@@ -65,7 +70,10 @@ macro_rules! tuple_impl {
                 mut channel: C,
             ) -> Self::ConstructFuture {
                 Box::pin(async move {
-                    let item = channel.next().await.unwrap();
+                    let item = channel.next().await.ok_or(ConstructError::Insufficient {
+                        got: 0,
+                        expected: 1
+                    })?;
                     Ok(($(channel.get_fork::<$name>(item[$n]).await.unwrap()),+))
                 })
             }

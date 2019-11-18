@@ -3,15 +3,17 @@ use crate::{
     ConstructResult, DeconstructResult, Kind,
 };
 
-use futures::{future::BoxFuture, SinkExt, StreamExt};
 use failure::Fail;
+use futures::{future::BoxFuture, SinkExt, StreamExt};
+
+use super::ConstructError;
 
 #[derive(Fail, Debug)]
 pub enum ResultError<T: Fail, E: Fail> {
     #[fail(display = "{}", _0)]
     Ok(T),
     #[fail(display = "{}", _0)]
-    Err(E)
+    Err(E),
 }
 
 impl<T, E> Kind for Result<T, E>
@@ -20,7 +22,7 @@ where
     E: Kind,
 {
     type ConstructItem = Result<ForkHandle, ForkHandle>;
-    type ConstructError = ResultError<T::ConstructError, E::ConstructError>;
+    type ConstructError = ConstructError<ResultError<T::ConstructError, E::ConstructError>>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = ResultError<T::DeconstructError, E::DeconstructError>;
@@ -43,10 +45,15 @@ where
         mut channel: C,
     ) -> Self::ConstructFuture {
         Box::pin(async move {
-            Ok(match channel.next().await.unwrap() {
-                Ok(item) => Ok(channel.get_fork(item).await.map_err(ResultError::Ok)?),
-                Err(item) => Err(channel.get_fork(item).await.map_err(ResultError::Err)?),
-            })
+            Ok(
+                match channel.next().await.ok_or(ConstructError::Insufficient {
+                    got: 0,
+                    expected: 1,
+                })? {
+                    Ok(item) => Ok(channel.get_fork(item).await.map_err(ResultError::Ok)?),
+                    Err(item) => Err(channel.get_fork(item).await.map_err(ResultError::Err)?),
+                },
+            )
         })
     }
 }
