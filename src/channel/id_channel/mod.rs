@@ -8,7 +8,7 @@ use id::REGISTRY;
 
 use futures::{
     channel::mpsc::{unbounded, SendError, UnboundedReceiver, UnboundedSender},
-    future::{lazy, ok, BoxFuture},
+    future::{ok, BoxFuture},
     task::{Context as FContext, Poll},
     Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
 };
@@ -368,7 +368,7 @@ impl<
     where
         K::DeconstructFuture: Send + 'static,
     {
-        lazy(move |_| {
+        async move {
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
             let (oi, receiver): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
             core::<dyn Executor>().unwrap().spawn(
@@ -381,7 +381,7 @@ impl<
                 .unwrap_or_else(|_| panic!()),
             );
             (sender, receiver)
-        })
+        }
     }
 
     fn new_root<K: Kind<DeconstructItem = I, ConstructItem = O>>(
@@ -390,7 +390,7 @@ impl<
     where
         K::DeconstructFuture: Send + 'static,
     {
-        lazy(move |_| {
+        async move {
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
             let (oi, receiver): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
             let mut in_channels = HashMap::new();
@@ -431,7 +431,7 @@ impl<
                 .unwrap_or_else(|_| panic!()),
             );
             channel
-        })
+        }
     }
 }
 
