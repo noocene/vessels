@@ -189,13 +189,13 @@ impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
             in_channels: Arc::new(Mutex::new(HashMap::new())),
         };
         let fork = channel.get_fork::<K>(ForkHandle(0));
-        let (receiver, sender) = channel.split();
+        let (sender, receiver) = channel.split();
         let mut executor = core::<dyn Executor>().unwrap();
-        executor.spawn(sender.map(Ok).forward(sink).unwrap_or_else(|_| panic!()));
+        executor.spawn(receiver.map(Ok).forward(sink).unwrap_or_else(|_| panic!()));
         executor.spawn(
             stream
                 .map(Ok)
-                .forward(receiver)
+                .forward(sender)
                 .unwrap_or_else(|e| panic!(format!("{}", e))),
         );
         Box::pin(fork)
