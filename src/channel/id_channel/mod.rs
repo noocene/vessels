@@ -12,10 +12,14 @@ use futures::{
     task::{Context as FContext, Poll},
     Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
 };
-
 use serde::{de::DeserializeOwned, Serialize};
-
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    marker::PhantomData,
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
+use failure::{Fail, Error};
 
 use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle, Waiter},
@@ -23,14 +27,6 @@ use crate::{
     core::{executor::Spawn, Executor},
     Kind, SerdeAny, Target,
 };
-
-use std::{
-    marker::PhantomData,
-    pin::Pin,
-    sync::{Arc, Mutex},
-};
-
-use failure::Fail;
 
 use super::Shim as IShim;
 
@@ -461,19 +457,19 @@ impl<
         O: Serialize + Unpin + DeserializeOwned + Send + 'static,
     > Sink<O> for IdChannelFork<I, O>
 {
-    type Error = SendError;
+    type Error = Error;
 
     fn start_send(mut self: Pin<&mut Self>, item: O) -> Result<(), Self::Error> {
-        self.o.as_mut().start_send(item)
+        self.o.as_mut().start_send(item).map_err(From::from)
     }
     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
-        self.o.as_mut().poll_ready(cx)
+        self.o.as_mut().poll_ready(cx).map_err(From::from)
     }
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
-        self.o.as_mut().poll_flush(cx)
+        self.o.as_mut().poll_flush(cx).map_err(From::from)
     }
     fn poll_close(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
-        self.o.as_mut().poll_close(cx)
+        self.o.as_mut().poll_close(cx).map_err(From::from)
     }
 }
 
