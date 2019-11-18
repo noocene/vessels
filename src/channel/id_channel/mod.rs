@@ -190,7 +190,7 @@ impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
             stream
                 .map(Ok)
                 .forward(receiver)
-                .unwrap_or_else(|_| panic!()),
+                .unwrap_or_else(|e| panic!(format!("{}", e))),
         );
         Box::pin(fork)
     }
