@@ -1,19 +1,18 @@
 pub mod id_channel;
 pub use id_channel::IdChannel;
 
+use crate::Kind;
+
+use futures::{future::BoxFuture, Sink, Stream};
 use serde::{
     de::{DeserializeOwned, DeserializeSeed},
     Deserialize, Serialize,
 };
-
 use std::{
     fmt::{self, Display, Formatter},
     marker::Unpin,
 };
-
-use crate::Kind;
-
-use futures::{future::BoxFuture, Sink, Stream};
+use failure::Error;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, Copy)]
 #[repr(transparent)]
@@ -37,7 +36,7 @@ pub trait Fork: Send + 'static {
 pub trait Channel<
     I: Serialize + DeserializeOwned + Send + 'static,
     O: Serialize + DeserializeOwned + Send + 'static,
->: Stream<Item = I> + Sink<O> + Fork + Send + Sync + Unpin
+>: Stream<Item = I> + Sink<O, Error = Error> + Fork + Send + Sync + Unpin
 {
 }
 
