@@ -33,7 +33,9 @@ impl Format for Cbor {
     {
         Box::pin(async move {
             let mut deserializer = serde_cbor::Deserializer::from_reader(item.as_slice());
-            context.deserialize(&mut deserializer).map_err(|e| (e, item))
+            context
+                .deserialize(&mut deserializer)
+                .map_err(|e| (e, item))
         })
     }
 }
