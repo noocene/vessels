@@ -32,36 +32,24 @@ pub type Sink<T, E> = Pin<Box<dyn ISink<T, Error = E> + Send>>;
 pub trait AsKindMarker {}
 
 #[derive(Fail, Debug)]
-pub enum ConstructError<T: Fail> {
+pub enum WrappedError<T: Fail> {
     #[fail(display = "{}", _0)]
-    Construct(T),
+    Concrete(T),
     #[fail(display = "got {} items in construct, expected {}", got, expected)]
     Insufficient { got: usize, expected: usize },
-}
-
-#[derive(Fail, Debug)]
-pub enum DeconstructError<T: Fail> {
-    #[fail(display = "{}", _0)]
-    Deconstruct(T),
     #[fail(display = "failed to send on underlying channel: {}", _0)]
     Send(ChannelError),
 }
 
-impl<T: Fail> From<T> for ConstructError<T> {
+impl<T: Fail> From<T> for WrappedError<T> {
     fn from(input: T) -> Self {
-        ConstructError::Construct(input)
+        WrappedError::Concrete(input)
     }
 }
 
-impl<T: Fail> From<T> for DeconstructError<T> {
-    fn from(input: T) -> Self {
-        DeconstructError::Deconstruct(input)
-    }
-}
-
-impl<T: Fail> From<ChannelError> for DeconstructError<T> {
+impl<T: Fail> From<ChannelError> for WrappedError<T> {
     fn from(input: ChannelError) -> Self {
-        DeconstructError::Send(input)
+        WrappedError::Send(input)
     }
 }
 

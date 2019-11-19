@@ -13,7 +13,7 @@ use futures::{
     SinkExt, StreamExt, TryFutureExt,
 };
 
-use super::{ConstructError, DeconstructError};
+use super::WrappedError;
 
 macro_rules! iterator_impl {
     ($($ty:ident < T $(: $tbound1:ident $(+ $tbound2:ident)*)* $(, $typaram:ident : $bound:ident)* >),+) => {$(
@@ -21,10 +21,10 @@ macro_rules! iterator_impl {
             where T: Kind $(+ $tbound1 $(+ $tbound2)*)*, $($typaram: $bound,)*
         {
             type ConstructItem = Vec<ForkHandle>;
-            type ConstructError = ConstructError<T::ConstructError>;
+            type ConstructError = WrappedError<T::ConstructError>;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructError = DeconstructError<T::DeconstructError>;
+            type DeconstructError = WrappedError<T::DeconstructError>;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
@@ -41,7 +41,7 @@ macro_rules! iterator_impl {
                 mut channel: C,
             ) -> Self::ConstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.ok_or(ConstructError::<T::ConstructError>::Insufficient {
+                    let handles = channel.next().await.ok_or(WrappedError::<T::ConstructError>::Insufficient {
                         got: 0,
                         expected: 1
                     })?;
@@ -73,10 +73,10 @@ macro_rules! map_impl {
             V: Kind
         {
             type ConstructItem = Vec<ForkHandle>;
-            type ConstructError = ConstructError<<(K, V) as Kind>::ConstructError>;
+            type ConstructError = WrappedError<<(K, V) as Kind>::ConstructError>;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructError = DeconstructError<<(K, V) as Kind>::DeconstructError>;
+            type DeconstructError = WrappedError<<(K, V) as Kind>::DeconstructError>;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
@@ -93,7 +93,7 @@ macro_rules! map_impl {
                 mut channel: C,
             ) -> Self::ConstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.ok_or(ConstructError::<<(K, V) as Kind>::ConstructError>::Insufficient {
+                    let handles = channel.next().await.ok_or(WrappedError::<<(K, V) as Kind>::ConstructError>::Insufficient {
                         got: 0,
                         expected: 1
                     })?;

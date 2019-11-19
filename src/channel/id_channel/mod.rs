@@ -16,9 +16,9 @@ use futures::{
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::HashMap,
+    fmt::{self, Display, Formatter},
     marker::PhantomData,
     pin::Pin,
-    fmt::{Display, Formatter, self},
     sync::{Arc, Mutex},
 };
 
@@ -74,17 +74,21 @@ pub enum SinkStage {
     Ready,
     Send,
     Flush,
-    Close
+    Close,
 }
 
 impl Display for SinkStage {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "{}", match self {
-            SinkStage::Ready => "ready",
-            SinkStage::Send => "send",
-            SinkStage::Flush => "flush",
-            SinkStage::Close => "close",
-        })
+        write!(
+            formatter,
+            "{}",
+            match self {
+                SinkStage::Ready => "ready",
+                SinkStage::Send => "send",
+                SinkStage::Flush => "flush",
+                SinkStage::Close => "close",
+            }
+        )
     }
 }
 
@@ -97,10 +101,17 @@ pub enum IdChannelError {
 impl Display for IdChannelError {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         use IdChannelError::{Channel, InvalidId};
-        write!(formatter, "{}", match self {
-            Channel(stage, handle, error) => format!("send on underlying channel {} in {} stage failed: {}", handle, stage, error),
-            InvalidId(handle) => format!("underlying channel {} does not exist", handle)
-        })
+        write!(
+            formatter,
+            "{}",
+            match self {
+                Channel(stage, handle, error) => format!(
+                    "send on underlying channel {} in {} stage failed: {}",
+                    handle, stage, error
+                ),
+                InvalidId(handle) => format!("underlying channel {} does not exist", handle),
+            }
+        )
     }
 }
 

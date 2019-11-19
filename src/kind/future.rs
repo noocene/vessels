@@ -5,7 +5,7 @@ use crate::{
 
 use futures::{future::BoxFuture, SinkExt, StreamExt};
 
-use super::DeconstructError;
+use super::WrappedError;
 
 impl<T> Kind for BoxFuture<'static, T>
 where
@@ -15,7 +15,7 @@ where
     type ConstructError = T::ConstructError;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = DeconstructError<T::DeconstructError>;
+    type DeconstructError = WrappedError<T::DeconstructError>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,

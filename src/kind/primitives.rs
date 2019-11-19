@@ -12,7 +12,7 @@ use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
 
 use futures::{future::BoxFuture, SinkExt, StreamExt};
 
-use super::{ConstructError, DeconstructError};
+use super::WrappedError;
 
 use void::Void;
 
@@ -20,10 +20,10 @@ macro_rules! primitive_impl {
     ($($ty:ident),+) => {$(
         impl Kind for $ty {
             type ConstructItem = $ty;
-            type ConstructError = ConstructError<Void>;
+            type ConstructError = WrappedError<Void>;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructError = DeconstructError<Void>;
+            type DeconstructError = WrappedError<Void>;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -39,7 +39,7 @@ macro_rules! primitive_impl {
             ) -> Self::ConstructFuture
             {
                 Box::pin(async move {
-                    Ok(channel.next().await.ok_or(ConstructError::Insufficient {
+                    Ok(channel.next().await.ok_or(WrappedError::Insufficient {
                         got: 0,
                         expected: 1
                     })?)
