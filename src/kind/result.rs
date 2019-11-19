@@ -6,7 +6,7 @@ use crate::{
 use failure::Fail;
 use futures::{future::BoxFuture, SinkExt, StreamExt};
 
-use super::ConstructError;
+use super::{ConstructError, DeconstructError};
 
 #[derive(Fail, Debug)]
 pub enum ResultError<T: Fail, E: Fail> {
@@ -25,7 +25,7 @@ where
     type ConstructError = ConstructError<ResultError<T::ConstructError, E::ConstructError>>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = ResultError<T::DeconstructError, E::DeconstructError>;
+    type DeconstructError = DeconstructError<ResultError<T::DeconstructError, E::DeconstructError>>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
@@ -38,7 +38,7 @@ where
                     Err(item) => Err(channel.fork(item).await.map_err(ResultError::Err)?),
                 })
                 .await
-                .map_err(|_| panic!())
+                .map_err(From::from)
         })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

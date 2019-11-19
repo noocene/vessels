@@ -23,7 +23,7 @@ use failure::Fail;
 use futures::{future::BoxFuture, stream::BoxStream, Sink as ISink};
 use std::pin::Pin;
 
-use crate::Kind;
+use crate::{channel::ChannelError, Kind};
 
 pub type Stream<T> = BoxStream<'static, T>;
 pub type Future<T> = BoxFuture<'static, T>;
@@ -39,9 +39,29 @@ pub enum ConstructError<T: Fail> {
     Insufficient { got: usize, expected: usize },
 }
 
+#[derive(Fail, Debug)]
+pub enum DeconstructError<T: Fail> {
+    #[fail(display = "{}", _0)]
+    Deconstruct(T),
+    #[fail(display = "failed to send on underlying channel: {}", _0)]
+    Send(ChannelError),
+}
+
 impl<T: Fail> From<T> for ConstructError<T> {
     fn from(input: T) -> Self {
         ConstructError::Construct(input)
+    }
+}
+
+impl<T: Fail> From<T> for DeconstructError<T> {
+    fn from(input: T) -> Self {
+        DeconstructError::Deconstruct(input)
+    }
+}
+
+impl<T: Fail> From<ChannelError> for DeconstructError<T> {
+    fn from(input: ChannelError) -> Self {
+        DeconstructError::Send(input)
     }
 }
 

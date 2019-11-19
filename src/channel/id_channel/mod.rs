@@ -6,7 +6,7 @@ mod id;
 pub(crate) use id::Id;
 use id::REGISTRY;
 
-use failure::{Error, Fail};
+use failure::Fail;
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
     future::{ok, BoxFuture},
@@ -28,7 +28,7 @@ use crate::{
     Kind, SerdeAny, Target,
 };
 
-use super::Shim as IShim;
+use super::{ChannelError, Shim as IShim};
 
 pub struct IdChannel {
     out_channel: (
@@ -37,7 +37,9 @@ pub struct IdChannel {
     ),
     context: Context,
     in_channels: Arc<
-        Mutex<HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = Error> + Send>>>>,
+        Mutex<
+            HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ChannelError> + Send>>>,
+        >,
     >,
 }
 
@@ -46,7 +48,9 @@ struct IdChannelHandle {
     out_channel: Pin<Box<UnboundedSender<Item>>>,
     context: Context,
     in_channels: Arc<
-        Mutex<HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = Error> + Send>>>>,
+        Mutex<
+            HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ChannelError> + Send>>>,
+        >,
     >,
 }
 
@@ -67,7 +71,7 @@ impl Stream for IdChannel {
 #[derive(Debug, Fail)]
 pub enum IdChannelError {
     #[fail(display = "{}, send on underlying channel {} failed: {}", _2, _0, _1)]
-    Channel(u32, ForkHandle, Error),
+    Channel(u32, ForkHandle, ChannelError),
     #[fail(display = "underlying channel {} does not exist", _0)]
     InvalidId(ForkHandle),
 }
@@ -418,7 +422,8 @@ impl<
                         .downcast::<K::DeconstructItem>()
                         .map_err(|_| panic!())
                         .unwrap()))
-                })) as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = Error> + Send>>,
+                }))
+                    as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ChannelError> + Send>>,
             );
             let ct = context.clone();
             let (csender, creceiver) = unbounded();
@@ -454,7 +459,7 @@ impl<
         O: Serialize + Unpin + DeserializeOwned + Send + 'static,
     > Sink<O> for IdChannelFork<I, O>
 {
-    type Error = Error;
+    type Error = ChannelError;
 
     fn start_send(mut self: Pin<&mut Self>, item: O) -> Result<(), Self::Error> {
         self.o.as_mut().start_send(item).map_err(From::from)
