@@ -1,6 +1,7 @@
 mod array;
 mod collections;
 pub mod default;
+mod failure_error;
 mod functions;
 mod future;
 pub mod iterator;
