@@ -13,7 +13,7 @@ use futures::{
     SinkExt, StreamExt, TryFutureExt,
 };
 
-use super::ConstructError;
+use super::{ConstructError, DeconstructError};
 
 macro_rules! iterator_impl {
     ($($ty:ident < T $(: $tbound1:ident $(+ $tbound2:ident)*)* $(, $typaram:ident : $bound:ident)* >),+) => {$(
@@ -24,7 +24,7 @@ macro_rules! iterator_impl {
             type ConstructError = ConstructError<T::ConstructError>;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructError = T::DeconstructError;
+            type DeconstructError = DeconstructError<T::DeconstructError>;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
@@ -34,7 +34,7 @@ macro_rules! iterator_impl {
                     channel.send(try_join_all(
                         self.into_iter()
                             .map(|entry| channel.fork::<T>(entry)),
-                    ).await?).await.map_err(|_| panic!())
+                    ).await?).await.map_err(From::from)
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
@@ -76,7 +76,7 @@ macro_rules! map_impl {
             type ConstructError = ConstructError<<(K, V) as Kind>::ConstructError>;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructError = <(K, V) as Kind>::DeconstructError;
+            type DeconstructError = DeconstructError<<(K, V) as Kind>::DeconstructError>;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
@@ -86,7 +86,7 @@ macro_rules! map_impl {
                     channel.send(try_join_all(
                         self.into_iter()
                             .map(|entry| channel.fork::<(K, V)>(entry))
-                    ).await?).await.map_err(|_| panic!())
+                    ).await?).await.map_err(From::from)
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

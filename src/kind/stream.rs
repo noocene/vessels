@@ -9,15 +9,17 @@ use futures::{
     SinkExt, StreamExt,
 };
 
+use super::{ConstructError, DeconstructError};
+
 impl<T> Kind for BoxStream<'static, T>
 where
     T: Kind,
 {
     type ConstructItem = Option<ForkHandle>;
-    type ConstructError = T::ConstructError;
+    type ConstructError = ConstructError<T::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = T::DeconstructError;
+    type DeconstructError = DeconstructError<T::DeconstructError>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         mut self,
@@ -25,12 +27,9 @@ where
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             while let Some(item) = self.next().await {
-                channel
-                    .send(Some(channel.fork(item).await?))
-                    .await
-                    .unwrap_or_else(|_| panic!())
+                channel.send(Some(channel.fork(item).await?)).await?
             }
-            channel.send(None).await.unwrap_or_else(|_| panic!());
+            channel.send(None).await?;
             Ok(())
         })
     }

@@ -8,7 +8,7 @@ use crate::{
     ConstructResult, DeconstructResult, Kind,
 };
 
-use super::{using, AsKind, ConstructError};
+use super::{using, AsKind, ConstructError, DeconstructError};
 
 use std::{iter::FromIterator, ops::Deref};
 
@@ -108,7 +108,7 @@ where
     type ConstructError = ConstructError<<<T as IntoIterator>::Item as Kind>::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = <<T as IntoIterator>::Item as Kind>::DeconstructError;
+    type DeconstructError = DeconstructError<<<T as IntoIterator>::Item as Kind>::DeconstructError>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -126,7 +126,7 @@ where
                     .await?,
                 )
                 .await
-                .map_err(|_| panic!())
+                .map_err(From::from)
         })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

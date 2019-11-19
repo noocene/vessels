@@ -11,7 +11,7 @@ use futures::{
 use std::{mem::MaybeUninit, ptr};
 use void::Void;
 
-use super::ConstructError;
+use super::{ConstructError, DeconstructError};
 
 impl<T: Send + 'static> Kind for [T; 0] {
     type ConstructItem = ();
@@ -51,7 +51,7 @@ macro_rules! array_impl {
             type ConstructError = ConstructError<ArrayError<T::ConstructError>>;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructError = T::DeconstructError;
+            type DeconstructError = DeconstructError<T::DeconstructError>;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
@@ -63,7 +63,7 @@ macro_rules! array_impl {
                         vec![
                             $(channel.fork::<T>($nn).await?),+
                         ]
-                    ).await.map_err(|_| panic!())
+                    ).await.map_err(From::from)
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

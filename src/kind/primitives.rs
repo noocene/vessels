@@ -12,7 +12,7 @@ use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
 
 use futures::{future::BoxFuture, SinkExt, StreamExt};
 
-use super::ConstructError;
+use super::{ConstructError, DeconstructError};
 
 use void::Void;
 
@@ -23,7 +23,7 @@ macro_rules! primitive_impl {
             type ConstructError = ConstructError<Void>;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructError = Void;
+            type DeconstructError = DeconstructError<Void>;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -31,7 +31,7 @@ macro_rules! primitive_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    channel.send(self).await.map_err(|_| panic!())
+                    channel.send(self).await.map_err(From::from)
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
