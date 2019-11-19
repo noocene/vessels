@@ -115,6 +115,12 @@ impl Display for IdChannelError {
     }
 }
 
+impl Drop for IdChannel {
+    fn drop(&mut self) {
+        self.in_channels.lock().unwrap().remove(&ForkHandle(0));
+    }
+}
+
 impl Sink<Item> for IdChannel {
     type Error = IdChannelError;
 
@@ -138,7 +144,7 @@ impl Sink<Item> for IdChannel {
             .iter_mut()
             .map(|(k, item)| (k, item.as_mut().poll_ready(cx)))
             .find(|(_, poll)| match poll {
-                Poll::Ready(Ok(_)) => false,
+                Poll::Ready(_) => false,
                 _ => true,
             })
         {
@@ -156,7 +162,7 @@ impl Sink<Item> for IdChannel {
             .iter_mut()
             .map(|(k, item)| (k, item.as_mut().poll_ready(cx)))
             .find(|(_, poll)| match poll {
-                Poll::Ready(Ok(_)) => false,
+                Poll::Ready(_) => false,
                 _ => true,
             })
         {
@@ -174,7 +180,7 @@ impl Sink<Item> for IdChannel {
             .iter_mut()
             .map(|(k, item)| (k, item.as_mut().poll_ready(cx)))
             .find(|(_, poll)| match poll {
-                Poll::Ready(Ok(_)) => false,
+                Poll::Ready(_) => false,
                 _ => true,
             })
         {
