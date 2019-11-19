@@ -8,7 +8,7 @@ use crate::{
     ConstructResult, DeconstructResult, Kind,
 };
 
-use super::{using, AsKind, ConstructError, DeconstructError};
+use super::{using, AsKind, WrappedError};
 
 use std::{iter::FromIterator, ops::Deref};
 
@@ -105,10 +105,10 @@ where
     T::IntoIter: Send,
 {
     type ConstructItem = Vec<ForkHandle>;
-    type ConstructError = ConstructError<<<T as IntoIterator>::Item as Kind>::ConstructError>;
+    type ConstructError = WrappedError<<<T as IntoIterator>::Item as Kind>::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = DeconstructError<<<T as IntoIterator>::Item as Kind>::DeconstructError>;
+    type DeconstructError = WrappedError<<<T as IntoIterator>::Item as Kind>::DeconstructError>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -133,7 +133,7 @@ where
         mut channel: C,
     ) -> Self::ConstructFuture {
         Box::pin(async move {
-            let handles = channel.next().await.ok_or(ConstructError::Insufficient {
+            let handles = channel.next().await.ok_or(WrappedError::Insufficient {
                 got: 0,
                 expected: 1,
             })?;

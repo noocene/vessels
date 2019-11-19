@@ -9,17 +9,17 @@ use futures::{
     SinkExt, StreamExt,
 };
 
-use super::{ConstructError, DeconstructError};
+use super::WrappedError;
 
 impl<T> Kind for BoxStream<'static, T>
 where
     T: Kind,
 {
     type ConstructItem = Option<ForkHandle>;
-    type ConstructError = ConstructError<T::ConstructError>;
+    type ConstructError = WrappedError<T::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = DeconstructError<T::DeconstructError>;
+    type DeconstructError = WrappedError<T::DeconstructError>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         mut self,

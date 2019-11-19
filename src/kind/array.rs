@@ -11,7 +11,7 @@ use futures::{
 use std::{mem::MaybeUninit, ptr};
 use void::Void;
 
-use super::{ConstructError, DeconstructError};
+use super::WrappedError;
 
 impl<T: Send + 'static> Kind for [T; 0] {
     type ConstructItem = ();
@@ -48,10 +48,10 @@ macro_rules! array_impl {
             where T: Kind
         {
             type ConstructItem = Vec<ForkHandle>;
-            type ConstructError = ConstructError<ArrayError<T::ConstructError>>;
+            type ConstructError = WrappedError<ArrayError<T::ConstructError>>;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = ();
-            type DeconstructError = DeconstructError<T::DeconstructError>;
+            type DeconstructError = WrappedError<T::DeconstructError>;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
@@ -74,7 +74,7 @@ macro_rules! array_impl {
                         .into_future()
                         .then(move |(item, channel)| async move {
                             try_join_all(
-                                item.ok_or(ConstructError::Insufficient {
+                                item.ok_or(WrappedError::Insufficient {
                                     got: 0,
                                     expected: 1
                                 })?

@@ -7,6 +7,8 @@ use vessels::{
     log, OnTo,
 };
 
+use futures::future::pending;
+
 type Call = Box<dyn Fn(Vec<u8>) -> Future<String> + Send + Sync>;
 
 fn main() {
@@ -16,5 +18,6 @@ fn main() {
         let encoded = call.on_to::<IdChannel>().await.encode::<Cbor>();
         let decoded: Call = encoded.decode::<IdChannel, Cbor>().await.unwrap();
         log!("{}", (decoded)(vec![5, 6, 7]).await);
+        pending::<()>().await;
     });
 }

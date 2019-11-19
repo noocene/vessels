@@ -11,7 +11,7 @@ use futures::{
     Sink as ISink, SinkExt, StreamExt,
 };
 
-use super::DeconstructError;
+use super::WrappedError;
 
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 
@@ -61,7 +61,7 @@ where
     type ConstructError = Void;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ForkHandle;
-    type DeconstructError = DeconstructError<Void>;
+    type DeconstructError = WrappedError<Void>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         mut self,
