@@ -18,6 +18,7 @@ use std::{
     collections::HashMap,
     marker::PhantomData,
     pin::Pin,
+    fmt::{Display, Formatter, self},
     sync::{Arc, Mutex},
 };
 
@@ -68,12 +69,39 @@ impl Stream for IdChannel {
     }
 }
 
+#[derive(Debug)]
+pub enum SinkStage {
+    Ready,
+    Send,
+    Flush,
+    Close
+}
+
+impl Display for SinkStage {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "{}", match self {
+            SinkStage::Ready => "ready",
+            SinkStage::Send => "send",
+            SinkStage::Flush => "flush",
+            SinkStage::Close => "close",
+        })
+    }
+}
+
 #[derive(Debug, Fail)]
 pub enum IdChannelError {
-    #[fail(display = "{}, send on underlying channel {} failed: {}", _2, _0, _1)]
-    Channel(u32, ForkHandle, ChannelError),
-    #[fail(display = "underlying channel {} does not exist", _0)]
+    Channel(SinkStage, ForkHandle, ChannelError),
     InvalidId(ForkHandle),
+}
+
+impl Display for IdChannelError {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        use IdChannelError::{Channel, InvalidId};
+        write!(formatter, "{}", match self {
+            Channel(stage, handle, error) => format!("send on underlying channel {} in {} stage failed: {}", handle, stage, error),
+            InvalidId(handle) => format!("underlying channel {} does not exist", handle)
+        })
+    }
 }
 
 impl Sink<Item> for IdChannel {
@@ -86,7 +114,7 @@ impl Sink<Item> for IdChannel {
                 channel
                     .as_mut()
                     .start_send(data)
-                    .map_err(move |e| IdChannelError::Channel(1, id, e.into()))
+                    .map_err(move |e| IdChannelError::Channel(SinkStage::Send, id, e.into()))
             }
             None => Err(IdChannelError::InvalidId(item.0)),
         }
@@ -104,7 +132,7 @@ impl Sink<Item> for IdChannel {
             })
         {
             let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(2, *id, e.into()))
+            result.map_err(move |e| IdChannelError::Channel(SinkStage::Ready, *id, e.into()))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -122,7 +150,7 @@ impl Sink<Item> for IdChannel {
             })
         {
             let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(3, *id, e.into()))
+            result.map_err(move |e| IdChannelError::Channel(SinkStage::Flush, *id, e.into()))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -140,7 +168,7 @@ impl Sink<Item> for IdChannel {
             })
         {
             let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(4, *id, e.into()))
+            result.map_err(move |e| IdChannelError::Channel(SinkStage::Close, *id, e.into()))
         } else {
             Poll::Ready(Ok(()))
         }
