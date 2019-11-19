@@ -5,7 +5,7 @@ use crate::{
 
 use futures::{future::BoxFuture, SinkExt, StreamExt};
 
-use super::ConstructError;
+use super::{ConstructError, DeconstructError};
 
 use void::Void;
 
@@ -17,7 +17,7 @@ where
     type ConstructError = ConstructError<T::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = T::DeconstructError;
+    type DeconstructError = DeconstructError<T::DeconstructError>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
@@ -27,7 +27,7 @@ where
             channel
                 .send(channel.fork::<T>(self.0).await?)
                 .await
-                .map_err(|_| panic!())
+                .map_err(From::from)
         })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

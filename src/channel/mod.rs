@@ -3,7 +3,7 @@ pub use id_channel::IdChannel;
 
 use crate::Kind;
 
-use failure::Error;
+use failure::{Error, Fail};
 use futures::{future::BoxFuture, Sink, Stream};
 use serde::{
     de::{DeserializeOwned, DeserializeSeed},
@@ -33,10 +33,25 @@ pub trait Fork: Send + 'static {
     ) -> BoxFuture<'static, Result<K, K::ConstructError>>;
 }
 
+#[derive(Debug)]
+pub struct ChannelError(Error);
+
+impl<T: Fail> From<T> for ChannelError {
+    fn from(input: T) -> Self {
+        ChannelError(input.into())
+    }
+}
+
+impl Display for ChannelError {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "{}", self.0)
+    }
+}
+
 pub trait Channel<
     I: Serialize + DeserializeOwned + Send + 'static,
     O: Serialize + DeserializeOwned + Send + 'static,
->: Stream<Item = I> + Sink<O, Error = Error> + Fork + Send + Sync + Unpin
+>: Stream<Item = I> + Sink<O, Error = ChannelError> + Fork + Send + Sync + Unpin
 {
 }
 

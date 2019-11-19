@@ -7,7 +7,7 @@ use futures::{future::BoxFuture, SinkExt, StreamExt};
 
 use std::sync::{Arc, Mutex};
 
-use super::ConstructError;
+use super::{ConstructError, DeconstructError};
 
 impl<T> Kind for Arc<Mutex<T>>
 where
@@ -17,7 +17,7 @@ where
     type ConstructError = ConstructError<T::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = T::DeconstructError;
+    type DeconstructError = DeconstructError<T::DeconstructError>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
@@ -37,7 +37,7 @@ where
                         .await?,
                 )
                 .await
-                .map_err(|_| panic!())
+                .map_err(From::from)
         })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
@@ -61,7 +61,7 @@ where
     type ConstructError = ConstructError<T::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = T::DeconstructError;
+    type DeconstructError = DeconstructError<T::DeconstructError>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
@@ -69,9 +69,9 @@ where
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             channel
-                .send(channel.fork::<T>(*self).await.unwrap())
+                .send(channel.fork::<T>(*self).await?)
                 .await
-                .map_err(|_| panic!())
+                .map_err(From::from)
         })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
@@ -82,7 +82,7 @@ where
                 got: 0,
                 expected: 1,
             })?;
-            Ok(Box::new(channel.get_fork(handle).await.unwrap()))
+            Ok(Box::new(channel.get_fork(handle).await?))
         })
     }
 }
