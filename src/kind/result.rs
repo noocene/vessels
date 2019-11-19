@@ -6,7 +6,7 @@ use crate::{
 use failure::Fail;
 use futures::{future::BoxFuture, SinkExt, StreamExt};
 
-use super::{ConstructError, DeconstructError};
+use super::WrappedError;
 
 #[derive(Fail, Debug)]
 pub enum ResultError<T: Fail, E: Fail> {
@@ -22,10 +22,10 @@ where
     E: Kind,
 {
     type ConstructItem = Result<ForkHandle, ForkHandle>;
-    type ConstructError = ConstructError<ResultError<T::ConstructError, E::ConstructError>>;
+    type ConstructError = WrappedError<ResultError<T::ConstructError, E::ConstructError>>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = DeconstructError<ResultError<T::DeconstructError, E::DeconstructError>>;
+    type DeconstructError = WrappedError<ResultError<T::DeconstructError, E::DeconstructError>>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
@@ -46,7 +46,7 @@ where
     ) -> Self::ConstructFuture {
         Box::pin(async move {
             Ok(
-                match channel.next().await.ok_or(ConstructError::Insufficient {
+                match channel.next().await.ok_or(WrappedError::Insufficient {
                     got: 0,
                     expected: 1,
                 })? {

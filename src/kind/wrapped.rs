@@ -7,17 +7,17 @@ use futures::{future::BoxFuture, SinkExt, StreamExt};
 
 use std::sync::{Arc, Mutex};
 
-use super::{ConstructError, DeconstructError};
+use super::WrappedError;
 
 impl<T> Kind for Arc<Mutex<T>>
 where
     T: Kind,
 {
     type ConstructItem = ForkHandle;
-    type ConstructError = ConstructError<T::ConstructError>;
+    type ConstructError = WrappedError<T::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = DeconstructError<T::DeconstructError>;
+    type DeconstructError = WrappedError<T::DeconstructError>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
@@ -44,7 +44,7 @@ where
         mut channel: C,
     ) -> Self::ConstructFuture {
         Box::pin(async move {
-            let handle = channel.next().await.ok_or(ConstructError::Insufficient {
+            let handle = channel.next().await.ok_or(WrappedError::Insufficient {
                 got: 0,
                 expected: 1,
             })?;
@@ -58,10 +58,10 @@ where
     T: Kind,
 {
     type ConstructItem = ForkHandle;
-    type ConstructError = ConstructError<T::ConstructError>;
+    type ConstructError = WrappedError<T::ConstructError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = DeconstructError<T::DeconstructError>;
+    type DeconstructError = WrappedError<T::DeconstructError>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
@@ -78,7 +78,7 @@ where
         mut channel: C,
     ) -> Self::ConstructFuture {
         Box::pin(async move {
-            let handle = channel.next().await.ok_or(ConstructError::Insufficient {
+            let handle = channel.next().await.ok_or(WrappedError::Insufficient {
                 got: 0,
                 expected: 1,
             })?;
