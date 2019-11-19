@@ -307,7 +307,7 @@ where
         );
         StreamSink(
             Box::pin(stream.map(<Self as Format>::serialize)),
-            Box::pin(sender.sink_map_err(|_| panic!())),
+            Box::pin(sender.sink_map_err(|e| panic!(format!("{}", e)))),
         )
     }
 }
