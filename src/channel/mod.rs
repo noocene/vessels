@@ -34,7 +34,7 @@ pub trait Fork: Send + 'static {
 }
 
 #[derive(Debug)]
-pub struct ChannelError(Error);
+pub struct ChannelError(pub(crate) Error);
 
 impl<T: Fail> From<T> for ChannelError {
     fn from(input: T) -> Self {

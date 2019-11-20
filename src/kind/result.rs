@@ -11,9 +11,9 @@ use super::WrappedError;
 #[derive(Fail, Debug)]
 pub enum ResultError<T: Fail, E: Fail> {
     #[fail(display = "{}", _0)]
-    Ok(T),
+    Ok(#[fail(cause)] T),
     #[fail(display = "{}", _0)]
-    Err(E),
+    Err(#[fail(cause)] E),
 }
 
 impl<T, E> Kind for Result<T, E>

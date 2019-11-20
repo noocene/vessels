@@ -16,8 +16,8 @@ pub struct MethodTypes {
 #[derive(Debug, Fail)]
 pub enum CallError {
     Type(u8),
-    ArgumentCount(ArgumentCountError),
-    OutOfRange(OutOfRangeError),
+    ArgumentCount(#[fail(cause)] ArgumentCountError),
+    OutOfRange(#[fail(cause)] OutOfRangeError),
     IncorrectReceiver(Receiver),
 }
 

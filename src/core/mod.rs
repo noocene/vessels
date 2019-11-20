@@ -27,7 +27,7 @@ pub struct UnimplementedError {
 #[derive(Fail, Debug)]
 pub enum CoreError {
     Unavailable,
-    Unimplemented(UnimplementedError),
+    Unimplemented(#[fail(cause)] UnimplementedError),
 }
 
 impl Display for CoreError {
