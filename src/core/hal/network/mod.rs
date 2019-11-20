@@ -1,6 +1,10 @@
-use crate::{core::UnimplementedError, kind::Future, object, Kind};
+use crate::{
+    core::UnimplementedError,
+    kind::{Future, Stream},
+    object, Kind,
+};
 
-use failure::Fail;
+use failure::{Error, Fail};
 use std::net::SocketAddr;
 
 use serde::{Deserialize, Serialize};
@@ -20,25 +24,54 @@ pub trait Peer {}
 #[fail(display = "connection failed")]
 pub struct ConnectError;
 
+#[derive(Fail, Debug, Kind)]
+#[fail(display = "listening failed: {}", cause)]
+pub struct ListenError {
+    #[fail(cause)]
+    cause: Error,
+}
+
 #[object]
-pub trait Network {
+pub trait Client {
     fn connect(&mut self, address: StaticCandidate) -> Future<Result<Box<dyn Peer>, ConnectError>>;
 }
 
+#[object]
+pub trait Server {
+    fn listen(&mut self, address: SocketAddr) -> Stream<Result<Box<dyn Peer>, ListenError>>;
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "core"))]
+mod native;
 #[cfg(all(target_arch = "wasm32", feature = "core"))]
 mod web;
 
-impl dyn Network {
-    pub fn new() -> Result<Box<dyn Network>, UnimplementedError> {
+impl dyn Client {
+    pub fn new() -> Result<Box<dyn Client>, UnimplementedError> {
         #[cfg(all(target_arch = "wasm32", feature = "core"))]
-        return Ok(web::Network::new());
+        return Ok(web::Client::new());
         #[cfg(all(not(target_arch = "wasm32"), feature = "core"))]
         return Err(UnimplementedError {
-            feature: "networking".to_owned(),
+            feature: "a network client".to_owned(),
         });
         #[cfg(not(feature = "core"))]
         return Err(UnimplementedError {
-            feature: "networking".to_owned(),
+            feature: "a network client".to_owned(),
+        });
+    }
+}
+
+impl dyn Server {
+    pub fn new() -> Result<Box<dyn Server>, UnimplementedError> {
+        #[cfg(all(target_arch = "wasm32", feature = "core"))]
+        return Err(UnimplementedError {
+            feature: "a network server".to_owned(),
+        });
+        #[cfg(all(not(target_arch = "wasm32"), feature = "core"))]
+        return Ok(native::Server::new());
+        #[cfg(not(feature = "core"))]
+        return Err(UnimplementedError {
+            feature: "a network server".to_owned(),
         });
     }
 }

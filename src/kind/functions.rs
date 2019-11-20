@@ -11,8 +11,6 @@ use std::sync::Arc;
 
 use void::Void;
 
-use super::WrappedError;
-
 impl<U: Kind> Kind for Box<dyn Fn() -> BoxFuture<'static, U> + Send + Sync> {
     type ConstructItem = ForkHandle;
     type ConstructError = Void;
@@ -496,7 +494,7 @@ macro_rules! functions_impl {
             type ConstructError = Void;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = Vec<ForkHandle>;
-            type DeconstructError = WrappedError<Void>;
+            type DeconstructError = Void;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -504,16 +502,16 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.ok_or(WrappedError::Insufficient {
-                        got: 0,
-                        expected: 1,
-                    })?;
+                    let handles = channel.next().await.unwrap();
                     channel
                         .send(
                             channel
                                 .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+).await)
-                                .await.unwrap(),
-                        ).await?;
+                                .await
+                                .unwrap(),
+                        )
+                        .unwrap_or_else(|_| panic!())
+                        .await;
                     Ok(())
                 })
             }
@@ -544,7 +542,7 @@ macro_rules! functions_impl {
             type ConstructError = Void;
             type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
             type DeconstructItem = Vec<ForkHandle>;
-            type DeconstructError = WrappedError<Void>;
+            type DeconstructError = Void;
             type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -552,10 +550,7 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    let handles = channel.next().await.ok_or(WrappedError::Insufficient {
-                        got: 0,
-                        expected: 1,
-                    })?;
+                    let handles = channel.next().await.unwrap();
                     channel
                         .send(
                             channel
@@ -563,7 +558,8 @@ macro_rules! functions_impl {
                                 .await
                                 .unwrap(),
                         )
-                        .await?;
+                        .unwrap_or_else(|_| panic!())
+                        .await;
                     Ok(())
                 })
             }

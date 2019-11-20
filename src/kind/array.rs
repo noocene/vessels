@@ -37,7 +37,7 @@ impl<T: Send + 'static> Kind for [T; 0] {
 #[derive(Fail, Debug)]
 pub enum ArrayError<T: Fail> {
     #[fail(display = "{}", _0)]
-    Construct(T),
+    Construct(#[fail(cause)] T),
     #[fail(display = "expected {} elements in array, got {}", expected, got)]
     Length { got: usize, expected: usize },
 }

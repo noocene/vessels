@@ -35,7 +35,7 @@ pub trait AsKindMarker {}
 #[derive(Fail, Debug)]
 pub enum WrappedError<T: Fail> {
     #[fail(display = "{}", _0)]
-    Concrete(T),
+    Concrete(#[fail(cause)] T),
     #[fail(display = "got {} items in construct, expected {}", got, expected)]
     Insufficient { got: usize, expected: usize },
     #[fail(display = "failed to send on underlying channel: {}", _0)]
