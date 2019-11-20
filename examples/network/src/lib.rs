@@ -5,7 +5,7 @@ use vessels::{
         executor::Spawn,
         hal::{
             crypto::Rng,
-            network::{Network, StaticCandidate},
+            network::{Client, StaticCandidate},
         },
         orchestrator::containers::{web::WebContainers, Containers},
         Executor, Vessel,
@@ -19,7 +19,7 @@ use wasm_bindgen::prelude::*;
 pub fn main() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     core::<dyn Executor>().unwrap().run(async move {
-        let mut network = Network::new().unwrap();
+        let mut network = Client::new().unwrap();
         let ufrag = [236, 97, 14];
         let pwd = [
             221, 45, 14, 120, 112, 243, 215, 166, 168, 89, 18, 184, 182, 112, 11, 34, 199, 155, 31,

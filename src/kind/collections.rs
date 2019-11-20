@@ -34,7 +34,7 @@ macro_rules! iterator_impl {
                     channel.send(try_join_all(
                         self.into_iter()
                             .map(|entry| channel.fork::<T>(entry)),
-                    ).await?).await.map_err(From::from)
+                    ).await?).await.map_err(WrappedError::Send)
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
@@ -86,7 +86,7 @@ macro_rules! map_impl {
                     channel.send(try_join_all(
                         self.into_iter()
                             .map(|entry| channel.fork::<(K, V)>(entry))
-                    ).await?).await.map_err(From::from)
+                    ).await?).await.map_err(WrappedError::Send)
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

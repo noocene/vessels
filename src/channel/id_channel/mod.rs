@@ -92,10 +92,22 @@ impl Display for SinkStage {
     }
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug)]
 pub enum IdChannelError {
     Channel(SinkStage, ForkHandle, ChannelError),
     InvalidId(ForkHandle),
+}
+
+impl Fail for IdChannelError {
+    fn name(&self) -> Option<&str> {
+        Some("IdChannelError")
+    }
+    fn cause(&self) -> Option<&dyn Fail> {
+        if let IdChannelError::Channel(_, _, error) = self {
+            return Some(error.0.as_fail());
+        }
+        None
+    }
 }
 
 impl Display for IdChannelError {
@@ -131,7 +143,7 @@ impl Sink<Item> for IdChannel {
                 channel
                     .as_mut()
                     .start_send(data)
-                    .map_err(move |e| IdChannelError::Channel(SinkStage::Send, id, e.into()))
+                    .map_err(move |e| IdChannelError::Channel(SinkStage::Send, id, e))
             }
             None => Err(IdChannelError::InvalidId(item.0)),
         }
@@ -149,7 +161,7 @@ impl Sink<Item> for IdChannel {
             })
         {
             let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(SinkStage::Ready, *id, e.into()))
+            result.map_err(move |e| IdChannelError::Channel(SinkStage::Ready, *id, e))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -167,7 +179,7 @@ impl Sink<Item> for IdChannel {
             })
         {
             let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(SinkStage::Flush, *id, e.into()))
+            result.map_err(move |e| IdChannelError::Channel(SinkStage::Flush, *id, e))
         } else {
             Poll::Ready(Ok(()))
         }
@@ -185,7 +197,7 @@ impl Sink<Item> for IdChannel {
             })
         {
             let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(SinkStage::Close, *id, e.into()))
+            result.map_err(move |e| IdChannelError::Channel(SinkStage::Close, *id, e))
         } else {
             Poll::Ready(Ok(()))
         }

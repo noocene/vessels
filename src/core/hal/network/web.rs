@@ -1,4 +1,4 @@
-use super::{ConnectError, Network as INetwork, Peer as IPeer, StaticCandidate};
+use super::{Client as IClient, ConnectError, Peer as IPeer, StaticCandidate};
 
 use crate::kind::Future;
 
@@ -11,7 +11,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{RtcIceCandidateInit, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit};
 
-pub struct Network;
+pub struct Client;
 
 pub struct Peer;
 
@@ -30,7 +30,7 @@ impl<F: IFuture> IFuture for SendAssert<F> {
 
 struct SendAssert<F: IFuture>(Pin<Box<F>>);
 
-impl INetwork for Network {
+impl IClient for Client {
     fn connect(
         &mut self,
         candidate: StaticCandidate,
@@ -90,8 +90,8 @@ a=fingerprint:sha-256 {}
     }
 }
 
-impl Network {
-    pub fn new() -> Box<dyn INetwork> {
-        Box::new(Network)
+impl Client {
+    pub fn new() -> Box<dyn IClient> {
+        Box::new(Client)
     }
 }

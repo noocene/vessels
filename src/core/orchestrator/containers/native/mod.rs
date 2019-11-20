@@ -115,7 +115,7 @@ fn panic(cx: &mut Ctx, ptr: i32, len: i32) {
     for (idx, byte) in buffer.iter_mut().enumerate() {
         *byte = view[ptr + idx].get();
     }
-    if let Some(item) = String::from_utf8(buffer).ok() {
+    if let Ok(item) = String::from_utf8(buffer) {
         panic!(item);
     } else {
         panic!();
