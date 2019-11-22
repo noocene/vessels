@@ -100,8 +100,7 @@ impl IServer for Server {
                             gstreamer::PromiseResult::Replied => println!("local description set"),
                             err => panic!(format!("{:?}", err)),
                         });
-                    rtc
-                        .emit("set-local-description", &[&offer, &promise])
+                    rtc.emit("set-local-description", &[&offer, &promise])
                         .unwrap();
                 });
                 webrtcbin

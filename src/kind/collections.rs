@@ -31,10 +31,10 @@ macro_rules! iterator_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    channel.send(try_join_all(
+                    Ok(channel.send(try_join_all(
                         self.into_iter()
                             .map(|entry| channel.fork::<T>(entry)),
-                    ).await?).await.map_err(WrappedError::Send)
+                    ).await?).await?)
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
@@ -45,12 +45,12 @@ macro_rules! iterator_impl {
                         got: 0,
                         expected: 1
                     })?;
-                    try_join_all(
+                    Ok(try_join_all(
                         handles
                             .into_iter()
                             .map(|entry| channel.get_fork::<T>(entry)),
                     )
-                    .map_ok(|vec| vec.into_iter().collect()).await.map_err(From::from)
+                    .map_ok(|vec| vec.into_iter().collect()).await?)
                 })
             }
         }
@@ -83,10 +83,10 @@ macro_rules! map_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    channel.send(try_join_all(
+                    Ok(channel.send(try_join_all(
                         self.into_iter()
                             .map(|entry| channel.fork::<(K, V)>(entry))
-                    ).await?).await.map_err(WrappedError::Send)
+                    ).await?).await?)
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
@@ -97,12 +97,12 @@ macro_rules! map_impl {
                         got: 0,
                         expected: 1
                     })?;
-                    try_join_all(
+                    Ok(try_join_all(
                         handles
                             .into_iter()
                             .map(|entry| channel.get_fork::<(K, V)>(entry)),
                     )
-                    .map_ok(|vec| vec.into_iter().collect()).await.map_err(From::from)
+                    .map_ok(|vec| vec.into_iter().collect()).await?)
                 })
             }
         }

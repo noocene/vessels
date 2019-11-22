@@ -1,36 +1,37 @@
-use crate::{
-    channel::{Channel, ForkHandle},
-    ConstructResult, DeconstructResult, Kind,
-};
+use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
 
 use futures::{future::BoxFuture, SinkExt, StreamExt};
+use url::{ParseError, Url};
 
 use super::WrappedError;
 
-impl<T> Kind for BoxFuture<'static, T>
-where
-    T: Kind,
-{
-    type ConstructItem = ForkHandle;
-    type ConstructError = T::ConstructError;
+use void::Void;
+
+impl Kind for Url {
+    type ConstructItem = String;
+    type ConstructError = WrappedError<ParseError>;
     type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = WrappedError<T::DeconstructError>;
+    type DeconstructError = WrappedError<Void>;
     type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         mut channel: C,
     ) -> Self::DeconstructFuture {
-        Box::pin(async move { Ok(channel.send(channel.fork(self.await).await?).await?) })
+        Box::pin(async move { Ok(channel.send(self.into_string()).await?) })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         mut channel: C,
     ) -> Self::ConstructFuture {
         Box::pin(async move {
-            Ok(Box::pin(async move {
-                let handle = channel.next().await.unwrap();
-                channel.get_fork::<T>(handle).await.unwrap()
-            }) as BoxFuture<'static, T>)
+            Ok(channel
+                .next()
+                .await
+                .ok_or(WrappedError::Insufficient {
+                    got: 0,
+                    expected: 1,
+                })?
+                .parse()?)
         })
     }
 }

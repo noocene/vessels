@@ -14,6 +14,7 @@ mod sink;
 mod stream;
 mod tuple;
 mod unit;
+mod url;
 pub mod using;
 mod wrapped;
 pub use self::serde::Serde;
