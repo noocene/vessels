@@ -61,10 +61,9 @@ impl Kind for Error {
         mut channel: C,
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
-            channel
+            Ok(channel
                 .send(channel.fork(ErrorShim::from_fail(self.as_fail())).await?)
-                .await
-                .map_err(From::from)
+                .await?)
         })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
