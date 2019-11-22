@@ -59,11 +59,11 @@ macro_rules! array_impl {
             ) -> Self::DeconstructFuture {
                 let [$($nn),+] = self;
                 Box::pin(async move {
-                    channel.send(
+                    Ok(channel.send(
                         vec![
                             $(channel.fork::<T>($nn).await?),+
                         ]
-                    ).await.map_err(From::from)
+                    ).await?)
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
@@ -73,7 +73,7 @@ macro_rules! array_impl {
                     channel
                         .into_future()
                         .then(move |(item, channel)| async move {
-                            try_join_all(
+                            Ok(try_join_all(
                                 item.ok_or(WrappedError::Insufficient {
                                     got: 0,
                                     expected: 1
@@ -98,7 +98,7 @@ macro_rules! array_impl {
                                     }
                                     Err(e) => Err(e)
                                 }
-                            }).await.map_err(From::from)
+                            }).await?)
                         })
                 )
             }

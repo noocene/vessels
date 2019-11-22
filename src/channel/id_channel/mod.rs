@@ -519,7 +519,7 @@ impl<
     type Error = ChannelError;
 
     fn start_send(mut self: Pin<&mut Self>, item: O) -> Result<(), Self::Error> {
-        self.o.as_mut().start_send(item).map_err(From::from)
+        Ok(self.o.as_mut().start_send(item)?)
     }
     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
         self.o.as_mut().poll_ready(cx).map_err(From::from)
