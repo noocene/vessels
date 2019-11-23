@@ -34,12 +34,9 @@ web-sys = { version = "0.3.30", optional = true, features = [
     "console", 
     "Window", 
     "Crypto", 
-    "RtcPeerConnection", 
-    "RtcSessionDescriptionInit",
-    "RtcSdpType",
-    "RtcIceCandidateInit",
-    "RtcDataChannel",
-    "WebSocket"
+    "WebSocket",
+    "MessageEvent",
+    "BinaryType"
 ]}
 js-sys = { version = "0.3.30", optional = true }
 wasm-bindgen-futures = { version = "0.4.4", optional = true }
