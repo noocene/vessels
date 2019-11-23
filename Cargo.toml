@@ -38,7 +38,8 @@ web-sys = { version = "0.3.30", optional = true, features = [
     "RtcSessionDescriptionInit",
     "RtcSdpType",
     "RtcIceCandidateInit",
-    "RtcDataChannel"
+    "RtcDataChannel",
+    "WebSocket"
 ]}
 js-sys = { version = "0.3.30", optional = true }
 wasm-bindgen-futures = { version = "0.4.4", optional = true }

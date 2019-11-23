@@ -22,14 +22,14 @@ pub use default::Default;
 pub use iterator::Iterator;
 
 use failure::Fail;
-use futures::{future::BoxFuture, stream::BoxStream, Sink as ISink};
+use futures::{Future as IFuture, Sink as ISink, Stream as IStream};
 use std::pin::Pin;
 
 use crate::{channel::ChannelError, Kind};
 
-pub type Stream<T> = BoxStream<'static, T>;
-pub type Future<T> = BoxFuture<'static, T>;
-pub type Sink<T, E> = Pin<Box<dyn ISink<T, Error = E> + Send>>;
+pub type Stream<T> = Pin<Box<dyn IStream<Item = T> + Sync + Send>>;
+pub type Future<T> = Pin<Box<dyn IFuture<Output = T> + Sync + Send>>;
+pub type Sink<T, E> = Pin<Box<dyn ISink<T, Error = E> + Sync + Send>>;
 
 pub trait AsKindMarker {}
 

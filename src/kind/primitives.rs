@@ -8,9 +8,9 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
+use crate::{channel::Channel, kind::Future, ConstructResult, DeconstructResult, Kind};
 
-use futures::{future::BoxFuture, SinkExt, StreamExt};
+use futures::{SinkExt, StreamExt};
 
 use super::WrappedError;
 
@@ -21,10 +21,10 @@ macro_rules! primitive_impl {
         impl Kind for $ty {
             type ConstructItem = $ty;
             type ConstructError = WrappedError<Void>;
-            type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+            type ConstructFuture = Future<ConstructResult<Self>>;
             type DeconstructItem = ();
             type DeconstructError = WrappedError<Void>;
-            type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
+            type DeconstructFuture = Future<DeconstructResult<Self>>;
 
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,

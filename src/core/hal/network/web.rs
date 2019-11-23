@@ -1,21 +1,21 @@
-use super::{Client as IClient, ConnectError, Peer as IPeer, StaticCandidate};
+use super::{Client as IClient, ConnectError, Peer as IPeer};
 
-use crate::kind::Future;
+use crate::{kind::Future, Kind};
 
+use failure::{Error, Fail};
 use futures::{
     task::{Context, Poll},
-    Future as IFuture,
+    Future as IFuture, TryFutureExt,
 };
-use std::{fmt::Write, pin::Pin};
+use std::{fmt::Write, marker::PhantomData, pin::Pin};
+use url::Url;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{RtcIceCandidateInit, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit};
+use web_sys::{
+    RtcIceCandidateInit, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit, WebSocket,
+};
 
-pub struct Client;
-
-pub struct Peer;
-
-impl IPeer for Peer {}
+pub struct Client<K: Kind>(PhantomData<K>);
 
 #[cfg(not(target_feature = "atomics"))]
 unsafe impl<F: IFuture> Send for SendAssert<F> {}
@@ -30,68 +30,22 @@ impl<F: IFuture> IFuture for SendAssert<F> {
 
 struct SendAssert<F: IFuture>(Pin<Box<F>>);
 
-impl IClient for Client {
-    fn connect(
-        &mut self,
-        candidate: StaticCandidate,
-    ) -> Future<Result<Box<dyn IPeer>, ConnectError>> {
+#[derive(Fail, Debug)]
+#[fail(display = "the target port is being blocked")]
+pub struct SecurityError;
+
+impl<K: Kind> IClient<K> for Client<K> {
+    fn connect(&mut self, address: Url) -> Future<Result<K, ConnectError>> {
         Box::pin(SendAssert(Box::pin(async move {
-            let mut fingerprint = String::new();
-            for byte in candidate.fingerprint.iter() {
-                write!(fingerprint, "{:02X}:", byte).unwrap();
-            }
-            fingerprint.pop();
-            let sdp = format!(
-                r#"v=0
-o=- 0 2 IN IP4 0.0.0.0
-s=-
-t=0 0
-a=group:BUNDLE 0
-a=msid-semantic: WMS
-m=application 9 DTLS/SCTP 5000
-c=IN IP4 0.0.0.0
-a=setup:passive
-a=mid:0
-a=ice-ufrag:{}
-a=ice-pwd:{}
-a=fingerprint:sha-256 {}
-"#,
-                base64::encode(&candidate.ufrag),
-                base64::encode(&candidate.pwd),
-                fingerprint
-            );
-            let connection =
-                RtcPeerConnection::new().expect("could not instantiate peer connection");
-            connection.create_data_channel("signalling");
-            let offer = JsFuture::from(connection.create_offer()).await.unwrap();
-            JsFuture::from(connection.set_local_description(offer.dyn_ref().unwrap()))
-                .await
-                .unwrap();
-            JsFuture::from(connection.set_remote_description(
-                &RtcSessionDescriptionInit::new(RtcSdpType::Answer).sdp(&sdp),
-            ))
-            .await
-            .unwrap();
-            JsFuture::from(
-                connection.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(
-                    RtcIceCandidateInit::new(&format!(
-                        "a=candidate:0 1 UDP 1 {} {} typ host",
-                        candidate.addr.ip(),
-                        candidate.addr.port()
-                    ))
-                    .sdp_mid(Some("0"))
-                    .sdp_m_line_index(Some(0)),
-                )),
-            )
-            .await
-            .unwrap();
-            Ok(Box::new(Peer) as Box<dyn IPeer>)
+            let socket = WebSocket::new(&address.into_string())
+                .map_err(|_| ConnectError::Connect(SecurityError.into()))?;
+            unimplemented!()
         })))
     }
 }
 
-impl Client {
-    pub fn new() -> Box<dyn IClient> {
-        Box::new(Client)
+impl<K: Kind> Client<K> {
+    pub fn new() -> Box<dyn IClient<K>> {
+        Box::new(Client(PhantomData))
     }
 }

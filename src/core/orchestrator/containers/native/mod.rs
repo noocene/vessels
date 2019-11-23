@@ -2,10 +2,10 @@ use super::{Containers, Instance};
 use crate::{
     core,
     core::{executor::Spawn, Executor},
+    kind::Future,
 };
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
-    future::BoxFuture,
     lock,
     task::{Context, Poll},
     Sink, SinkExt, Stream,
@@ -75,7 +75,7 @@ impl Sink<Vec<u8>> for NativeInstance {
 }
 
 struct State {
-    handle: Box<dyn FnMut() + Send>,
+    handle: Box<dyn FnMut() + Sync + Send>,
     output: UnboundedSender<Vec<u8>>,
 }
 
@@ -124,9 +124,9 @@ fn panic(cx: &mut Ctx, ptr: i32, len: i32) {
 
 impl Containers for NativeContainers {
     type Module = Module;
-    type Compile = BoxFuture<'static, Module>;
+    type Compile = Future<Module>;
     type Instance = NativeInstance;
-    type Instantiate = BoxFuture<'static, NativeInstance>;
+    type Instantiate = Future<NativeInstance>;
 
     fn compile<T: AsRef<[u8]>>(&mut self, data: T) -> Self::Compile {
         let data = data.as_ref().to_vec();

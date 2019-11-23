@@ -6,7 +6,7 @@ use futures::future::{ok, Ready};
 
 use void::Void;
 
-impl<T: Send + 'static> Kind for PhantomData<T> {
+impl<T: Sync + Send + 'static> Kind for PhantomData<T> {
     type ConstructItem = ();
     type ConstructError = Void;
     type ConstructFuture = Ready<ConstructResult<Self>>;

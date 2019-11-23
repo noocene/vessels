@@ -1,9 +1,10 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind::Future,
     ConstructResult, DeconstructResult, Kind,
 };
 
-use futures::{future::BoxFuture, SinkExt, StreamExt};
+use futures::{SinkExt, StreamExt};
 
 use std::sync::{Arc, Mutex};
 
@@ -15,10 +16,10 @@ where
 {
     type ConstructItem = ForkHandle;
     type ConstructError = WrappedError<T::ConstructError>;
-    type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+    type ConstructFuture = Future<ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = WrappedError<T::DeconstructError>;
-    type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
+    type DeconstructFuture = Future<DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         mut channel: C,
@@ -58,10 +59,10 @@ where
 {
     type ConstructItem = ForkHandle;
     type ConstructError = WrappedError<T::ConstructError>;
-    type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+    type ConstructFuture = Future<ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = WrappedError<T::DeconstructError>;
-    type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
+    type DeconstructFuture = Future<DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         mut channel: C,

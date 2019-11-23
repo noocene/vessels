@@ -1,26 +1,23 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind::{Future, Stream},
     ConstructResult, DeconstructResult, Kind,
 };
 
-use futures::{
-    future::BoxFuture,
-    stream::{unfold, BoxStream},
-    SinkExt, StreamExt,
-};
+use futures::{stream::unfold, SinkExt, StreamExt};
 
 use super::WrappedError;
 
-impl<T> Kind for BoxStream<'static, T>
+impl<T> Kind for Stream<T>
 where
     T: Kind,
 {
     type ConstructItem = Option<ForkHandle>;
     type ConstructError = WrappedError<T::ConstructError>;
-    type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+    type ConstructFuture = Future<ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = WrappedError<T::DeconstructError>;
-    type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
+    type DeconstructFuture = Future<DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         mut self,
         mut channel: C,
@@ -45,7 +42,7 @@ where
                         None
                     }
                 }
-            })) as BoxStream<'static, T>)
+            })) as Stream<T>)
         })
     }
 }
