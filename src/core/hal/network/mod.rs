@@ -6,23 +6,18 @@ use crate::{
 
 use failure::{Error, Fail};
 use std::net::SocketAddr;
-
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Kind)]
-pub struct StaticCandidate {
-    pub ufrag: [u8; 3],
-    pub pwd: [u8; 24],
-    pub fingerprint: [u8; 32],
-    pub addr: SocketAddr,
-}
+use url::Url;
 
 #[object]
 pub trait Peer {}
 
 #[derive(Fail, Debug, Kind)]
-#[fail(display = "connection failed")]
-pub struct ConnectError;
+pub enum ConnectError {
+    #[fail(display = "connection failed: {}", _0)]
+    Connect(#[cause] Error),
+    #[fail(display = "construct failed: {}", _0)]
+    Construct(#[cause] Error),
+}
 
 #[derive(Fail, Debug, Kind)]
 #[fail(display = "listening failed: {}", cause)]
@@ -32,8 +27,8 @@ pub struct ListenError {
 }
 
 #[object]
-pub trait Client {
-    fn connect(&mut self, address: StaticCandidate) -> Future<Result<Box<dyn Peer>, ConnectError>>;
+pub trait Client<K: Kind> {
+    fn connect(&mut self, address: Url) -> Future<Result<K, ConnectError>>;
 }
 
 #[object]
@@ -46,8 +41,8 @@ mod native;
 #[cfg(all(target_arch = "wasm32", feature = "core"))]
 mod web;
 
-impl dyn Client {
-    pub fn new() -> Result<Box<dyn Client>, UnimplementedError> {
+impl<K: Kind> dyn Client<K> {
+    pub fn new() -> Result<Box<dyn Client<K>>, UnimplementedError> {
         #[cfg(all(target_arch = "wasm32", feature = "core"))]
         return Ok(web::Client::new());
         #[cfg(all(not(target_arch = "wasm32"), feature = "core"))]

@@ -1,11 +1,12 @@
 use super::WrappedError;
 use crate::{
     channel::{Channel, ForkHandle},
+    kind::Future,
     ConstructResult, DeconstructResult, Kind,
 };
 
 use failure::{Error, Fail};
-use futures::{future::BoxFuture, SinkExt, StreamExt};
+use futures::{SinkExt, StreamExt};
 use std::fmt::{self, Debug, Display, Formatter};
 use void::Void;
 
@@ -52,10 +53,10 @@ impl ErrorShim {
 impl Kind for Error {
     type ConstructItem = ForkHandle;
     type ConstructError = WrappedError<Void>;
-    type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+    type ConstructFuture = Future<ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = WrappedError<Void>;
-    type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
+    type DeconstructFuture = Future<DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         mut channel: C,

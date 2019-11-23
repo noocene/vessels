@@ -1,8 +1,6 @@
 use super::Executor;
-use futures::{
-    executor::{block_on, ThreadPool},
-    future::BoxFuture,
-};
+use crate::kind::Future;
+use futures::executor::{block_on, ThreadPool};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -14,10 +12,10 @@ pub(crate) struct Spawner {
 }
 
 impl Executor for Spawner {
-    fn spawn_boxed(&mut self, future: BoxFuture<'static, ()>) {
+    fn spawn_boxed(&mut self, future: Future<()>) {
         self.inner.spawn_ok(future)
     }
-    fn run_boxed(&mut self, future: BoxFuture<'static, ()>) {
+    fn run_boxed(&mut self, future: Future<()>) {
         block_on(future);
     }
 }

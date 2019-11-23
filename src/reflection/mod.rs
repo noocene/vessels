@@ -125,7 +125,7 @@ impl From<Box<SomeTrait>> for () {
 }
 
 pub trait Erased: Send + Trait<SomeTrait> {
-    fn cast(self: Box<Self>, ty: TypeId) -> Result<Box<dyn Any + Send>, CastError>;
+    fn cast(self: Box<Self>, ty: TypeId) -> Result<Box<dyn Any + Send + Sync>, CastError>;
 }
 
 pub trait Cast<T: ?Sized + Reflected> {
@@ -136,7 +136,7 @@ pub trait Cast<T: ?Sized + Reflected> {
 impl<S: ?Sized + Reflected> Cast<S> for Box<dyn Erased> {
     fn downcast(self) -> Result<Box<S>, CastError> {
         self.cast(TypeId::of::<S>()).map(|erased| {
-            *Box::<dyn Any + Send>::downcast::<Box<S>>(erased)
+            *Box::<dyn Any>::downcast::<Box<S>>(erased)
                 .map_err(|_| panic!("could not downcast after successful reinterpretation"))
                 .unwrap()
         })
@@ -153,7 +153,7 @@ impl<S: ?Sized + Reflected> Cast<S> for Box<dyn Erased> {
 impl<T: ?Sized + Reflected + Trait<T>, S: ?Sized + Reflected> Cast<S> for Box<T> {
     fn downcast(self) -> Result<Box<S>, CastError> {
         self.erase().cast(TypeId::of::<S>()).map(|erased| {
-            *Box::<dyn Any + Send>::downcast::<Box<S>>(erased)
+            *Box::<dyn Any>::downcast::<Box<S>>(erased)
                 .map_err(|_| panic!("could not downcast after successful reinterpretation"))
                 .unwrap()
         })
@@ -171,18 +171,18 @@ pub trait Trait<T: Reflected + ?Sized> {
     fn call(
         &self,
         index: MethodIndex,
-        args: Vec<Box<dyn Any + Send>>,
-    ) -> Result<Box<dyn Any + Send>, CallError>;
+        args: Vec<Box<dyn Any + Send + Sync>>,
+    ) -> Result<Box<dyn Any + Send + Sync>, CallError>;
     fn call_mut(
         &mut self,
         index: MethodIndex,
-        args: Vec<Box<dyn Any + Send>>,
-    ) -> Result<Box<dyn Any + Send>, CallError>;
+        args: Vec<Box<dyn Any + Send + Sync>>,
+    ) -> Result<Box<dyn Any + Send + Sync>, CallError>;
     fn call_move(
         self: Box<Self>,
         index: MethodIndex,
-        args: Vec<Box<dyn Any + Send>>,
-    ) -> Result<Box<dyn Any + Send>, CallError>;
+        args: Vec<Box<dyn Any + Send + Sync>>,
+    ) -> Result<Box<dyn Any + Send + Sync>, CallError>;
     fn by_name(&self, name: &'_ str) -> Result<MethodIndex, NameError>;
     fn count(&self) -> MethodIndex;
     fn name_of(&self, index: MethodIndex) -> Result<String, OutOfRangeError>;

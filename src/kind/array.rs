@@ -1,11 +1,12 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind::Future,
     ConstructResult, DeconstructResult, Kind,
 };
 
 use failure::Fail;
 use futures::{
-    future::{ok, try_join_all, BoxFuture, Ready},
+    future::{ok, try_join_all, Ready},
     FutureExt, SinkExt, StreamExt, TryFutureExt,
 };
 use std::{mem::MaybeUninit, ptr};
@@ -13,7 +14,7 @@ use void::Void;
 
 use super::WrappedError;
 
-impl<T: Send + 'static> Kind for [T; 0] {
+impl<T: Sync + Send + 'static> Kind for [T; 0] {
     type ConstructItem = ();
     type ConstructError = Void;
     type ConstructFuture = Ready<ConstructResult<Self>>;
@@ -49,10 +50,10 @@ macro_rules! array_impl {
         {
             type ConstructItem = Vec<ForkHandle>;
             type ConstructError = WrappedError<ArrayError<T::ConstructError>>;
-            type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+            type ConstructFuture = Future<ConstructResult<Self>>;
             type DeconstructItem = ();
             type DeconstructError = WrappedError<T::DeconstructError>;
-            type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
+            type DeconstructFuture = Future<DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
                 mut channel: C,
