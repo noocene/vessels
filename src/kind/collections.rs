@@ -1,5 +1,6 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind::Future,
     ConstructResult, DeconstructResult, Kind,
 };
 
@@ -8,10 +9,7 @@ use std::{
     hash::Hash,
 };
 
-use futures::{
-    future::{try_join_all, BoxFuture},
-    SinkExt, StreamExt, TryFutureExt,
-};
+use futures::{future::try_join_all, SinkExt, StreamExt, TryFutureExt};
 
 use super::WrappedError;
 
@@ -22,10 +20,10 @@ macro_rules! iterator_impl {
         {
             type ConstructItem = Vec<ForkHandle>;
             type ConstructError = WrappedError<T::ConstructError>;
-            type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+            type ConstructFuture = Future<ConstructResult<Self>>;
             type DeconstructItem = ();
             type DeconstructError = WrappedError<T::DeconstructError>;
-            type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
+            type DeconstructFuture = Future<DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
                 mut channel: C,
@@ -74,10 +72,10 @@ macro_rules! map_impl {
         {
             type ConstructItem = Vec<ForkHandle>;
             type ConstructError = WrappedError<<(K, V) as Kind>::ConstructError>;
-            type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+            type ConstructFuture = Future<ConstructResult<Self>>;
             type DeconstructItem = ();
             type DeconstructError = WrappedError<<(K, V) as Kind>::DeconstructError>;
-            type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
+            type DeconstructFuture = Future<DeconstructResult<Self>>;
             fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
                 self,
                 mut channel: C,

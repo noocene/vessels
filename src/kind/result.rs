@@ -1,10 +1,11 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind::Future,
     ConstructResult, DeconstructResult, Kind,
 };
 
 use failure::Fail;
-use futures::{future::BoxFuture, SinkExt, StreamExt};
+use futures::{SinkExt, StreamExt};
 
 use super::WrappedError;
 
@@ -23,10 +24,10 @@ where
 {
     type ConstructItem = Result<ForkHandle, ForkHandle>;
     type ConstructError = WrappedError<ResultError<T::ConstructError, E::ConstructError>>;
-    type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+    type ConstructFuture = Future<ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = WrappedError<ResultError<T::DeconstructError, E::DeconstructError>>;
-    type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
+    type DeconstructFuture = Future<DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         mut channel: C,

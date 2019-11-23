@@ -5,7 +5,7 @@ use crate::{
 };
 
 use futures::{
-    future::{ready, BoxFuture},
+    future::ready,
     lock::Mutex,
     task::{Context, Poll},
     Sink as ISink, SinkExt, StreamExt,
@@ -59,10 +59,10 @@ where
 {
     type ConstructItem = ForkHandle;
     type ConstructError = Void;
-    type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+    type ConstructFuture = Future<ConstructResult<Self>>;
     type DeconstructItem = ForkHandle;
     type DeconstructError = WrappedError<Void>;
-    type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
+    type DeconstructFuture = Future<DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         mut self,
         mut channel: C,

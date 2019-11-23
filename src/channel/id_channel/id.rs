@@ -27,7 +27,7 @@ impl Registry {
         self.add_type::<K::DeconstructItem>();
     }
 
-    fn add_type<T: Serialize + DeserializeOwned + Send + 'static>(&self) {
+    fn add_type<T: Serialize + DeserializeOwned + Sync + Send + 'static>(&self) {
         if !self.items.read().unwrap().contains_key(&TypeId::of::<T>()) {
             let mut items = self.items.write().unwrap();
             if !items.contains_key(&TypeId::of::<T>()) {

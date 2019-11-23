@@ -9,9 +9,9 @@ use id::REGISTRY;
 use failure::Fail;
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
-    future::{ok, BoxFuture},
+    future::ok,
     task::{Context as FContext, Poll},
-    Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
+    Future as IFuture, FutureExt, Sink as ISink, SinkExt, Stream, StreamExt, TryFutureExt,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -26,6 +26,7 @@ use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle, Waiter},
     core,
     core::{executor::Spawn, Executor},
+    kind::{Future, Sink},
     Kind, SerdeAny, Target,
 };
 
@@ -37,22 +38,14 @@ pub struct IdChannel {
         Pin<Box<UnboundedSender<Item>>>,
     ),
     context: Context,
-    in_channels: Arc<
-        Mutex<
-            HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ChannelError> + Send>>>,
-        >,
-    >,
+    in_channels: Arc<Mutex<HashMap<ForkHandle, Sink<Box<dyn SerdeAny>, ChannelError>>>>,
 }
 
 #[derive(Clone)]
 struct IdChannelHandle {
     out_channel: Pin<Box<UnboundedSender<Item>>>,
     context: Context,
-    in_channels: Arc<
-        Mutex<
-            HashMap<ForkHandle, Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ChannelError> + Send>>>,
-        >,
-    >,
+    in_channels: Arc<Mutex<HashMap<ForkHandle, Sink<Box<dyn SerdeAny>, ChannelError>>>>,
 }
 
 impl IdChannelHandle {
@@ -133,7 +126,7 @@ impl Drop for IdChannel {
     }
 }
 
-impl Sink<Item> for IdChannel {
+impl ISink<Item> for IdChannel {
     type Error = IdChannelError;
 
     fn start_send(self: Pin<&mut Self>, item: Item) -> Result<(), Self::Error> {
@@ -205,7 +198,7 @@ impl Sink<Item> for IdChannel {
 }
 
 impl Waiter for Context {
-    fn wait_for(&self, data: String) -> BoxFuture<'static, ()> {
+    fn wait_for(&self, data: String) -> Future<()> {
         Box::pin(self.wait_for(ForkHandle(data.parse().unwrap())))
     }
 }
@@ -234,10 +227,10 @@ pub struct Shim<K: Kind> {
 }
 
 impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
-    fn complete<C: Send + Stream<Item = Item> + Sink<Item> + 'static>(
+    fn complete<C: Sync + Send + Stream<Item = Item> + ISink<Item> + 'static>(
         self,
         input: C,
-    ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
+    ) -> Future<Result<K, K::ConstructError>> {
         let (sink, stream) = input.split();
         let (sender, receiver) = unbounded();
         let channel = IdChannel {
@@ -269,10 +262,7 @@ impl<'a, K: Kind> IContext<'a> for Shim<K> {
 }
 
 impl IdChannelHandle {
-    fn fork<K: Kind>(
-        &self,
-        kind: K,
-    ) -> BoxFuture<'static, Result<ForkHandle, K::DeconstructError>> {
+    fn fork<K: Kind>(&self, kind: K) -> Future<Result<ForkHandle, K::DeconstructError>> {
         REGISTRY.add_deconstruct::<K>();
         let id = self.context.create::<K>();
         let context = self.context.clone();
@@ -302,10 +292,7 @@ impl IdChannelHandle {
         )
     }
 
-    fn get_fork<K: Kind>(
-        &self,
-        fork_ref: ForkHandle,
-    ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
+    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Future<Result<K, K::ConstructError>> {
         let out_channel = self.out_channel.clone();
         REGISTRY.add_construct::<K>();
         self.context.add::<K>(fork_ref);
@@ -348,10 +335,7 @@ impl IdChannel {
             in_channels: self.in_channels.clone(),
         }
     }
-    fn get_fork<K: Kind>(
-        &self,
-        fork_ref: ForkHandle,
-    ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
+    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Future<Result<K, K::ConstructError>> {
         self.clone().get_fork(fork_ref)
     }
 }
@@ -359,7 +343,7 @@ impl IdChannel {
 impl<'a, K: Kind> Target<'a, K> for IdChannel {
     type Shim = Shim<K>;
 
-    fn new_with(kind: K) -> BoxFuture<'static, Self>
+    fn new_with(kind: K) -> Future<Self>
     where
         K::DeconstructFuture: Send,
     {
@@ -378,27 +362,21 @@ impl<'a, K: Kind> Target<'a, K> for IdChannel {
 }
 
 impl<
-        I: Serialize + DeserializeOwned + Send + 'static,
-        O: Serialize + DeserializeOwned + Send + Unpin + 'static,
+        I: Serialize + DeserializeOwned + Sync + Send + 'static,
+        O: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static,
     > IFork for IdChannelFork<I, O>
 {
-    fn fork<K: Kind>(
-        &self,
-        kind: K,
-    ) -> BoxFuture<'static, Result<ForkHandle, K::DeconstructError>> {
+    fn fork<K: Kind>(&self, kind: K) -> Future<Result<ForkHandle, K::DeconstructError>> {
         self.channel.fork(kind)
     }
-    fn get_fork<K: Kind>(
-        &self,
-        fork_ref: ForkHandle,
-    ) -> BoxFuture<'static, Result<K, K::ConstructError>> {
+    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Future<Result<K, K::ConstructError>> {
         self.channel.get_fork(fork_ref)
     }
 }
 
 pub(crate) struct IdChannelFork<
-    I: Serialize + DeserializeOwned + Send + 'static,
-    O: Serialize + DeserializeOwned + Send + Unpin + 'static,
+    I: Serialize + DeserializeOwned + Sync + Send + 'static,
+    O: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static,
 > {
     i: Pin<Box<UnboundedReceiver<I>>>,
     o: Pin<Box<UnboundedSender<O>>>,
@@ -408,8 +386,8 @@ pub(crate) struct IdChannelFork<
 }
 
 impl<
-        I: Serialize + DeserializeOwned + Send + 'static,
-        O: Serialize + DeserializeOwned + Send + Unpin + 'static,
+        I: Serialize + DeserializeOwned + Sync + Send + 'static,
+        O: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static,
     > Drop for IdChannelFork<I, O>
 {
     fn drop(&mut self) {
@@ -418,8 +396,8 @@ impl<
 }
 
 impl<
-        I: Serialize + DeserializeOwned + Send + 'static,
-        O: Serialize + DeserializeOwned + Send + Unpin + 'static,
+        I: Serialize + DeserializeOwned + Sync + Send + 'static,
+        O: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static,
     > Stream for IdChannelFork<I, O>
 {
     type Item = I;
@@ -438,9 +416,9 @@ impl<
         kind: K,
         channel: IdChannelHandle,
         handle: ForkHandle,
-    ) -> impl Future<Output = (UnboundedSender<I>, UnboundedReceiver<O>)>
+    ) -> impl IFuture<Output = (UnboundedSender<I>, UnboundedReceiver<O>)>
     where
-        K::DeconstructFuture: Send + 'static,
+        K::DeconstructFuture: Sync + Send + 'static,
     {
         async move {
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
@@ -461,9 +439,9 @@ impl<
 
     fn new_root<K: Kind<DeconstructItem = I, ConstructItem = O>>(
         kind: K,
-    ) -> impl Future<Output = IdChannel>
+    ) -> impl IFuture<Output = IdChannel>
     where
-        K::DeconstructFuture: Send + 'static,
+        K::DeconstructFuture: Sync + Send + 'static,
     {
         async move {
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
@@ -479,8 +457,7 @@ impl<
                         .downcast::<K::DeconstructItem>()
                         .map_err(|_| panic!())
                         .unwrap()))
-                }))
-                    as Pin<Box<dyn Sink<Box<dyn SerdeAny>, Error = ChannelError> + Send>>,
+                })) as Sink<Box<dyn SerdeAny>, ChannelError>,
             );
             let ct = context.clone();
             let (csender, creceiver) = unbounded();
@@ -512,9 +489,9 @@ impl<
 }
 
 impl<
-        I: Serialize + DeserializeOwned + Send + 'static,
-        O: Serialize + Unpin + DeserializeOwned + Send + 'static,
-    > Sink<O> for IdChannelFork<I, O>
+        I: Serialize + DeserializeOwned + Sync + Send + 'static,
+        O: Serialize + Unpin + DeserializeOwned + Sync + Send + 'static,
+    > ISink<O> for IdChannelFork<I, O>
 {
     type Error = ChannelError;
 
@@ -533,7 +510,7 @@ impl<
 }
 
 impl<
-        I: Serialize + DeserializeOwned + Send + 'static,
+        I: Serialize + DeserializeOwned + Sync + Send + 'static,
         O: Serialize + Unpin + DeserializeOwned + Send + Sync + 'static,
     > Channel<I, O> for IdChannelFork<I, O>
 {

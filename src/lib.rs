@@ -155,14 +155,14 @@ pub type DeconstructResult<K> = Result<(), <K as Kind>::DeconstructError>;
 /// Authors of third-party crates are encouraged to derive or implement Kind or Kind providers for
 /// types their crates expose that might be useful over some form of wire boundary, be it network, IPC,
 /// or any other similar transport.
-pub trait Kind: Any + Sized + Send + 'static {
+pub trait Kind: Any + Sized + Sync + Send + 'static {
     /// The item transmitted over the network **to** the construction task
     /// from deconstruction.
     type ConstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
     /// The failure condition of constructing a concrete type from communicated data.
     type ConstructError: Fail;
     /// The concrete future type returned by the construction process.
-    type ConstructFuture: Future<Output = ConstructResult<Self>> + Send + 'static;
+    type ConstructFuture: Future<Output = ConstructResult<Self>> + Sync + Send + 'static;
 
     /// Constructs the `Kind` from the provided channel. This method should return
     /// immediately and, if necessary, move `channel` into some shim structure,
@@ -179,7 +179,7 @@ pub trait Kind: Any + Sized + Send + 'static {
     /// The concrete future type returned by the deconstruction process. This is
     /// used to only to communicate failure of deconstruction and does not return
     /// a value.
-    type DeconstructFuture: Future<Output = DeconstructResult<Self>> + Send + 'static;
+    type DeconstructFuture: Future<Output = DeconstructResult<Self>> + Sync + Send + 'static;
 
     /// Moves out of the `Kind` and deconstructs on to the provided channel.
     /// As with `construct`, this method should return immediately.
@@ -191,13 +191,13 @@ pub trait Kind: Any + Sized + Send + 'static {
 
 /// An erased representation of any serializable type used in communication
 /// by `Kind`.
-pub(crate) trait SerdeAny: erased_serde::Serialize + Downcast + Send {}
+pub(crate) trait SerdeAny: erased_serde::Serialize + Downcast + Sync + Send {}
 
 impl_downcast!(SerdeAny);
 
 serialize_trait_object!(SerdeAny);
 
-impl<T: ?Sized> SerdeAny for T where T: ErasedSerialize + Downcast + Send {}
+impl<T: ?Sized> SerdeAny for T where T: ErasedSerialize + Downcast + Sync + Send {}
 
 /// Logs information to a target-appropriate console.
 ///

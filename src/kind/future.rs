@@ -1,22 +1,23 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind::Future,
     ConstructResult, DeconstructResult, Kind,
 };
 
-use futures::{future::BoxFuture, SinkExt, StreamExt};
+use futures::{SinkExt, StreamExt};
 
 use super::WrappedError;
 
-impl<T> Kind for BoxFuture<'static, T>
+impl<T> Kind for Future<T>
 where
     T: Kind,
 {
     type ConstructItem = ForkHandle;
     type ConstructError = T::ConstructError;
-    type ConstructFuture = BoxFuture<'static, ConstructResult<Self>>;
+    type ConstructFuture = Future<ConstructResult<Self>>;
     type DeconstructItem = ();
     type DeconstructError = WrappedError<T::DeconstructError>;
-    type DeconstructFuture = BoxFuture<'static, DeconstructResult<Self>>;
+    type DeconstructFuture = Future<DeconstructResult<Self>>;
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
         self,
         mut channel: C,
@@ -30,7 +31,7 @@ where
             Ok(Box::pin(async move {
                 let handle = channel.next().await.unwrap();
                 channel.get_fork::<T>(handle).await.unwrap()
-            }) as BoxFuture<'static, T>)
+            }) as Future<T>)
         })
     }
 }

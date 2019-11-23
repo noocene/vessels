@@ -25,7 +25,7 @@ impl<T: IDefault> From<T> for Default<T> {
     }
 }
 
-impl<T: IDefault + Send + 'static> AsKind<using::Default> for T {
+impl<T: IDefault + Sync + Send + 'static> AsKind<using::Default> for T {
     type Kind = Default<T>;
 
     fn into_kind(self) -> Default<T> {
@@ -42,7 +42,7 @@ impl<T: IDefault> Default<T> {
     }
 }
 
-impl<T: IDefault + Send + 'static> Kind for Default<T> {
+impl<T: IDefault + Sync + Send + 'static> Kind for Default<T> {
     type ConstructItem = ();
     type ConstructError = Void;
     type ConstructFuture = Ready<ConstructResult<Self>>;

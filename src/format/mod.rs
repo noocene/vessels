@@ -16,16 +16,17 @@ pub use bincode::Bincode;
 
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver},
-    future::{ok, BoxFuture},
-    stream::BoxStream,
+    future::ok,
     task::{Context as FContext, Poll},
-    Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryFutureExt,
+    Future as IFuture, FutureExt, Sink as ISink, SinkExt, Stream as IStream, StreamExt,
+    TryFutureExt,
 };
 
 use crate::{
     channel::{Context, Shim, Target, Waiter},
     core,
     core::{executor::Spawn, Executor},
+    kind::{Future, Sink, Stream},
     Kind,
 };
 
@@ -39,12 +40,9 @@ use std::{
 use failure::Fail;
 
 #[doc(hidden)]
-pub struct StreamSink<T, U, E>(
-    pub(crate) BoxStream<'static, T>,
-    pub(crate) Pin<Box<dyn Sink<U, Error = E> + Send>>,
-);
+pub struct StreamSink<T, U, E>(pub(crate) Stream<T>, pub(crate) Sink<U, E>);
 
-impl<T, U, E> Sink<U> for StreamSink<T, U, E> {
+impl<T, U, E> ISink<U> for StreamSink<T, U, E> {
     type Error = E;
 
     fn start_send(mut self: Pin<&mut Self>, item: U) -> Result<(), Self::Error> {
@@ -61,7 +59,7 @@ impl<T, U, E> Sink<U> for StreamSink<T, U, E> {
     }
 }
 
-impl<T, I, U> Stream for StreamSink<T, I, U> {
+impl<T, I, U> IStream for StreamSink<T, I, U> {
     type Item = T;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Option<Self::Item>> {
@@ -69,9 +67,9 @@ impl<T, I, U> Stream for StreamSink<T, I, U> {
     }
 }
 
-pub trait UniformStreamSink<T>: Sink<T> + Stream<Item = T> {}
+pub trait UniformStreamSink<T>: ISink<T> + IStream<Item = T> {}
 
-impl<T, U> UniformStreamSink<T> for U where U: Sink<T> + Stream<Item = T> {}
+impl<T, U> UniformStreamSink<T> for U where U: ISink<T> + IStream<Item = T> {}
 
 /// A serialization format used in the transport of `Kind`s.
 ///
@@ -91,9 +89,9 @@ pub trait Format {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> BoxFuture<'static, Result<T::Value, (Self::Error, Self::Representation)>>
+    ) -> Future<Result<T::Value, (Self::Error, Self::Representation)>>
     where
-        T: Send + 'static,
+        T: Sync + Send + 'static,
         Self: Sized;
 }
 
@@ -113,25 +111,25 @@ where
 }
 
 pub trait ApplyDecode<'de, K: Kind> {
-    fn decode<T: Target<'de, K> + Send + 'static, F: Format + 'static>(
+    fn decode<T: Target<'de, K> + Sync + Send + 'static, F: Format + 'static>(
         self,
     ) -> <F as Decode<'de, Self, K>>::Output
     where
-        Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
-        F::Representation: Clone + Send + 'static,
-        <Self as Sink<F::Representation>>::Error: Fail,
-        T::Item: Send + 'static;
+        Self: UniformStreamSink<F::Representation> + Sync + Send + Sized + 'static,
+        F::Representation: Clone + Sync + Send + 'static,
+        <Self as ISink<F::Representation>>::Error: Fail,
+        T::Item: Sync + Send + 'static;
 }
 
 impl<'de, U, K: Kind> ApplyDecode<'de, K> for U {
-    fn decode<T: Target<'de, K> + Send + 'static, F: Format + 'static>(
+    fn decode<T: Target<'de, K> + Sync + Send + 'static, F: Format + 'static>(
         self,
     ) -> <F as Decode<'de, Self, K>>::Output
     where
-        Self: UniformStreamSink<F::Representation> + Send + Sized + 'static,
-        F::Representation: Clone + Send,
-        <Self as Sink<F::Representation>>::Error: Fail,
-        T::Item: Send,
+        Self: UniformStreamSink<F::Representation> + Sync + Send + Sized + 'static,
+        F::Representation: Clone + Sync + Send,
+        <Self as ISink<F::Representation>>::Error: Fail,
+        T::Item: Sync + Send,
     {
         <F as Decode<'de, Self, K>>::decode::<T>(self)
     }
@@ -140,37 +138,37 @@ impl<'de, U, K: Kind> ApplyDecode<'de, K> for U {
 pub trait Decode<'de, C: UniformStreamSink<<Self as Format>::Representation> + 'static, K: Kind>:
     Format
 {
-    type Output: Future<Output = Result<K, K::ConstructError>>;
+    type Output: IFuture<Output = Result<K, K::ConstructError>>;
 
-    fn decode<T: Target<'de, K> + Send + 'static>(input: C) -> Self::Output
+    fn decode<T: Target<'de, K> + Sync + Send + 'static>(input: C) -> Self::Output
     where
-        T::Item: Send;
+        T::Item: Sync + Send;
 }
 
 pub trait Encode<'de, C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de>>:
     Format + Sized
 {
-    type Output: Stream<Item = <Self as Format>::Representation>
-        + Sink<Self::Representation, Error = EncodeError<Self, <C as Context<'de>>::Item, C>>;
+    type Output: IStream<Item = <Self as Format>::Representation>
+        + ISink<Self::Representation, Error = EncodeError<Self, <C as Context<'de>>::Item, C>>;
 
     fn encode(input: C) -> Self::Output;
 }
 
 impl<
         'de,
-        C: Send + UniformStreamSink<<Self as Format>::Representation> + 'static,
+        C: Sync + Send + UniformStreamSink<<Self as Format>::Representation> + 'static,
         T: Format + 'static,
         K: Kind,
     > Decode<'de, C, K> for T
 where
-    Self::Representation: Send + Clone,
-    <C as Sink<<Self as Format>::Representation>>::Error: Fail,
+    Self::Representation: Sync + Send + Clone,
+    <C as ISink<<Self as Format>::Representation>>::Error: Fail,
 {
-    type Output = BoxFuture<'static, Result<K, K::ConstructError>>;
+    type Output = Future<Result<K, K::ConstructError>>;
 
-    fn decode<U: Target<'de, K> + Send + 'static>(input: C) -> Self::Output
+    fn decode<U: Target<'de, K> + Sync + Send + 'static>(input: C) -> Self::Output
     where
-        U::Item: Send,
+        U::Item: Sync + Send,
     {
         let shim = U::new_shim();
         let context = shim.context();
@@ -208,19 +206,19 @@ where
     }
 }
 
-pub enum EncodeError<T: Format, I, S: Sink<I>> {
+pub enum EncodeError<T: Format, I, S: ISink<I>> {
     Format(T::Error),
     Sink(S::Error),
 }
 
-impl<I: 'static, T: Format + 'static, S: Sink<I> + 'static> Fail for EncodeError<T, I, S>
+impl<I: 'static, T: Format + 'static, S: ISink<I> + 'static> Fail for EncodeError<T, I, S>
 where
     T::Error: Fail,
     S::Error: Fail,
 {
 }
 
-impl<T: Format, I, S: Sink<I>> Display for EncodeError<T, I, S>
+impl<T: Format, I, S: ISink<I>> Display for EncodeError<T, I, S>
 where
     T::Error: Fail,
     S::Error: Fail,
@@ -235,7 +233,7 @@ where
     }
 }
 
-impl<T: Format, I, S: Sink<I>> Debug for EncodeError<T, I, S>
+impl<T: Format, I, S: ISink<I>> Debug for EncodeError<T, I, S>
 where
     T::Error: Fail,
     S::Error: Fail,
@@ -252,7 +250,7 @@ where
     }
 }
 
-impl<T: Format, I, S: Sink<I>> EncodeError<T, I, S> {
+impl<T: Format, I, S: ISink<I>> EncodeError<T, I, S> {
     fn from_sink_error(err: S::Error) -> Self {
         EncodeError::Sink(err)
     }
@@ -264,12 +262,12 @@ impl<T: Format, I, S: Sink<I>> EncodeError<T, I, S> {
 impl<
         'de,
         T: Format + 'static,
-        C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de> + 'static + Send + Sized,
+        C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de> + 'static + Sync + Send + Sized,
     > Encode<'de, C> for T
 where
-    T::Representation: Send + Clone,
-    <C as Context<'de>>::Item: Send,
-    <C as Sink<<C as Context<'de>>::Item>>::Error: Fail,
+    T::Representation: Sync + Send + Clone,
+    <C as Context<'de>>::Item: Sync + Send,
+    <C as ISink<<C as Context<'de>>::Item>>::Error: Fail,
 {
     type Output = StreamSink<
         Self::Representation,
