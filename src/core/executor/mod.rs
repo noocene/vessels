@@ -1,7 +1,7 @@
 use crate::kind::Future;
 use futures::Future as IFuture;
 
-pub trait Executor: Send {
+pub trait Executor: Sync + Send {
     fn spawn_boxed(&mut self, fut: Future<()>);
     fn run_boxed(&mut self, fut: Future<()>);
 }

@@ -26,7 +26,7 @@ use crate::{
     channel::{Context, Shim, Target, Waiter},
     core,
     core::{executor::Spawn, Executor},
-    kind::{Future, Sink, Stream},
+    kind::{Future, Sink, SinkStream, Stream},
     Kind,
 };
 
@@ -38,34 +38,6 @@ use std::{
 };
 
 use failure::Fail;
-
-#[doc(hidden)]
-pub struct StreamSink<T, U, E>(pub(crate) Stream<T>, pub(crate) Sink<U, E>);
-
-impl<T, U, E> ISink<U> for StreamSink<T, U, E> {
-    type Error = E;
-
-    fn start_send(mut self: Pin<&mut Self>, item: U) -> Result<(), Self::Error> {
-        self.1.as_mut().start_send(item)
-    }
-    fn poll_ready(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
-        self.1.as_mut().poll_ready(cx)
-    }
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
-        self.1.as_mut().poll_flush(cx)
-    }
-    fn poll_close(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
-        self.1.as_mut().poll_close(cx)
-    }
-}
-
-impl<T, I, U> IStream for StreamSink<T, I, U> {
-    type Item = T;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Option<Self::Item>> {
-        self.0.as_mut().poll_next(cx)
-    }
-}
 
 pub trait UniformStreamSink<T>: ISink<T> + IStream<Item = T> {}
 
@@ -174,33 +146,29 @@ where
         let context = shim.context();
         let (sink, stream) = input.split();
         Box::pin(
-            shim.complete(StreamSink(
-                Box::pin(
-                    stream
-                        .map(move |item| {
-                            let ct = context.clone();
-                            Self::deserialize(item, context.clone())
-                                .or_else(move |(e, item)| {
-                                    let context = ct.clone();
-                                    let message = format!("{}", e);
-                                    let mut data = message.split_whitespace();
-                                    if data.next() == Some("ASYNC_WAIT") {
-                                        if let Some(data) = data.next() {
-                                            return context.wait_for(data.to_owned()).then(
-                                                move |_| Self::deserialize(item, context.clone()),
-                                            );
-                                        }
+            shim.complete(SinkStream::new(
+                sink.sink_map_err(|_| panic!())
+                    .with::<_, _, _, ()>(|item: U::Item| ok(Self::serialize(item))),
+                stream
+                    .map(move |item| {
+                        let ct = context.clone();
+                        Self::deserialize(item, context.clone())
+                            .or_else(move |(e, item)| {
+                                let context = ct.clone();
+                                let message = format!("{}", e);
+                                let mut data = message.split_whitespace();
+                                if data.next() == Some("ASYNC_WAIT") {
+                                    if let Some(data) = data.next() {
+                                        return context.wait_for(data.to_owned()).then(move |_| {
+                                            Self::deserialize(item, context.clone())
+                                        });
                                     }
-                                    panic!(format!("{:?}", e))
-                                })
-                                .unwrap_or_else(|e| panic!(format!("{:?}", e.0)))
-                        })
-                        .buffer_unordered(std::usize::MAX),
-                ),
-                Box::pin(
-                    sink.sink_map_err(|_| panic!())
-                        .with::<_, _, _, ()>(|item: U::Item| ok(Self::serialize(item))),
-                ),
+                                }
+                                panic!(format!("{:?}", e))
+                            })
+                            .unwrap_or_else(|e| panic!(format!("{:?}", e.0)))
+                    })
+                    .buffer_unordered(std::usize::MAX),
             )),
         )
     }
@@ -269,10 +237,10 @@ where
     <C as Context<'de>>::Item: Sync + Send,
     <C as ISink<<C as Context<'de>>::Item>>::Error: Fail,
 {
-    type Output = StreamSink<
-        Self::Representation,
+    type Output = SinkStream<
         Self::Representation,
         EncodeError<T, <C as Context<'de>>::Item, C>,
+        Self::Representation,
     >;
 
     fn encode(input: C) -> Self::Output {
@@ -303,9 +271,9 @@ where
                 .forward(sink.sink_map_err(|e| panic!(format!("{}", e))))
                 .unwrap_or_else(|_| panic!()),
         );
-        StreamSink(
-            Box::pin(stream.map(<Self as Format>::serialize)),
-            Box::pin(sender.sink_map_err(|e| panic!(format!("{}", e)))),
+        SinkStream::new(
+            sender.sink_map_err(|e| panic!(format!("{}", e))),
+            stream.map(<Self as Format>::serialize),
         )
     }
 }
