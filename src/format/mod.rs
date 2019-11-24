@@ -17,7 +17,6 @@ pub use bincode::Bincode;
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver},
     future::ok,
-    task::{Context as FContext, Poll},
     Future as IFuture, FutureExt, Sink as ISink, SinkExt, Stream as IStream, StreamExt,
     TryFutureExt,
 };
@@ -26,16 +25,13 @@ use crate::{
     channel::{Context, Shim, Target, Waiter},
     core,
     core::{executor::Spawn, Executor},
-    kind::{Future, Sink, SinkStream, Stream},
+    kind::{Future, SinkStream},
     Kind,
 };
 
 use serde::{de::DeserializeSeed, Serialize};
 
-use std::{
-    fmt::{Debug, Display, Formatter},
-    pin::Pin,
-};
+use std::fmt::{Debug, Display, Formatter};
 
 use failure::Fail;
 
