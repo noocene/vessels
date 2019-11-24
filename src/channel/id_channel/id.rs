@@ -32,7 +32,7 @@ impl Registry {
             let mut items = self.items.write().unwrap();
             if !items.contains_key(&TypeId::of::<T>()) {
                 items.insert(TypeId::of::<T>(), |de| {
-                    <T as ::serde::Deserialize>::deserialize(de)
+                    <T as serde::Deserialize>::deserialize(de)
                         .map(|v| Box::new(v) as Box<dyn SerdeAny>)
                 });
             }
