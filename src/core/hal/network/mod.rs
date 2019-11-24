@@ -46,9 +46,7 @@ impl<K: Kind> dyn Client<K> {
         #[cfg(all(target_arch = "wasm32", feature = "core"))]
         return Ok(web::Client::new());
         #[cfg(all(not(target_arch = "wasm32"), feature = "core"))]
-        return Err(UnimplementedError {
-            feature: "a network client".to_owned(),
-        });
+        return Ok(native::Client::new());
         #[cfg(not(feature = "core"))]
         return Err(UnimplementedError {
             feature: "a network client".to_owned(),
