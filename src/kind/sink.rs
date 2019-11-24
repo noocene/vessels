@@ -23,10 +23,7 @@ pub struct KindSink<T: Kind, E: Kind, C: Channel<ForkHandle, ForkHandle>> {
     item: Future<()>,
 }
 
-impl<T: Kind, E: Kind, C: Channel<ForkHandle, ForkHandle>> ISink<T> for KindSink<T, E, C>
-where
-    Self: Unpin,
-{
+impl<T: Kind, E: Kind, C: Channel<ForkHandle, ForkHandle>> ISink<T> for KindSink<T, E, C> {
     type Error = E;
 
     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
@@ -54,8 +51,8 @@ where
 
 impl<T, E> Kind for Sink<T, E>
 where
-    T: Kind + Unpin,
-    E: Kind + Unpin,
+    T: Kind,
+    E: Kind,
 {
     type ConstructItem = ForkHandle;
     type ConstructError = Void;

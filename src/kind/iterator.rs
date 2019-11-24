@@ -12,27 +12,27 @@ use std::{iter::FromIterator, ops::Deref};
 
 #[derive(Clone, Debug, Copy, Hash, Eq, Ord, PartialOrd, PartialEq, Default)]
 pub struct Iterator<
-    T: Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static,
+    T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static,
 >(pub T)
 where
     <T as IntoIterator>::Item: Kind,
-    T::IntoIter: Sync + Send;
+    T::IntoIter: Unpin + Sync + Send;
 
-impl<T: Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> Iterator<T>
+impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> Iterator<T>
 where
     <T as IntoIterator>::Item: Kind,
-    T::IntoIter: Sync + Send,
+    T::IntoIter: Unpin + Sync + Send,
 {
     pub fn new(item: T) -> Self {
         Iterator(item)
     }
 }
 
-impl<T: Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> Deref
+impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> Deref
     for Iterator<T>
 where
     <T as IntoIterator>::Item: Kind,
-    T::IntoIter: Sync + Send,
+    T::IntoIter: Unpin + Sync + Send,
 {
     type Target = T;
 
@@ -41,22 +41,22 @@ where
     }
 }
 
-impl<T: Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> From<T>
+impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> From<T>
     for Iterator<T>
 where
     <T as IntoIterator>::Item: Kind,
-    T::IntoIter: Sync + Send,
+    T::IntoIter: Unpin + Sync + Send,
 {
     fn from(item: T) -> Self {
         Iterator(item)
     }
 }
 
-impl<T: Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static>
+impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static>
     FromIterator<<T as IntoIterator>::Item> for Iterator<T>
 where
     <T as IntoIterator>::Item: Kind,
-    T::IntoIter: Sync + Send,
+    T::IntoIter: Unpin + Sync + Send,
 {
     fn from_iter<U>(iter: U) -> Self
     where
@@ -66,11 +66,11 @@ where
     }
 }
 
-impl<T: Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static>
+impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static>
     AsKind<using::Iterator> for T
 where
     <T as IntoIterator>::Item: Kind,
-    T::IntoIter: Sync + Send,
+    T::IntoIter: Unpin + Sync + Send,
 {
     type Kind = Iterator<T>;
 
@@ -82,11 +82,11 @@ where
     }
 }
 
-impl<T: Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> IntoIterator
+impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> IntoIterator
     for Iterator<T>
 where
     <T as IntoIterator>::Item: Kind,
-    T::IntoIter: Sync + Send,
+    T::IntoIter: Unpin + Sync + Send,
 {
     type Item = <T as IntoIterator>::Item;
     type IntoIter = <T as IntoIterator>::IntoIter;
@@ -96,11 +96,11 @@ where
     }
 }
 
-impl<T: Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> Kind
+impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> Kind
     for Iterator<T>
 where
     <T as IntoIterator>::Item: Kind,
-    T::IntoIter: Sync + Send,
+    T::IntoIter: Unpin + Sync + Send,
 {
     type ConstructItem = Vec<ForkHandle>;
     type ConstructError = WrappedError<<<T as IntoIterator>::Item as Kind>::ConstructError>;
