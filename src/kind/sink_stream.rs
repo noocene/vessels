@@ -1,10 +1,14 @@
-use crate::kind::{Sink, Stream};
+use crate::{
+    kind::{Sink, Stream},
+    Kind,
+};
 use futures::{
     task::{Context, Poll},
     Sink as ISink, Stream as IStream,
 };
 use std::pin::Pin;
 
+#[derive(Kind)]
 pub struct SinkStream<T, E, U>(Sink<T, E>, Stream<U>);
 
 impl<T, E, U> SinkStream<T, E, U> {

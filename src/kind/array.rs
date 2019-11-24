@@ -14,7 +14,7 @@ use void::Void;
 
 use super::WrappedError;
 
-impl<T: Sync + Send + 'static> Kind for [T; 0] {
+impl<T: Unpin + Sync + Send + 'static> Kind for [T; 0] {
     type ConstructItem = ();
     type ConstructError = Void;
     type ConstructFuture = Ready<ConstructResult<Self>>;

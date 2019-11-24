@@ -155,7 +155,7 @@ pub type DeconstructResult<K> = Result<(), <K as Kind>::DeconstructError>;
 /// Authors of third-party crates are encouraged to derive or implement Kind or Kind providers for
 /// types their crates expose that might be useful over some form of wire boundary, be it network, IPC,
 /// or any other similar transport.
-pub trait Kind: Any + Sized + Sync + Send + 'static {
+pub trait Kind: Any + Sized + Sync + Send + Unpin + 'static {
     /// The item transmitted over the network **to** the construction task
     /// from deconstruction.
     type ConstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
