@@ -24,7 +24,7 @@ pub use iterator::Iterator;
 pub use sink_stream::SinkStream;
 
 use failure::Fail;
-use futures::{Future as IFuture, Sink as ISink, Stream as IStream};
+use futures::{Future as IFuture, FutureExt, Sink as ISink, Stream as IStream, StreamExt};
 use std::pin::Pin;
 
 use crate::{channel::ChannelError, Kind};
@@ -32,6 +32,22 @@ use crate::{channel::ChannelError, Kind};
 pub type Stream<T> = Pin<Box<dyn IStream<Item = T> + Sync + Send>>;
 pub type Future<T> = Pin<Box<dyn IFuture<Output = T> + Sync + Send>>;
 pub type Sink<T, E> = Pin<Box<dyn ISink<T, Error = E> + Sync + Send>>;
+
+pub trait Flatten: Sized {
+    fn flatten<F: IFuture<Output = Self> + Sync + Send + 'static>(fut: F) -> Self;
+}
+
+impl<T> Flatten for Future<T> {
+    fn flatten<F: IFuture<Output = Self> + Sync + Send + 'static>(fut: F) -> Self {
+        Box::pin(fut.flatten())
+    }
+}
+
+impl<T> Flatten for Stream<T> {
+    fn flatten<F: IFuture<Output = Self> + Sync + Send + 'static>(fut: F) -> Self {
+        Box::pin(fut.into_stream().flatten())
+    }
+}
 
 pub trait AsKindMarker {}
 
