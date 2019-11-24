@@ -6,7 +6,15 @@ pub trait Executor: Sync + Send {
     fn run_boxed(&mut self, fut: Future<()>);
 }
 
-pub trait Spawn {
+mod private {
+    use super::Executor;
+
+    pub trait Sealed {}
+
+    impl Sealed for Box<dyn Executor> {}
+}
+
+pub trait Spawn: private::Sealed {
     fn spawn<F: Sync + Send + 'static + IFuture<Output = ()>>(&mut self, future: F);
     fn run<F: Sync + Send + 'static + IFuture<Output = ()>>(&mut self, future: F);
 }
