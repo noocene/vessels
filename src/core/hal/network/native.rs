@@ -48,7 +48,9 @@ impl<K: Kind> IServer<K> for Server<K> {
                     }
                     Ok(())
                 }
-            });
+            }).map_err(|e| ListenError {
+                cause: e.into()
+            })?;
             Ok(())
         })
     }
