@@ -159,7 +159,11 @@ pub fn derive(mut s: Structure) -> TokenStream {
                         items.extend(quote!(::vessels::channel::ForkHandle,));
                     }
                     let id = &s.ast().ident;
-                    cons_arms.extend(quote!(_DERIVE_Items::#ident(#cons_extension) => #id::#ident(#cons_c_extension),));
+                    if is_struct {
+                        cons_arms.extend(quote!(_DERIVE_Items::#ident(#cons_extension) => #id(#cons_c_extension),));
+                    } else {
+                        cons_arms.extend(quote!(_DERIVE_Items::#ident(#cons_extension) => #id::#ident(#cons_c_extension),));
+                    }
                     quote!((#items))
                 }
                 Unit => {
