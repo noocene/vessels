@@ -1,4 +1,4 @@
-use super::{ListenError, Server as IServer};
+use super::super::{ListenError, Server as IServer};
 
 use crate::{
     channel::{IdChannel, OnTo},
@@ -48,9 +48,8 @@ impl<K: Kind> IServer<K> for Server<K> {
                     }
                     Ok(())
                 }
-            }).map_err(|e| ListenError {
-                cause: e.into()
-            })?;
+            })
+            .map_err(|e| ListenError { cause: e.into() })?;
             Ok(())
         })
     }
