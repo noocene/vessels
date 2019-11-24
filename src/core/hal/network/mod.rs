@@ -1,8 +1,4 @@
-use crate::{
-    core::UnimplementedError,
-    kind::{Future, Stream},
-    object, Kind,
-};
+use crate::{core::UnimplementedError, kind::Future, object, Kind};
 
 use failure::{Error, Fail};
 use std::net::SocketAddr;
@@ -32,8 +28,12 @@ pub trait Client<K: Kind> {
 }
 
 #[object]
-pub trait Server {
-    fn listen(&mut self, address: SocketAddr) -> Stream<Result<Box<dyn Peer>, ListenError>>;
+pub trait Server<K: Kind> {
+    fn listen(
+        &mut self,
+        address: SocketAddr,
+        handler: Box<dyn FnMut() -> Future<K> + Sync + Send>,
+    ) -> Future<Result<(), ListenError>>;
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "core"))]
@@ -56,8 +56,8 @@ impl<K: Kind> dyn Client<K> {
     }
 }
 
-impl dyn Server {
-    pub fn new() -> Result<Box<dyn Server>, UnimplementedError> {
+impl<K: Kind> dyn Server<K> {
+    pub fn new() -> Result<Box<dyn Server<K>>, UnimplementedError> {
         #[cfg(all(target_arch = "wasm32", feature = "core"))]
         return Err(UnimplementedError {
             feature: "a network server".to_owned(),
