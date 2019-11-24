@@ -86,10 +86,10 @@ macro_rules! array_impl {
                                     Ok(items) => {
                                         let len = items.len();
                                         if len != $len {
-                                            Err(ArrayError::Length {
+                                            return Err(ArrayError::Length {
                                                 got: len,
                                                 expected: $len
-                                            })?;
+                                            });
                                         }
                                         let mut arr = MaybeUninit::uninit();
                                         for (i, item) in items.into_iter().enumerate() {
