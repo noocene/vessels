@@ -1,57 +1,16 @@
 use crate::{
     channel::{Channel, ForkHandle},
-    kind::{Future, Stream},
+    kind::{Future, Flatten},
     ConstructResult, DeconstructResult, Kind,
 };
 
-use futures::{lock::Mutex, FutureExt, SinkExt, StreamExt, TryFutureExt};
+use futures::{lock::Mutex, SinkExt, StreamExt, TryFutureExt};
 
 use std::sync::Arc;
 
 use void::Void;
 
-impl<U: Kind> Kind for Box<dyn Fn() -> Future<U> + Send + Sync> {
-    type ConstructItem = ForkHandle;
-    type ConstructError = Void;
-    type ConstructFuture = Future<ConstructResult<Self>>;
-    type DeconstructItem = ();
-    type DeconstructError = Void;
-    type DeconstructFuture = Future<DeconstructResult<Self>>;
-
-    fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
-        self,
-        mut channel: C,
-    ) -> Self::DeconstructFuture {
-        Box::pin(async move {
-            while let Some(()) = channel.next().await {
-                channel
-                    .send(channel.fork((self)().await).await.unwrap())
-                    .unwrap_or_else(|_| panic!())
-                    .await;
-            }
-            Ok(())
-        })
-    }
-    fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-        channel: C,
-    ) -> Self::ConstructFuture {
-        Box::pin(async move {
-            let channel = Arc::new(Mutex::new(channel));
-            let closure: Box<dyn Fn() -> Future<U> + Send + Sync> = Box::new(move || {
-                let channel = channel.clone();
-                Box::pin(async move {
-                    let mut channel = channel.lock().await;
-                    channel.send(()).unwrap_or_else(|_| panic!()).await;
-                    let handle = channel.next().await.expect("test2");
-                    channel.get_fork(handle).await.expect("test3")
-                })
-            });
-            Ok(closure)
-        })
-    }
-}
-
-impl<U: Kind> Kind for Box<dyn Fn() -> Stream<U> + Send + Sync> {
+impl<U: Kind + Flatten> Kind for Box<dyn Fn() -> U + Send + Sync> {
     type ConstructItem = ForkHandle;
     type ConstructError = Void;
     type ConstructFuture = Future<ConstructResult<Self>>;
@@ -78,54 +37,9 @@ impl<U: Kind> Kind for Box<dyn Fn() -> Stream<U> + Send + Sync> {
     ) -> Self::ConstructFuture {
         Box::pin(async move {
             let channel = Arc::new(Mutex::new(channel));
-            let closure: Box<dyn Fn() -> Stream<U> + Send + Sync> = Box::new(move || {
+            let closure: Box<dyn Fn() -> U + Send + Sync> = Box::new(move || {
                 let channel = channel.clone();
-                Box::pin(
-                    async move {
-                        let mut channel = channel.lock().await;
-                        channel.send(()).unwrap_or_else(|_| panic!()).await;
-                        let handle = channel.next().await.expect("test2");
-                        channel.get_fork::<Stream<U>>(handle).await.expect("test3")
-                    }
-                    .into_stream()
-                    .flatten(),
-                )
-            });
-            Ok(closure)
-        })
-    }
-}
-
-impl<U: Kind> Kind for Box<dyn FnMut() -> Future<U> + Send + Sync> {
-    type ConstructItem = ForkHandle;
-    type ConstructError = Void;
-    type ConstructFuture = Future<ConstructResult<Self>>;
-    type DeconstructItem = ();
-    type DeconstructError = Void;
-    type DeconstructFuture = Future<DeconstructResult<Self>>;
-
-    fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
-        mut self,
-        mut channel: C,
-    ) -> Self::DeconstructFuture {
-        Box::pin(async move {
-            while let Some(()) = channel.next().await {
-                channel
-                    .send(channel.fork((self)().await).await.unwrap())
-                    .unwrap_or_else(|_| panic!())
-                    .await;
-            }
-            Ok(())
-        })
-    }
-    fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-        channel: C,
-    ) -> Self::ConstructFuture {
-        Box::pin(async move {
-            let channel = Arc::new(Mutex::new(channel));
-            let closure: Box<dyn FnMut() -> Future<U> + Send + Sync> = Box::new(move || {
-                let channel = channel.clone();
-                Box::pin(async move {
+                U::flatten(async move {
                     let mut channel = channel.lock().await;
                     channel.send(()).unwrap_or_else(|_| panic!()).await;
                     let handle = channel.next().await.expect("test2");
@@ -137,7 +51,7 @@ impl<U: Kind> Kind for Box<dyn FnMut() -> Future<U> + Send + Sync> {
     }
 }
 
-impl<U: Kind> Kind for Box<dyn FnMut() -> Stream<U> + Send + Sync> {
+impl<U: Kind + Flatten> Kind for Box<dyn FnMut() -> U + Send + Sync> {
     type ConstructItem = ForkHandle;
     type ConstructError = Void;
     type ConstructFuture = Future<ConstructResult<Self>>;
@@ -164,51 +78,10 @@ impl<U: Kind> Kind for Box<dyn FnMut() -> Stream<U> + Send + Sync> {
     ) -> Self::ConstructFuture {
         Box::pin(async move {
             let channel = Arc::new(Mutex::new(channel));
-            let closure: Box<dyn FnMut() -> Stream<U> + Send + Sync> = Box::new(move || {
+            let closure: Box<dyn FnMut() -> U + Send + Sync> = Box::new(move || {
                 let channel = channel.clone();
-                Box::pin(
-                    async move {
-                        let mut channel = channel.lock().await;
-                        channel.send(()).unwrap_or_else(|_| panic!()).await;
-                        let handle = channel.next().await.expect("test2");
-                        channel.get_fork::<Stream<U>>(handle).await.expect("test3")
-                    }
-                    .into_stream()
-                    .flatten(),
-                )
-            });
-            Ok(closure)
-        })
-    }
-}
-
-impl<U: Kind> Kind for Box<dyn FnOnce() -> Future<U> + Send + Sync> {
-    type ConstructItem = ForkHandle;
-    type ConstructError = Void;
-    type ConstructFuture = Future<ConstructResult<Self>>;
-    type DeconstructItem = ();
-    type DeconstructError = Void;
-    type DeconstructFuture = Future<DeconstructResult<Self>>;
-
-    fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
-        self,
-        mut channel: C,
-    ) -> Self::DeconstructFuture {
-        Box::pin(async move {
-            channel.next().await.unwrap();
-            channel
-                .send(channel.fork((self)().await).await.unwrap())
-                .unwrap_or_else(|_| panic!())
-                .await;
-            Ok(())
-        })
-    }
-    fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-        mut channel: C,
-    ) -> Self::ConstructFuture {
-        Box::pin(async move {
-            let closure: Box<dyn FnOnce() -> Future<U> + Send + Sync> = Box::new(move || {
-                Box::pin(async move {
+                U::flatten(async move {
+                    let mut channel = channel.lock().await;
                     channel.send(()).unwrap_or_else(|_| panic!()).await;
                     let handle = channel.next().await.expect("test2");
                     channel.get_fork(handle).await.expect("test3")
@@ -219,7 +92,7 @@ impl<U: Kind> Kind for Box<dyn FnOnce() -> Future<U> + Send + Sync> {
     }
 }
 
-impl<U: Kind> Kind for Box<dyn FnOnce() -> Stream<U> + Send + Sync> {
+impl<U: Kind + Flatten> Kind for Box<dyn FnOnce() -> U + Send + Sync> {
     type ConstructItem = ForkHandle;
     type ConstructError = Void;
     type ConstructFuture = Future<ConstructResult<Self>>;
@@ -244,16 +117,12 @@ impl<U: Kind> Kind for Box<dyn FnOnce() -> Stream<U> + Send + Sync> {
         mut channel: C,
     ) -> Self::ConstructFuture {
         Box::pin(async move {
-            let closure: Box<dyn FnOnce() -> Stream<U> + Send + Sync> = Box::new(move || {
-                Box::pin(
-                    async move {
-                        channel.send(()).unwrap_or_else(|_| panic!()).await;
-                        let handle = channel.next().await.expect("test2");
-                        channel.get_fork::<Stream<U>>(handle).await.expect("test3")
-                    }
-                    .into_stream()
-                    .flatten(),
-                )
+            let closure: Box<dyn FnOnce() -> U + Send + Sync> = Box::new(move || {
+                U::flatten(async move {
+                    channel.send(()).unwrap_or_else(|_| panic!()).await;
+                    let handle = channel.next().await.expect("test2");
+                    channel.get_fork(handle).await.expect("test3")
+                })
             });
             Ok(closure)
         })
@@ -263,163 +132,7 @@ impl<U: Kind> Kind for Box<dyn FnOnce() -> Stream<U> + Send + Sync> {
 macro_rules! functions_impl {
     ($($len:expr => ($($n:tt $name:ident $nn:ident)+))+) => {$(
         #[allow(non_snake_case)]
-        impl<U: Kind, $($name),+> Kind for Box<dyn Fn($($name),+) -> Future<U> + Send + Sync>
-            where $($name: Kind),+
-        {
-            type ConstructItem = ForkHandle;
-            type ConstructError = Void;
-            type ConstructFuture = Future<ConstructResult<Self>>;
-            type DeconstructItem = Vec<ForkHandle>;
-            type DeconstructError = Void;
-            type DeconstructFuture = Future<DeconstructResult<Self>>;
-
-            fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
-                self,
-                mut channel: C,
-            ) -> Self::DeconstructFuture {
-                Box::pin(async move {
-                    while let Some(handles) = channel.next().await {
-                        channel
-                            .send(
-                                channel
-                                    .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+).await)
-                                    .await
-                                    .unwrap(),
-                            )
-                            .unwrap_or_else(|_| panic!())
-                            .await;
-                    }
-                    Ok(())
-                })
-            }
-            fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-                channel: C,
-            ) -> Self::ConstructFuture {
-                Box::pin(async move {
-                    let channel = Arc::new(Mutex::new(channel));
-                    let closure: Box<dyn Fn($($name),+) -> Future<U> + Send + Sync> =
-                        Box::new(move |$($name),+| {
-                            let channel = channel.clone();
-                            Box::pin(async move {
-                                let mut channel = channel.lock().await;
-                                let handles = vec![
-                                    $(channel.fork::<$name>($name).await.unwrap()),+
-                                ];
-                                channel.send(handles).unwrap_or_else(|_| panic!()).await;
-                                let handle = channel.next().await.expect("test2");
-                                channel.get_fork(handle).await.expect("test3")
-                            })
-                        });
-                    Ok(closure)
-                })
-            }
-        }
-        #[allow(non_snake_case)]
-        impl<U: Kind, $($name),+> Kind for Box<dyn FnMut($($name),+) -> Future<U> + Send + Sync>
-            where $($name: Kind),+
-        {
-            type ConstructItem = ForkHandle;
-            type ConstructError = Void;
-            type ConstructFuture = Future<ConstructResult<Self>>;
-            type DeconstructItem = Vec<ForkHandle>;
-            type DeconstructError = Void;
-            type DeconstructFuture = Future<DeconstructResult<Self>>;
-
-            fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
-                mut self,
-                mut channel: C,
-            ) -> Self::DeconstructFuture {
-                Box::pin(async move {
-                    while let Some(handles) = channel.next().await {
-                        channel
-                            .send(
-                                channel
-                                    .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+).await)
-                                    .await
-                                    .unwrap(),
-                            )
-                            .unwrap_or_else(|_| panic!())
-                            .await;
-                    }
-                    Ok(())
-                })
-            }
-            fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-                channel: C,
-            ) -> Self::ConstructFuture {
-                Box::pin(async move {
-                    let channel = Arc::new(Mutex::new(channel));
-                    let closure: Box<dyn FnMut($($name),+) -> Future<U> + Send + Sync> =
-                        Box::new(move |$($name),+| {
-                            let channel = channel.clone();
-                            Box::pin(async move {
-                                let mut channel = channel.lock().await;
-                                let handles = vec![
-                                    $(channel.fork::<$name>($name).await.unwrap()),+
-                                ];
-                                channel.send(handles).unwrap_or_else(|_| panic!()).await;
-                                let handle = channel.next().await.expect("test2");
-                                channel.get_fork(handle).await.expect("test3")
-                            })
-                        });
-                    Ok(closure)
-                })
-            }
-        }
-        #[allow(non_snake_case)]
-        impl<U: Kind, $($name),+> Kind for Box<dyn FnMut($($name),+) -> Stream<U> + Send + Sync>
-            where $($name: Kind),+
-        {
-            type ConstructItem = ForkHandle;
-            type ConstructError = Void;
-            type ConstructFuture = Future<ConstructResult<Self>>;
-            type DeconstructItem = Vec<ForkHandle>;
-            type DeconstructError = Void;
-            type DeconstructFuture = Future<DeconstructResult<Self>>;
-
-            fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
-                mut self,
-                mut channel: C,
-            ) -> Self::DeconstructFuture {
-                Box::pin(async move {
-                    while let Some(handles) = channel.next().await {
-                        channel
-                            .send(
-                                channel
-                                    .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+))
-                                    .await
-                                    .unwrap(),
-                            )
-                            .unwrap_or_else(|_| panic!())
-                            .await;
-                    }
-                    Ok(())
-                })
-            }
-            fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-                channel: C,
-            ) -> Self::ConstructFuture {
-                Box::pin(async move {
-                    let channel = Arc::new(Mutex::new(channel));
-                    let closure: Box<dyn FnMut($($name),+) -> Stream<U> + Send + Sync> =
-                        Box::new(move |$($name),+| {
-                            let channel = channel.clone();
-                            Box::pin(async move {
-                                let mut channel = channel.lock().await;
-                                let handles = vec![
-                                    $(channel.fork::<$name>($name).await.unwrap()),+
-                                ];
-                                channel.send(handles).unwrap_or_else(|_| panic!()).await;
-                                let handle = channel.next().await.expect("test2");
-                                channel.get_fork::<Stream<U>>(handle).await.expect("test3")
-                            }.into_stream().flatten())
-                        });
-                    Ok(closure)
-                })
-            }
-        }
-        #[allow(non_snake_case)]
-        impl<U: Kind, $($name),+> Kind for Box<dyn Fn($($name),+) -> Stream<U> + Send + Sync>
+        impl<U: Kind + Flatten, $($name),+> Kind for Box<dyn Fn($($name),+) -> U + Send + Sync>
             where $($name: Kind),+
         {
             type ConstructItem = ForkHandle;
@@ -453,59 +166,11 @@ macro_rules! functions_impl {
             ) -> Self::ConstructFuture {
                 Box::pin(async move {
                     let channel = Arc::new(Mutex::new(channel));
-                    let closure: Box<dyn Fn($($name),+) -> Stream<U> + Send + Sync> =
+                    let closure: Box<dyn Fn($($name),+) -> U + Send + Sync> =
                         Box::new(move |$($name),+| {
                             let channel = channel.clone();
-                            Box::pin(async move {
+                            U::flatten(async move {
                                 let mut channel = channel.lock().await;
-                                let handles = vec![
-                                    $(channel.fork::<$name>($name).await.unwrap()),+
-                                ];
-                                channel.send(handles).unwrap_or_else(|_| panic!()).await;
-                                let handle = channel.next().await.expect("test2");
-                                channel.get_fork::<Stream<U>>(handle).await.expect("test3")
-                            }.into_stream().flatten())
-                        });
-                    Ok(closure)
-                })
-            }
-        }
-        #[allow(non_snake_case)]
-        impl<U: Kind, $($name),+> Kind for Box<dyn FnOnce($($name),+) -> Future<U> + Send + Sync>
-            where $($name: Kind),+
-        {
-            type ConstructItem = ForkHandle;
-            type ConstructError = Void;
-            type ConstructFuture = Future<ConstructResult<Self>>;
-            type DeconstructItem = Vec<ForkHandle>;
-            type DeconstructError = Void;
-            type DeconstructFuture = Future<DeconstructResult<Self>>;
-
-            fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
-                self,
-                mut channel: C,
-            ) -> Self::DeconstructFuture {
-                Box::pin(async move {
-                    let handles = channel.next().await.unwrap();
-                    channel
-                        .send(
-                            channel
-                                .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+).await)
-                                .await
-                                .unwrap(),
-                        )
-                        .unwrap_or_else(|_| panic!())
-                        .await;
-                    Ok(())
-                })
-            }
-            fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
-                mut channel: C,
-            ) -> Self::ConstructFuture {
-                Box::pin(async move {
-                    let closure: Box<dyn FnOnce($($name),+) -> Future<U> + Send + Sync> =
-                        Box::new(move |$($name),+| {
-                            Box::pin(async move {
                                 let handles = vec![
                                     $(channel.fork::<$name>($name).await.unwrap()),+
                                 ];
@@ -519,7 +184,59 @@ macro_rules! functions_impl {
             }
         }
         #[allow(non_snake_case)]
-        impl<U: Kind, $($name),+> Kind for Box<dyn FnOnce($($name),+) -> Stream<U> + Send + Sync>
+        impl<U: Kind + Flatten, $($name),+> Kind for Box<dyn FnMut($($name),+) -> U + Send + Sync>
+            where $($name: Kind),+
+        {
+            type ConstructItem = ForkHandle;
+            type ConstructError = Void;
+            type ConstructFuture = Future<ConstructResult<Self>>;
+            type DeconstructItem = Vec<ForkHandle>;
+            type DeconstructError = Void;
+            type DeconstructFuture = Future<DeconstructResult<Self>>;
+
+            fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
+                mut self,
+                mut channel: C,
+            ) -> Self::DeconstructFuture {
+                Box::pin(async move {
+                    while let Some(handles) = channel.next().await {
+                        channel
+                            .send(
+                                channel
+                                    .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+))
+                                    .await
+                                    .unwrap(),
+                            )
+                            .unwrap_or_else(|_| panic!())
+                            .await;
+                    }
+                    Ok(())
+                })
+            }
+            fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
+                channel: C,
+            ) -> Self::ConstructFuture {
+                Box::pin(async move {
+                    let channel = Arc::new(Mutex::new(channel));
+                    let closure: Box<dyn FnMut($($name),+) -> U + Send + Sync> =
+                        Box::new(move |$($name),+| {
+                            let channel = channel.clone();
+                            U::flatten(async move {
+                                let mut channel = channel.lock().await;
+                                let handles = vec![
+                                    $(channel.fork::<$name>($name).await.unwrap()),+
+                                ];
+                                channel.send(handles).unwrap_or_else(|_| panic!()).await;
+                                let handle = channel.next().await.expect("test2");
+                                channel.get_fork(handle).await.expect("test3")
+                            })
+                        });
+                    Ok(closure)
+                })
+            }
+        }
+        #[allow(non_snake_case)]
+        impl<U: Kind + Flatten, $($name),+> Kind for Box<dyn FnOnce($($name),+) -> U + Send + Sync>
             where $($name: Kind),+
         {
             type ConstructItem = ForkHandle;
@@ -551,16 +268,16 @@ macro_rules! functions_impl {
                 mut channel: C,
             ) -> Self::ConstructFuture {
                 Box::pin(async move {
-                    let closure: Box<dyn FnOnce($($name),+) -> Stream<U> + Send + Sync> =
+                    let closure: Box<dyn FnOnce($($name),+) -> U + Send + Sync> =
                         Box::new(move |$($name),+| {
-                            Box::pin(async move {
+                            U::flatten(async move {
                                 let handles = vec![
                                     $(channel.fork::<$name>($name).await.unwrap()),+
                                 ];
                                 channel.send(handles).unwrap_or_else(|_| panic!()).await;
                                 let handle = channel.next().await.expect("test2");
-                                channel.get_fork::<Stream<U>>(handle).await.expect("test3")
-                            }.into_stream().flatten())
+                                channel.get_fork(handle).await.expect("test3")
+                            })
                         });
                     Ok(closure)
                 })
