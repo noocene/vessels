@@ -4,12 +4,13 @@ use crate::{
     channel::IdChannel,
     core,
     core::{executor::Spawn, Executor},
-    format::{ApplyDecode, Cbor, StreamSink},
+    format::{ApplyDecode, Cbor},
     kind::Future,
-    log, Kind,
+    kind::SinkStream,
+    Kind,
 };
 
-use failure::{Error, Fail};
+use failure::Fail;
 use futures::{
     channel::{
         mpsc::{unbounded, UnboundedReceiver},
@@ -73,7 +74,7 @@ impl<K: Kind> IClient<K> for Client<K> {
                     }
                 })));
             receiver.await.unwrap();
-            StreamSink(Box::pin(data_receiver), Box::pin(out_sender))
+            SinkStream::new(out_sender, data_receiver)
                 .decode::<IdChannel, Cbor>()
                 .await
                 .map_err(|e: K::ConstructError| ConnectError::Construct(e.into()))

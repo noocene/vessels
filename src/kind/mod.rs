@@ -11,6 +11,8 @@ mod primitives;
 mod result;
 pub mod serde;
 mod sink;
+pub mod sink_stream;
+pub use sink_stream::SinkStream;
 mod stream;
 mod tuple;
 mod unit;
