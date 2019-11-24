@@ -8,7 +8,7 @@ use super::{using, AsKind};
 
 use void::Void;
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
 pub struct Default<T: IDefault>(T);
 
 impl<T: IDefault> Deref for Default<T> {
@@ -38,7 +38,7 @@ impl<T: IDefault + Unpin + Sync + Send + 'static> AsKind<using::Default> for T {
 
 impl<T: IDefault> Default<T> {
     pub fn new() -> Self {
-        Default(T::default())
+        Default::default()
     }
 }
 
