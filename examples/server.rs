@@ -1,20 +1,22 @@
 use vessels::{
     core,
     core::{executor::Spawn, hal::network::Server, Executor},
-    log,
+    kind::Future,
 };
+
+use std::pin::Pin;
 
 use futures::StreamExt;
 
 pub fn main() {
     core::<dyn Executor>().unwrap().run(async move {
-        let mut network = Server::new().unwrap();
-        while let Some(_) = network
-            .listen("127.0.0.1:61200".parse().unwrap())
-            .next()
+        let mut server = Server::new().unwrap();
+        server
+            .listen(
+                "127.0.0.1:61200".parse().unwrap(),
+                Box::new(|| Box::pin(async { "hello".to_string() })),
+            )
             .await
-        {
-            log!("got peer");
-        }
+            .unwrap();
     });
 }

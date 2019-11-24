@@ -18,7 +18,8 @@ where
     <T as IntoIterator>::Item: Kind,
     T::IntoIter: Unpin + Sync + Send;
 
-impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> Iterator<T>
+impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static>
+    Iterator<T>
 where
     <T as IntoIterator>::Item: Kind,
     T::IntoIter: Unpin + Sync + Send,
@@ -28,8 +29,8 @@ where
     }
 }
 
-impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> Deref
-    for Iterator<T>
+impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static>
+    Deref for Iterator<T>
 where
     <T as IntoIterator>::Item: Kind,
     T::IntoIter: Unpin + Sync + Send,
@@ -41,8 +42,8 @@ where
     }
 }
 
-impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> From<T>
-    for Iterator<T>
+impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static>
+    From<T> for Iterator<T>
 where
     <T as IntoIterator>::Item: Kind,
     T::IntoIter: Unpin + Sync + Send,
@@ -82,8 +83,8 @@ where
     }
 }
 
-impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> IntoIterator
-    for Iterator<T>
+impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static>
+    IntoIterator for Iterator<T>
 where
     <T as IntoIterator>::Item: Kind,
     T::IntoIter: Unpin + Sync + Send,
