@@ -1,46 +1,42 @@
-use super::super::{ListenError, Server as IServer};
+use super::super::{ConnectionError, ListenError, RawServer};
 
 use crate::{
-    channel::{IdChannel, OnTo},
     core,
     core::{executor::Spawn, Executor},
-    format::{ApplyEncode, Cbor},
-    kind::Future,
-    Kind,
+    kind::{Future, SinkStream},
 };
 
 use futures::{channel::mpsc::unbounded, lock::Mutex, SinkExt, StreamExt};
-use std::{marker::PhantomData, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 use ws::{listen, Message};
 
-pub struct Server<K: Kind>(PhantomData<K>);
+pub(crate) struct Server;
 
-impl<K: Kind> IServer<K> for Server<K> {
+impl RawServer for Server {
     fn listen(
         &mut self,
         address: SocketAddr,
-        handler: Box<dyn FnMut() -> Future<K> + Sync + Send>,
+        handler: Box<
+            dyn FnMut(SinkStream<Vec<u8>, ConnectionError, Vec<u8>>) -> Future<()> + Sync + Send,
+        >,
     ) -> Future<Result<(), ListenError>> {
         Box::pin(async move {
             let handler = Arc::new(Mutex::new(handler));
             listen(address, move |peer| {
                 let handler = handler.clone();
-                let (sender, mut receiver) = unbounded();
+                let (sender, receiver) = unbounded();
                 core::<dyn Executor>().unwrap().spawn(async move {
-                    let (mut sink, mut stream) = (handler.lock().await.as_mut())()
-                        .await
-                        .on_to::<IdChannel>()
-                        .await
-                        .encode::<Cbor>()
-                        .split();
+                    let (data_sender, mut stream) = unbounded();
                     core::<dyn Executor>().unwrap().spawn(async move {
                         while let Some(item) = stream.next().await {
                             peer.send(item).unwrap();
                         }
                     });
-                    while let Some(item) = receiver.next().await {
-                        sink.send(item).await.unwrap();
-                    }
+                    (handler.lock().await.as_mut())(SinkStream::new(
+                        data_sender.sink_map_err(|e| ConnectionError { cause: e.into() }),
+                        receiver,
+                    ))
+                    .await;
                 });
                 move |message| {
                     if let Message::Binary(data) = message {
@@ -55,8 +51,8 @@ impl<K: Kind> IServer<K> for Server<K> {
     }
 }
 
-impl<K: Kind> Server<K> {
-    pub fn new() -> Box<dyn IServer<K>> {
-        Box::new(Server(PhantomData))
+impl Server {
+    pub(crate) fn new() -> Box<dyn RawServer> {
+        Box::new(Server)
     }
 }
