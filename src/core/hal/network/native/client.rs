@@ -1,8 +1,7 @@
 use super::super::{ConnectError, ConnectionError, RawClient};
 
 use crate::{
-    core,
-    core::Executor,
+    core::spawn,
     kind::{Future, SinkStream},
 };
 
@@ -31,12 +30,12 @@ impl RawClient for Client {
             let (data_sender, data_receiver) = unbounded();
             let (sender, receiver) = channel();
             let sender = Arc::new(sync::Mutex::new(Some(sender)));
-            core::<Executor>().unwrap().spawn(async move {
+            spawn(async move {
                 connect(address.to_string(), move |peer| {
                     sender.lock().unwrap().take().unwrap().send(()).unwrap();
                     let data_sender = data_sender.clone();
                     let out_receiver = out_receiver.clone();
-                    core::<Executor>().unwrap().spawn(async move {
+                    spawn(async move {
                         while let Some(item) = out_receiver.lock().await.next().await {
                             peer.send(item).unwrap();
                         }

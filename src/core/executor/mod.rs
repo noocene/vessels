@@ -25,7 +25,7 @@ pub(crate) mod native;
 
 pub(crate) fn new_executor() -> Result<Executor, super::UnimplementedError> {
     #[cfg(target_arch = "wasm32")]
-    return Ok(Executor(web_sequential::Spawner::new()));
+    return Ok(Executor(web_sequential::Executor::new()));
     #[cfg(not(target_arch = "wasm32"))]
     return Ok(Executor(native::Executor::new()));
 }

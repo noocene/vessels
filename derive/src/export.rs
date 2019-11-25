@@ -35,7 +35,7 @@ pub fn build(block: TokenStream) -> TokenStream {
                 let len = Box::from_raw(data.sub(size_of::<usize>()) as *mut usize);
                 let data = slice::from_raw_parts_mut(data, *len).to_vec();
                 let mut executor = ::vessels::core::<::vessels::core::Executor>().unwrap();
-                use ::vessels::{core::executor::Spawn, futures::SinkExt};
+                use ::vessels::futures::SinkExt;
                 executor.spawn(async move {
                     DATA.lock().await.0.clone().send(data).await.unwrap();
                 });
@@ -67,7 +67,7 @@ pub fn build(block: TokenStream) -> TokenStream {
                 }
                 export(_export_initializer);
             };
-            use ::vessels::{channel::IdChannel, OnTo, futures::{StreamExt, SinkExt, TryFutureExt}, format::{ApplyEncode, Cbor}, core, core::{Executor, executor::Spawn}};
+            use ::vessels::{channel::IdChannel, OnTo, futures::{StreamExt, SinkExt, TryFutureExt}, format::{ApplyEncode, Cbor}, core, core::{Executor}};
             let mut executor = core::<Executor>().unwrap();
             let vessel = Box::new(_export_initializer) as ::vessels::core::Vessel<_>;
             executor.spawn(async move {

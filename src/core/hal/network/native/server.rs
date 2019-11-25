@@ -1,8 +1,7 @@
 use super::super::{ConnectionError, ListenError, RawServer};
 
 use crate::{
-    core,
-    core::Executor,
+    core::spawn,
     kind::{Future, SinkStream},
 };
 
@@ -25,9 +24,9 @@ impl RawServer for Server {
             listen(address, move |peer| {
                 let handler = handler.clone();
                 let (sender, receiver) = unbounded();
-                core::<Executor>().unwrap().spawn(async move {
+                spawn(async move {
                     let (data_sender, mut stream) = unbounded();
-                    core::<Executor>().unwrap().spawn(async move {
+                    spawn(async move {
                         while let Some(item) = stream.next().await {
                             peer.send(item).unwrap();
                         }
