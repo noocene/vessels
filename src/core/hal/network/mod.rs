@@ -1,7 +1,7 @@
 use crate::{
     channel::{Context, OnTo, Target},
     core,
-    core::{executor::Spawn, Executor, UnimplementedError},
+    core::{Executor, UnimplementedError},
     format::{ApplyDecode, ApplyEncode, Format},
     kind::{Future, SinkStream},
     object, Kind,
@@ -117,10 +117,10 @@ impl Server {
                         .await
                         .encode::<F>()
                         .split();
-                    core::<dyn Executor>()
+                    core::<Executor>()
                         .unwrap()
                         .spawn(stream.map(Ok).forward(sender).then(|_| ready(())));
-                    core::<dyn Executor>()
+                    core::<Executor>()
                         .unwrap()
                         .spawn(receiver.map(Ok).forward(sink).then(|_| ready(())));
                 })

@@ -1,7 +1,7 @@
 use vessels::{
     channel::IdChannel,
     core,
-    core::{executor::Spawn, Executor},
+    core::Executor,
     format::{ApplyDecode, ApplyEncode, Cbor},
     kind::using,
     log, Kind, OnTo,
@@ -24,7 +24,7 @@ enum Enum<T: Kind> {
 }
 
 fn main() {
-    core::<dyn Executor>().unwrap().run(async move {
+    core::<Executor>().unwrap().run(async move {
         let encoded = Enum::StructLike {
             item: "hello".to_owned(),
             another_kind: WithSerde { test: 10 },
