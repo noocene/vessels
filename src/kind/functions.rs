@@ -1,6 +1,6 @@
 use crate::{
     channel::{Channel, ForkHandle},
-    kind::{Future, Flatten},
+    kind::{Flatten, Future},
     ConstructResult, DeconstructResult, Kind,
 };
 
