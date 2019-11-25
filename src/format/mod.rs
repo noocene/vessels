@@ -249,7 +249,7 @@ where
                 Self::deserialize(item, ctx.clone()).or_else(move |(e, item)| {
                     let context = ct.clone();
                     let message = format!("{}", e);
-                    let mut data = message.split(" ");
+                    let mut data = message.split_whitespace();
                     if data.next() == Some("ASYNC_WAIT") {
                         if let Some(data) = data.next() {
                             return context
