@@ -1,7 +1,7 @@
 use vessels::{
     channel::IdChannel,
     core,
-    core::{executor::Spawn, Executor},
+    core::Executor,
     format::{ApplyDecode, ApplyEncode, Cbor},
     kind::Future,
     log, object, Kind, OnTo,
@@ -23,7 +23,7 @@ impl<T: Kind + Display> ExampleObject<T> for Implementor {
 }
 
 fn main() {
-    core::<dyn Executor>().unwrap().run(async move {
+    core::<Executor>().unwrap().run(async move {
         let encoded = (Box::new(Implementor) as Box<dyn ExampleObject<String>>)
             .on_to::<IdChannel>()
             .await
