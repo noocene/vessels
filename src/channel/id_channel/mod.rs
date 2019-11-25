@@ -25,7 +25,7 @@ use std::{
 use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle, Waiter},
     core,
-    core::Executor,
+    core::{spawn, Executor},
     kind::{Future, Sink},
     Kind, SerdeAny, Target,
 };
@@ -271,7 +271,7 @@ impl IdChannelHandle {
 
         Box::pin(
             IdChannelFork::new(kind, self.clone(), id).map(move |(sender, receiver)| {
-                core::<Executor>().unwrap().spawn(
+                spawn(
                     receiver
                         .map(move |v| Ok(Item::new(id, Box::new(v), context.clone())))
                         .forward(out_channel)
@@ -309,7 +309,7 @@ impl IdChannelHandle {
             .unwrap()
             .insert(fork_ref, Box::pin(isender));
         let ct = self.context.clone();
-        core::<Executor>().unwrap().spawn(
+        spawn(
             ireceiver
                 .map(move |item: K::DeconstructItem| {
                     Ok(Item::new(fork_ref, Box::new(item), ct.clone()))
@@ -423,7 +423,7 @@ impl<
         async move {
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
             let (oi, receiver): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
-            core::<Executor>().unwrap().spawn(
+            spawn(
                 kind.deconstruct(IdChannelFork {
                     o: Box::pin(oi),
                     i: Box::pin(oo),

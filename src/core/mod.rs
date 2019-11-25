@@ -1,4 +1,5 @@
 use failure::Fail;
+use futures::Future as IFuture;
 use std::{
     any::{Any, TypeId},
     fmt::{self, Display, Formatter},
@@ -97,4 +98,8 @@ pub fn core<T: Any + ?Sized + CoreValue>() -> Result<Box<T>, CoreError> {
         .unwrap());
     }
     Err(CoreError::Unavailable)
+}
+
+pub fn spawn<F: Sync + Send + 'static + IFuture<Output = ()>>(fut: F) {
+    core::<Executor>().unwrap().spawn(fut)
 }
