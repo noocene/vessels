@@ -1,8 +1,5 @@
 use super::{Containers, Instance};
-use crate::{
-    core,
-    core::{executor::Spawn, Executor},
-};
+use crate::{core, core::Executor};
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver},
     future::LocalBoxFuture,
@@ -199,7 +196,7 @@ impl Containers for WebContainers {
             let handle: Rc<RefCell<Option<InstanceStateRead>>> = Rc::new(RefCell::new(None));
             let imports = js_sys::Object::new();
             let h = handle.clone();
-            let mut executor = core::<dyn Executor>().unwrap();
+            let mut executor = core::<Executor>().unwrap();
             let output = Closure::wrap(Box::new(move |ptr: u32, len: u32| {
                 let mut sender = sender.clone();
                 let data = h.read(ptr, len);
@@ -215,7 +212,7 @@ impl Containers for WebContainers {
                 }
             }) as Box<dyn FnMut(_, _)>);
             let h_2 = handle.clone();
-            let mut handle_executor = core::<dyn Executor>().unwrap();
+            let mut handle_executor = core::<Executor>().unwrap();
             let enqueue = Closure::wrap(Box::new(move || {
                 handle_executor.spawn(h_2.handle());
             }) as Box<dyn FnMut()>);

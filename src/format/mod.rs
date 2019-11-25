@@ -23,8 +23,7 @@ use futures::{
 
 use crate::{
     channel::{Context, Shim, Target, Waiter},
-    core,
-    core::Executor,
+    core::spawn,
     kind::{Future, SinkStream},
     Kind,
 };
@@ -262,7 +261,7 @@ where
                 })
             })
             .buffer_unordered(std::usize::MAX);
-        core::<Executor>().unwrap().spawn(
+        spawn(
             receiver
                 .forward(sink.sink_map_err(|e| panic!(format!("{}", e))))
                 .unwrap_or_else(|_| panic!()),
