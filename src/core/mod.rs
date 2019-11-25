@@ -7,7 +7,7 @@ use std::{
 
 use crate::kind::Future;
 
-pub mod executor;
+mod executor;
 pub use executor::Executor;
 
 pub mod hal;
