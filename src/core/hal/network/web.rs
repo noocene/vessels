@@ -1,13 +1,10 @@
-use super::{Client as IClient, ConnectError};
+use super::{ConnectError, ConnectionError, RawClient};
 
 use crate::{
-    channel::IdChannel,
     core,
     core::{executor::Spawn, Executor},
-    format::{ApplyDecode, Cbor},
     kind::Future,
     kind::SinkStream,
-    Kind,
 };
 
 use failure::Fail;
@@ -17,15 +14,15 @@ use futures::{
         oneshot::channel,
     },
     task::{Context, Poll},
-    Future as IFuture, StreamExt,
+    Future as IFuture, SinkExt, StreamExt,
 };
 use js_sys::Uint8Array;
-use std::{marker::PhantomData, pin::Pin};
+use std::pin::Pin;
 use url::Url;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{BinaryType, MessageEvent, WebSocket};
 
-pub struct Client<K: Kind>(PhantomData<K>);
+pub(crate) struct Client;
 
 #[cfg(not(target_feature = "atomics"))]
 unsafe impl<F: IFuture> Send for SyncSendAssert<F> {}
@@ -46,8 +43,11 @@ struct SyncSendAssert<F: IFuture>(Pin<Box<F>>);
 #[fail(display = "the target port is being blocked")]
 pub struct SecurityError;
 
-impl<K: Kind> IClient<K> for Client<K> {
-    fn connect(&mut self, address: Url) -> Future<Result<K, ConnectError>> {
+impl RawClient for Client {
+    fn connect(
+        &mut self,
+        address: Url,
+    ) -> Future<Result<SinkStream<Vec<u8>, ConnectionError, Vec<u8>>, ConnectError>> {
         Box::pin(SyncSendAssert(Box::pin(async move {
             let socket = WebSocket::new(&address.into_string())
                 .map_err(|_| ConnectError::Connect(SecurityError.into()))?;
@@ -74,16 +74,16 @@ impl<K: Kind> IClient<K> for Client<K> {
                     }
                 })));
             receiver.await.unwrap();
-            SinkStream::new(out_sender, data_receiver)
-                .decode::<IdChannel, Cbor>()
-                .await
-                .map_err(|e: K::ConstructError| ConnectError::Construct(e.into()))
+            Ok(SinkStream::new(
+                out_sender.sink_map_err(|e| ConnectionError { cause: e.into() }),
+                data_receiver,
+            ))
         })))
     }
 }
 
-impl<K: Kind> Client<K> {
-    pub fn new() -> Box<dyn IClient<K>> {
-        Box::new(Client(PhantomData))
+impl Client {
+    pub(crate) fn new() -> Box<dyn RawClient> {
+        Box::new(Client)
     }
 }

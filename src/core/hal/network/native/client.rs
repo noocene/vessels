@@ -1,13 +1,9 @@
-use super::super::{Client as IClient, ConnectError};
+use super::super::{ConnectError, ConnectionError, RawClient};
 
 use crate::{
-    channel::IdChannel,
     core,
     core::{executor::Spawn, Executor},
-    format::{ApplyDecode, Cbor},
-    kind::Future,
-    kind::SinkStream,
-    Kind,
+    kind::{Future, SinkStream},
 };
 
 use futures::{
@@ -16,16 +12,19 @@ use futures::{
         oneshot::channel,
     },
     lock::Mutex,
-    StreamExt,
+    SinkExt, StreamExt,
 };
-use std::{marker::PhantomData, sync::{Arc, self}};
+use std::sync::{self, Arc};
 use url::Url;
 use ws::{connect, Message};
 
-pub struct Client<K: Kind>(PhantomData<K>);
+pub(crate) struct Client;
 
-impl<K: Kind> IClient<K> for Client<K> {
-    fn connect(&mut self, address: Url) -> Future<Result<K, ConnectError>> {
+impl RawClient for Client {
+    fn connect(
+        &mut self,
+        address: Url,
+    ) -> Future<Result<SinkStream<Vec<u8>, ConnectionError, Vec<u8>>, ConnectError>> {
         Box::pin(async move {
             let (out_sender, out_receiver): (_, UnboundedReceiver<Vec<u8>>) = unbounded();
             let out_receiver = Arc::new(Mutex::new(out_receiver));
@@ -49,19 +48,20 @@ impl<K: Kind> IClient<K> for Client<K> {
                         Ok(())
                     }
                 })
-                .map_err(|e| ConnectError::Connect(e.into())).unwrap();
+                .map_err(|e| ConnectError::Connect(e.into()))
+                .unwrap();
             });
             receiver.await.unwrap();
-            SinkStream::new(out_sender, data_receiver)
-                .decode::<IdChannel, Cbor>()
-                .await
-                .map_err(|e: K::ConstructError| ConnectError::Construct(e.into()))
+            Ok(SinkStream::new(
+                out_sender.sink_map_err(|e| ConnectionError { cause: e.into() }),
+                data_receiver,
+            ))
         })
     }
 }
 
-impl<K: Kind> Client<K> {
-    pub fn new() -> Box<dyn IClient<K>> {
-        Box::new(Client(PhantomData))
+impl Client {
+    pub(crate) fn new() -> Box<dyn RawClient> {
+        Box::new(Client)
     }
 }

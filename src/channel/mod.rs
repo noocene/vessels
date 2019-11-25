@@ -66,7 +66,7 @@ pub trait Shim<'a, T: Target<'a, K>, K: Kind>:
     ) -> Future<Result<K, K::ConstructError>>;
 }
 
-pub trait Target<'a, K: Kind>: Context<'a> + Sized {
+pub trait Target<'a, K: Kind>: Context<'a> + Sized + Send + Sync {
     type Shim: Shim<'a, Self, K>;
 
     fn new_with(kind: K) -> Future<Self>
@@ -81,7 +81,7 @@ pub trait Waiter {
 }
 
 pub trait Context<'de> {
-    type Item: Serialize + 'static;
+    type Item: Serialize + Sync + Send + 'static;
     type Target: Waiter + DeserializeSeed<'de, Value = Self::Item> + Clone + Sync + Send + 'static;
 
     fn context(&self) -> Self::Target;
