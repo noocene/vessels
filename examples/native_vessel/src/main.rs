@@ -2,7 +2,6 @@ use vessels::{
     channel::IdChannel,
     core,
     core::{
-        executor::Spawn,
         orchestrator::containers::{native::NativeContainers, Containers},
         Executor, Vessel,
     },
@@ -15,7 +14,7 @@ use std::fs::read;
 pub fn main() {
     let binary =
         read("../../target/wasm32-unknown-unknown/debug/examples/test_vessel.wasm").unwrap();
-    let mut executor = core::<dyn Executor>().unwrap();
+    let mut executor = core::<Executor>().unwrap();
     executor.run(async move {
         let mut containers = NativeContainers;
         let module = containers.compile(binary).await;

@@ -1,11 +1,11 @@
 mod queue;
 mod task;
-use super::Executor;
+use super::Spawner;
 use crate::kind::Future;
 
-pub(crate) struct Spawner;
+pub(crate) struct Executor;
 
-impl Executor for Spawner {
+impl Spawner for Executor {
     fn spawn_boxed(&mut self, future: Future<()>) {
         task::Task::spawn(future)
     }
@@ -14,8 +14,8 @@ impl Executor for Spawner {
     }
 }
 
-impl Spawner {
-    pub fn new() -> Self {
-        Spawner
+impl Executor {
+    pub fn new() -> Box<dyn Spawner> {
+        Box::new(Executor)
     }
 }

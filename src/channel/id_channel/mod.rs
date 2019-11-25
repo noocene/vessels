@@ -25,7 +25,7 @@ use std::{
 use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle, Waiter},
     core,
-    core::{executor::Spawn, Executor},
+    core::Executor,
     kind::{Future, Sink},
     Kind, SerdeAny, Target,
 };
@@ -240,7 +240,7 @@ impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
         };
         let fork = channel.get_fork::<K>(ForkHandle(0));
         let (sender, receiver) = channel.split();
-        let mut executor = core::<dyn Executor>().unwrap();
+        let mut executor = core::<Executor>().unwrap();
         executor.spawn(receiver.map(Ok).forward(sink).unwrap_or_else(|_| panic!()));
         executor.spawn(
             stream
@@ -271,7 +271,7 @@ impl IdChannelHandle {
 
         Box::pin(
             IdChannelFork::new(kind, self.clone(), id).map(move |(sender, receiver)| {
-                core::<dyn Executor>().unwrap().spawn(
+                core::<Executor>().unwrap().spawn(
                     receiver
                         .map(move |v| Ok(Item::new(id, Box::new(v), context.clone())))
                         .forward(out_channel)
@@ -309,7 +309,7 @@ impl IdChannelHandle {
             .unwrap()
             .insert(fork_ref, Box::pin(isender));
         let ct = self.context.clone();
-        core::<dyn Executor>().unwrap().spawn(
+        core::<Executor>().unwrap().spawn(
             ireceiver
                 .map(move |item: K::DeconstructItem| {
                     Ok(Item::new(fork_ref, Box::new(item), ct.clone()))
@@ -423,7 +423,7 @@ impl<
         async move {
             let (sender, oo): (UnboundedSender<I>, UnboundedReceiver<I>) = unbounded();
             let (oi, receiver): (UnboundedSender<O>, UnboundedReceiver<O>) = unbounded();
-            core::<dyn Executor>().unwrap().spawn(
+            core::<Executor>().unwrap().spawn(
                 kind.deconstruct(IdChannelFork {
                     o: Box::pin(oi),
                     i: Box::pin(oo),
@@ -466,7 +466,7 @@ impl<
                 context,
                 in_channels: Arc::new(Mutex::new(in_channels)),
             };
-            let mut executor = core::<dyn Executor>().unwrap();
+            let mut executor = core::<Executor>().unwrap();
             executor.spawn(
                 receiver
                     .map(move |v| Ok(Item::new(handle, Box::new(v), ct.clone())))

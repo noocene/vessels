@@ -64,7 +64,7 @@ mod private {
     pub trait Sealed {}
 
     impl<T: Reflected + ?Sized> Sealed for T {}
-    impl Sealed for dyn Executor {}
+    impl Sealed for Executor {}
     impl Sealed for dyn Log {}
 }
 
@@ -78,9 +78,11 @@ impl<T: ?Sized> CoreValue for T where T: private::Sealed {}
 
 pub fn core<T: Any + ?Sized + CoreValue>() -> Result<Box<T>, CoreError> {
     let ty = TypeId::of::<T>();
-    if ty == TypeId::of::<dyn Executor>() {
+    if ty == TypeId::of::<Executor>() {
         return executor::new_executor()
-            .map(|executor| *Box::<dyn Any>::downcast(Box::new(executor) as Box<dyn Any>).unwrap())
+            .map(|executor| {
+                *Box::<dyn Any>::downcast(Box::new(Box::new(executor)) as Box<dyn Any>).unwrap()
+            })
             .map_err(CoreError::Unimplemented);
     }
     if ty == TypeId::of::<dyn Log>() {
