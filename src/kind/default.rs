@@ -2,7 +2,11 @@ use futures::future::{ok, Ready};
 
 use std::{default::Default as IDefault, ops::Deref};
 
-use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
+use crate::{
+    channel::Channel,
+    kind::{ConstructResult, DeconstructResult},
+    Kind,
+};
 
 use super::{using, AsKind};
 

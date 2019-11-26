@@ -33,6 +33,11 @@ pub type Stream<T> = Pin<Box<dyn IStream<Item = T> + Sync + Send>>;
 pub type Future<T> = Pin<Box<dyn IFuture<Output = T> + Sync + Send>>;
 pub type Sink<T, E> = Pin<Box<dyn ISink<T, Error = E> + Sync + Send>>;
 
+/// The result of reconstructing a Kind.
+pub type ConstructResult<K> = Result<K, <K as Kind>::ConstructError>;
+/// The result of deconstructing a Kind.
+pub type DeconstructResult<K> = Result<(), <K as Kind>::DeconstructError>;
+
 pub trait Flatten: Sized {
     fn flatten<F: IFuture<Output = Self> + Sync + Send + 'static>(fut: F) -> Self;
 }

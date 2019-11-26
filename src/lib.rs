@@ -14,7 +14,9 @@ pub mod core;
 pub mod kind;
 #[doc(inline)]
 pub use crate::core::core;
+use kind::{ConstructResult, DeconstructResult};
 pub mod reflection;
+pub mod replicate;
 
 use downcast_rs::{impl_downcast, Downcast};
 use erased_serde::Serialize as ErasedSerialize;
@@ -133,11 +135,6 @@ pub use lazy_static;
 pub use serde;
 #[doc(hidden)]
 pub use void;
-
-/// The result of reconstructing a Kind.
-pub type ConstructResult<K> = Result<K, <K as Kind>::ConstructError>;
-/// The result of deconstructing a Kind.
-pub type DeconstructResult<K> = Result<(), <K as Kind>::DeconstructError>;
 
 /// A type with a bijection to over-the-wire data.
 ///

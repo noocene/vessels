@@ -5,7 +5,7 @@ authors = ["Izzy Swart <zenerboson@gmail.com>"]
 edition = "2018"
 
 [workspace]
-members = [".", "./derive", "examples/vessel", "examples/native_vessel", "examples/network"]
+members = [".", "./derive", "examples/vessel", "examples/native_vessel"]
 
 [features]
 cbor = ["serde_cbor"]

@@ -1,7 +1,7 @@
 use crate::{
     channel::{Channel, ForkHandle},
-    kind::{Flatten, Future},
-    ConstructResult, DeconstructResult, Kind,
+    kind::{ConstructResult, DeconstructResult, Flatten, Future},
+    Kind,
 };
 
 use futures::{lock::Mutex, SinkExt, StreamExt, TryFutureExt};

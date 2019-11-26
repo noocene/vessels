@@ -1,8 +1,8 @@
 use super::WrappedError;
 use crate::{
     channel::{Channel, ForkHandle},
-    kind::Future,
-    ConstructResult, DeconstructResult, Kind,
+    kind::{ConstructResult, DeconstructResult, Future},
+    Kind,
 };
 
 use failure::{Error, Fail};
