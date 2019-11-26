@@ -167,7 +167,7 @@ impl<T: ?Sized + Reflected + Trait<T>, S: ?Sized + Reflected> Cast<S> for Box<T>
     }
 }
 
-pub trait Trait<T: Reflected + ?Sized> {
+pub trait Trait<T: Reflected + ?Sized>: Sync + Send {
     fn call(
         &self,
         index: MethodIndex,
