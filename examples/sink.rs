@@ -1,5 +1,6 @@
 use vessels::{
     channel::IdChannel,
+    core,
     core::{spawn, Executor},
     format::{ApplyDecode, ApplyEncode, Json},
     kind::Sink,

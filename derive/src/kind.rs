@@ -31,10 +31,10 @@ pub fn derive(mut s: Structure) -> TokenStream {
                     gen impl ::vessels::Kind for @Self where Self: ::vessels::kind::AsKind<#ty> {
                         type ConstructItem = ::vessels::channel::ForkHandle;
                         type ConstructError = ::vessels::void::Void;
-                        type ConstructFuture = ::vessels::kind::Future<::vessels::ConstructResult<Self>>;
+                        type ConstructFuture = ::vessels::kind::Future<::vessels::kind::ConstructResult<Self>>;
                         type DeconstructItem = ();
                         type DeconstructError = ::vessels::void::Void;
-                        type DeconstructFuture = ::vessels::kind::Future<::vessels::DeconstructResult<Self>>;
+                        type DeconstructFuture = ::vessels::kind::Future<::vessels::kind::DeconstructResult<Self>>;
 
                         fn deconstruct<C: ::vessels::channel::Channel<<Self as ::vessels::Kind>::DeconstructItem, <Self as ::vessels::Kind>::ConstructItem>>(
                             self,
@@ -222,10 +222,10 @@ pub fn derive(mut s: Structure) -> TokenStream {
             gen impl ::vessels::Kind for @Self {
                 type ConstructItem = _DERIVE_Items;
                 type ConstructError = ::vessels::void::Void;
-                type ConstructFuture = ::vessels::kind::Future<::vessels::ConstructResult<Self>>;
+                type ConstructFuture = ::vessels::kind::Future<::vessels::kind::ConstructResult<Self>>;
                 type DeconstructItem = ();
                 type DeconstructError = ::vessels::void::Void;
-                type DeconstructFuture = ::vessels::kind::Future<::vessels::DeconstructResult<Self>>;
+                type DeconstructFuture = ::vessels::kind::Future<::vessels::kind::DeconstructResult<Self>>;
 
                 fn deconstruct<C: ::vessels::channel::Channel<<Self as ::vessels::Kind>::DeconstructItem, <Self as ::vessels::Kind>::ConstructItem>>(
                     self,
