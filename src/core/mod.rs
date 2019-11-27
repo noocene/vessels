@@ -60,7 +60,7 @@ impl Log for Logger {
 
 mod private {
     use super::{Executor, Log};
-    use crate::reflection::Reflected;
+    use crate::reflect::Reflected;
 
     pub trait Sealed {}
 
