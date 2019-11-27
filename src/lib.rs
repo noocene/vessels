@@ -15,7 +15,7 @@ pub mod kind;
 #[doc(inline)]
 pub use crate::core::core;
 use kind::{ConstructResult, DeconstructResult};
-pub mod reflection;
+pub mod reflect;
 pub mod replicate;
 
 use downcast_rs::{impl_downcast, Downcast};

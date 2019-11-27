@@ -1,4 +1,4 @@
-use crate::reflection::{
+use crate::reflect::{
     CallError, CastError, Erased, MethodIndex, MethodTypes, NameError, OutOfRangeError, Reflected,
     Trait,
 };
