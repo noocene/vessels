@@ -1,6 +1,6 @@
 use super::{ConnectError, ConnectionError, RawClient};
 
-use crate::{core, core::Executor, kind::Future, kind::SinkStream};
+use crate::{core::spawn, kind::Future, kind::SinkStream};
 
 use failure::Fail;
 use futures::{
@@ -61,13 +61,11 @@ impl RawClient for Client {
             socket.set_onmessage(Some(on_data.as_ref().unchecked_ref()));
             on_data.forget();
             let (out_sender, mut out_receiver): (_, UnboundedReceiver<Vec<u8>>) = unbounded();
-            core::<Executor>()
-                .unwrap()
-                .spawn(SyncSendAssert(Box::pin(async move {
-                    while let Some(mut data) = out_receiver.next().await {
-                        socket.send_with_u8_array(data.as_mut_slice()).unwrap();
-                    }
-                })));
+            spawn(SyncSendAssert(Box::pin(async move {
+                while let Some(mut data) = out_receiver.next().await {
+                    socket.send_with_u8_array(data.as_mut_slice()).unwrap();
+                }
+            })));
             receiver.await.unwrap();
             Ok(SinkStream::new(
                 out_sender.sink_map_err(|e| ConnectionError { cause: e.into() }),

@@ -1,9 +1,8 @@
 use vessels::{
     channel::IdChannel,
-    core,
     core::{
         orchestrator::containers::{web::WebContainers, Containers},
-        Executor, Vessel,
+        run, Constructor,
     },
     format::{ApplyDecode, Cbor},
     log,
@@ -16,11 +15,11 @@ const WASM_DATA: &'static [u8] =
 #[wasm_bindgen(start)]
 pub fn main() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-    core::<Executor>().unwrap().run(async move {
+    run(async move {
         let mut containers = WebContainers;
         let module = containers.compile(WASM_DATA).await;
         let instance = containers.instantiate(&module).await;
-        let data: Vessel<String> = instance.decode::<IdChannel, Cbor>().await.unwrap();
+        let data: Constructor<String> = instance.decode::<IdChannel, Cbor>().await.unwrap();
         log!("{}", data().await);
     });
 }
