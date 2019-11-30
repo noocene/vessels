@@ -1,5 +1,5 @@
 use super::{Containers, Instance};
-use crate::{core, core::Executor, kind::Future};
+use crate::{core::spawn, kind::Future};
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
     lock,
@@ -77,8 +77,7 @@ struct State {
 
 fn enqueue(cx: &mut Ctx) {
     let state = unsafe { Box::from_raw(cx.data as *mut lock::Mutex<State>) };
-    let mut executor = core::<Executor>().unwrap();
-    executor.spawn(async move {
+    spawn(async move {
         {
             let mut st = state.lock().await;
             (&mut *st.handle)();
@@ -96,8 +95,7 @@ fn output(cx: &mut Ctx, ptr: i32, len: i32) {
         *byte = view[ptr + idx].get();
     }
     let state = unsafe { Box::from_raw(cx.data as *mut lock::Mutex<State>) };
-    let mut executor = core::<Executor>().unwrap();
-    executor.spawn(async move {
+    spawn(async move {
         state.lock().await.output.send(buffer).await.unwrap();
         Box::leak(state);
     });
@@ -149,8 +147,7 @@ impl Containers for NativeContainers {
             let state = lock::Mutex::new(State {
                 handle: Box::new(move || {
                     let inst = inst.clone();
-                    let mut executor = core::<Executor>().unwrap();
-                    executor.spawn(async move {
+                    spawn(async move {
                         inst.lock().unwrap().call("_EXPORT_handle", &[]).unwrap();
                     });
                 }),

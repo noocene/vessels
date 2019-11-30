@@ -1,7 +1,7 @@
 use vessels::{
     channel::IdChannel,
     core,
-    core::{hal::network::Server, Executor},
+    core::{hal::network::Server, run},
     format::Cbor,
     replicate::{collections::List, Share, Shared},
 };
@@ -9,7 +9,7 @@ use vessels::{
 type Collection = Shared<dyn List<String>>;
 
 pub fn main() {
-    core::<Executor>().unwrap().run(async move {
+    run(async move {
         let collection = Collection::new(Box::new(vec![]));
         let mut server = Server::new().unwrap();
         server
