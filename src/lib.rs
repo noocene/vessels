@@ -12,8 +12,6 @@ pub mod format;
 pub use format::{ApplyDecode, ApplyEncode};
 pub mod core;
 pub mod kind;
-#[doc(inline)]
-pub use crate::core::core;
 use kind::{ConstructResult, DeconstructResult};
 pub mod reflect;
 pub mod replicate;
@@ -209,10 +207,10 @@ impl<T: ?Sized> SerdeAny for T where T: ErasedSerialize + Downcast + Sync + Send
 macro_rules! log {
     ($($args:expr),*) => (
         let formatted = format!($($args,)*);
-        $crate::core::<dyn $crate::core::Log>().unwrap().info(formatted)
+        $crate::core::LOG.info(formatted)
     );
     ($($args:expr,)*) => (
         let formatted = format!($($args,)*);
-        $crate::core::<dyn $crate::core::Log>().unwrap().info(formatted)
+        $crate::core::LOG.info(formatted)
     );
 }

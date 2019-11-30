@@ -1,5 +1,5 @@
 use super::{Containers, Instance};
-use crate::{core, core::Executor};
+use crate::core::spawn;
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver},
     future::LocalBoxFuture,
@@ -196,11 +196,10 @@ impl Containers for WebContainers {
             let handle: Rc<RefCell<Option<InstanceStateRead>>> = Rc::new(RefCell::new(None));
             let imports = js_sys::Object::new();
             let h = handle.clone();
-            let mut executor = core::<Executor>().unwrap();
             let output = Closure::wrap(Box::new(move |ptr: u32, len: u32| {
                 let mut sender = sender.clone();
                 let data = h.read(ptr, len);
-                executor.spawn(async move { sender.send(data).unwrap_or_else(|_| panic!()).await });
+                spawn(async move { sender.send(data).unwrap_or_else(|_| panic!()).await });
             }) as Box<dyn FnMut(_, _)>);
             let h_3 = handle.clone();
             let panic = Closure::wrap(Box::new(move |ptr: u32, len: u32| {
@@ -212,9 +211,8 @@ impl Containers for WebContainers {
                 }
             }) as Box<dyn FnMut(_, _)>);
             let h_2 = handle.clone();
-            let mut handle_executor = core::<Executor>().unwrap();
             let enqueue = Closure::wrap(Box::new(move || {
-                handle_executor.spawn(h_2.handle());
+                spawn(h_2.handle());
             }) as Box<dyn FnMut()>);
             js_sys::Reflect::set(
                 &imports,

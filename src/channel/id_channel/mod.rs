@@ -24,8 +24,7 @@ use std::{
 
 use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle, Waiter},
-    core,
-    core::{spawn, Executor},
+    core::spawn,
     kind::{Future, Sink},
     Kind, SerdeAny, Target,
 };
@@ -240,9 +239,8 @@ impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
         };
         let fork = channel.get_fork::<K>(ForkHandle(0));
         let (sender, receiver) = channel.split();
-        let mut executor = core::<Executor>().unwrap();
-        executor.spawn(receiver.map(Ok).forward(sink).unwrap_or_else(|_| panic!()));
-        executor.spawn(
+        spawn(receiver.map(Ok).forward(sink).unwrap_or_else(|_| panic!()));
+        spawn(
             stream
                 .map(Ok)
                 .forward(sender)
@@ -466,14 +464,13 @@ impl<
                 context,
                 in_channels: Arc::new(Mutex::new(in_channels)),
             };
-            let mut executor = core::<Executor>().unwrap();
-            executor.spawn(
+            spawn(
                 receiver
                     .map(move |v| Ok(Item::new(handle, Box::new(v), ct.clone())))
                     .forward(csender)
                     .unwrap_or_else(|_| panic!()),
             );
-            executor.spawn(
+            spawn(
                 kind.deconstruct(IdChannelFork {
                     o: Box::pin(oi),
                     i: Box::pin(oo),
