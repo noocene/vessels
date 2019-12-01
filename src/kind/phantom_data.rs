@@ -1,11 +1,12 @@
 use std::marker::PhantomData;
 
-use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
+use crate::{channel::Channel, kind, ConstructResult, DeconstructResult, Kind};
 
 use futures::future::{ok, Ready};
 
 use void::Void;
 
+#[kind]
 impl<T: Unpin + Sync + Send + 'static> Kind for PhantomData<T> {
     type ConstructItem = ();
     type ConstructError = Void;

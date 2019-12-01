@@ -2,6 +2,7 @@ use futures::{future::try_join_all, SinkExt, StreamExt};
 
 use crate::{
     channel::{Channel, ForkHandle},
+    kind,
     kind::Future,
     ConstructResult, DeconstructResult, Kind,
 };
@@ -97,6 +98,7 @@ where
     }
 }
 
+#[kind]
 impl<T: Unpin + Sync + Send + IntoIterator + FromIterator<<T as IntoIterator>::Item> + 'static> Kind
     for Iterator<T>
 where

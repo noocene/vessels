@@ -125,6 +125,8 @@ pub use derive::Kind;
 /// for the compilation of a vessel.
 pub use derive::export;
 
+pub use derive::kind;
+
 #[doc(hidden)]
 pub use futures;
 #[doc(hidden)]
@@ -182,6 +184,8 @@ pub trait Kind: Any + Sized + Sync + Send + Unpin + 'static {
         self,
         channel: C,
     ) -> Self::DeconstructFuture;
+
+    const USE_KIND_MACRO_TO_GENERATE_THIS_FIELD: [u8; 32];
 }
 
 /// An erased representation of any serializable type used in communication

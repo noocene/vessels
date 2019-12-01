@@ -1,5 +1,6 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind,
     kind::{Future, Sink},
     ConstructResult, DeconstructResult, Kind,
 };
@@ -49,6 +50,7 @@ impl<T: Kind, E: Kind, C: Channel<ForkHandle, ForkHandle>> ISink<T> for KindSink
     }
 }
 
+#[kind]
 impl<T, E> Kind for Sink<T, E>
 where
     T: Kind,

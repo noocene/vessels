@@ -1,5 +1,6 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind,
     kind::{ConstructResult, DeconstructResult, Future},
     Kind,
 };
@@ -14,6 +15,7 @@ use void::Void;
 
 use super::WrappedError;
 
+#[kind]
 impl<T: Unpin + Sync + Send + 'static> Kind for [T; 0] {
     type ConstructItem = ();
     type ConstructError = Void;
@@ -45,6 +47,7 @@ pub enum ArrayError<T: Fail> {
 
 macro_rules! array_impl {
     ($($len:expr => ($($n:tt $nn:ident)+))+) => {$(
+        #[kind]
         impl<T> Kind for [T; $len]
             where T: Kind
         {

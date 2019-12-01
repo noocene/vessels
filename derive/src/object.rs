@@ -476,6 +476,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     Box::new(_DERIVED_ErasedShim::from(self)) as ::std::boxed::Box<dyn ::vessels::reflect::Erased>
                 }
             }
+            #[::vessels::kind]
             impl<#kind_bounded_params> ::vessels::Kind for ::std::boxed::Box<dyn #ident<#params>> {
                 type ConstructItem = ::vessels::channel::ForkHandle;
                 type ConstructError = ::vessels::void::Void;
