@@ -28,7 +28,11 @@ impl<T: Kind, E: Kind, C: Channel<ForkHandle, ForkHandle>> ISink<T> for KindSink
     type Error = E;
 
     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
-        self.item.as_mut().poll(cx).map(Ok)
+        let poll = self.item.as_mut().poll(cx).map(Ok);
+        if let Poll::Ready(_) = poll {
+            self.item = Box::pin(ready(()));
+        }
+        poll
     }
 
     fn start_send(mut self: Pin<&mut Self>, item: T) -> Result<(), Self::Error> {
@@ -42,11 +46,19 @@ impl<T: Kind, E: Kind, C: Channel<ForkHandle, ForkHandle>> ISink<T> for KindSink
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
-        self.item.as_mut().poll(cx).map(Ok)
+        let poll = self.item.as_mut().poll(cx).map(Ok);
+        if let Poll::Ready(_) = poll {
+            self.item = Box::pin(ready(()));
+        }
+        poll
     }
 
     fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
-        self.item.as_mut().poll(cx).map(Ok)
+        let poll = self.item.as_mut().poll(cx).map(Ok);
+        if let Poll::Ready(_) = poll {
+            self.item = Box::pin(ready(()));
+        }
+        poll
     }
 }
 
