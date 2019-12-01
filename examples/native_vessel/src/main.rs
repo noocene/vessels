@@ -14,8 +14,8 @@ use std::fs::read;
 pub struct Tester;
 
 impl test_vessel::Test for Tester {
-    fn test(&self, message: String) -> Future<()> {
-        log!("{}", message);
+    fn test(&self) -> Future<()> {
+        log!("hello there");
         Box::pin(async {})
     }
 }
@@ -29,7 +29,7 @@ pub fn main() {
         let instance = containers.instantiate(&module).await;
         let data: Constructor<String> = instance.decode::<IdChannel, Cbor>().await.unwrap();
         let mut core = Core::new();
-        core.register(|| Box::new(Tester) as Box<dyn test_vessel::Test>);
+        core.register(|| String::from("hello there"));
         log!("{}", data(core.into_handle()).await);
     });
 }
