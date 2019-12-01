@@ -1,6 +1,5 @@
 use vessels::{
     channel::IdChannel,
-    core,
     core::{hal::network::Server, run},
     format::Cbor,
     replicate::{collections::List, Share, Shared},
