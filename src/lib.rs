@@ -28,7 +28,7 @@ use std::any::Any;
 /// Annotating an object-safe trait with this macro will allow the use of
 /// trait objects constructed from that trait as `Kind`s. This uses the implementations
 /// of `Kind` for boxed `dyn Fn`s internally and therefore only functions that return
-/// `Future` or `Stream` will result in an implementation that compiles. This is intended,
+/// some `Flatten` type will result in an implementation that compiles. This is intended,
 /// synchronous returns in an RPC system are an antipattern and this system avoids them.
 /// ```
 /// use vessels::object;
@@ -185,6 +185,7 @@ pub trait Kind: Any + Sized + Sync + Send + Unpin + 'static {
         channel: C,
     ) -> Self::DeconstructFuture;
 
+    #[doc(hidden)]
     const USE_KIND_MACRO_TO_GENERATE_THIS_FIELD: [u8; 32];
 }
 

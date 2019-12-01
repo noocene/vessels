@@ -2,7 +2,6 @@ use failure::{Error, Fail};
 use futures::{lock, SinkExt, StreamExt};
 use lazy_static::lazy_static;
 use std::{
-    any::Any,
     collections::HashMap,
     fmt::{self, Display, Formatter},
     sync::{Arc, Mutex},
@@ -86,7 +85,7 @@ pub fn register_handle(item: Handle) {
     }
 }
 
-pub fn acquire<K: Any + Kind>() -> Future<Result<K, CoreError>> {
+pub fn acquire<K: Kind>() -> Future<Result<K, CoreError>> {
     #[cfg(all(target_arch = "wasm32", not(feature = "core")))]
     return {
         let handle = HANDLE.lock().unwrap();
@@ -112,7 +111,7 @@ trait HandleInner {
 pub struct Handle(Box<dyn HandleInner>);
 
 impl Handle {
-    pub fn acquire<K: Any + Kind>(&self) -> Future<Result<K, CoreError>> {
+    pub fn acquire<K: Kind>(&self) -> Future<Result<K, CoreError>> {
         let channel = self.0.acquire(K::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD);
         Box::pin(async move {
             channel
@@ -159,7 +158,7 @@ impl Core {
             capabilities: Arc::new(Mutex::new(HashMap::new())),
         }
     }
-    pub fn register<K: Kind + Any>(&mut self, item: impl Fn() -> K + Sync + Send + 'static) {
+    pub fn register<K: Kind>(&mut self, item: impl Fn() -> K + Sync + Send + 'static) {
         let item = Arc::new(lock::Mutex::new(item));
         self.capabilities.lock().unwrap().insert(
             K::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD,

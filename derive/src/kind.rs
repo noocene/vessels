@@ -1,4 +1,4 @@
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use ring::digest::{Context, SHA256};
 use syn::{
@@ -271,8 +271,6 @@ pub fn derive(mut s: Structure) -> TokenStream {
 pub fn annotate(item: &mut ItemImpl) {
     let mut context = Context::new(&SHA256);
     context.update(item.clone().into_token_stream().to_string().as_bytes());
-    let call_site = Span::call_site();
-    context.update(format!("{:?}", call_site).as_bytes());
     let hash = context.finish();
     let mut hash_stream = TokenStream::new();
     for byte in hash.as_ref() {
