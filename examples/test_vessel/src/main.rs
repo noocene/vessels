@@ -1,5 +1,5 @@
 use vessels::{core::acquire, export};
 
 export! {
-    acquire::<String>().await.unwrap()
+    acquire::<Box<dyn test_vessel::Test>>().await.unwrap().test("hello".to_owned()).await
 }
