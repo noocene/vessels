@@ -1,5 +1,6 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind,
     kind::Future,
     ConstructResult, DeconstructResult, Kind,
 };
@@ -10,6 +11,7 @@ use super::WrappedError;
 
 use void::Void;
 
+#[kind]
 impl<T> Kind for (T,)
 where
     T: Kind,
@@ -41,6 +43,7 @@ where
 
 macro_rules! tuple_impl {
     ($($len:expr => ($($n:tt $name:ident $nn:ident)+))+) => {$(
+        #[kind]
         impl<$($name),+> Kind for ($($name),+)
             where $($name: Kind),+
         {

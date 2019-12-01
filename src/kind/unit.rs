@@ -1,9 +1,10 @@
-use crate::{channel::Channel, ConstructResult, DeconstructResult, Kind};
+use crate::{channel::Channel, kind, ConstructResult, DeconstructResult, Kind};
 
 use futures::future::{ok, Ready};
 
 use void::Void;
 
+#[kind]
 impl Kind for () {
     type ConstructItem = ();
     type ConstructError = Void;

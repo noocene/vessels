@@ -1,5 +1,6 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind,
     kind::Future,
     ConstructResult, DeconstructResult, Kind,
 };
@@ -10,6 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use super::WrappedError;
 
+#[kind]
 impl<T> Kind for Arc<Mutex<T>>
 where
     T: Kind,
@@ -53,6 +55,7 @@ where
     }
 }
 
+#[kind]
 impl<T> Kind for Box<T>
 where
     T: Kind,
