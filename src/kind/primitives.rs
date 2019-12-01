@@ -8,7 +8,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::{channel::Channel, kind::Future, ConstructResult, DeconstructResult, Kind};
+use crate::{channel::Channel, kind, kind::Future, ConstructResult, DeconstructResult, Kind};
 
 use futures::{SinkExt, StreamExt};
 
@@ -18,6 +18,7 @@ use void::Void;
 
 macro_rules! primitive_impl {
     ($($ty:ident),+) => {$(
+        #[kind]
         impl Kind for $ty {
             type ConstructItem = $ty;
             type ConstructError = WrappedError<Void>;

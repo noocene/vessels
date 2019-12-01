@@ -1,7 +1,9 @@
-use proc_macro2::TokenStream;
-use quote::{format_ident, quote, quote_spanned};
+use proc_macro2::{Span, TokenStream};
+use quote::{format_ident, quote, quote_spanned, ToTokens};
+use ring::digest::{Context, SHA256};
 use syn::{
-    parse2, parse_quote, parse_str, spanned::Spanned, Data, Fields, Path, Type, WherePredicate,
+    parse2, parse_quote, parse_str, spanned::Spanned, Data, Fields, ItemImpl, Path, Type,
+    WherePredicate,
 };
 use synstructure::{AddBounds, BindStyle, Structure};
 
@@ -28,6 +30,7 @@ pub fn derive(mut s: Structure) -> TokenStream {
                     s.add_where_predicate(parse_quote!(#ident: ::std::marker::Send + ::std::marker::Sync + ::std::marker::Unpin + 'static));
                 }
                 s.gen_impl(quote!{
+                    #[::vessels::kind]
                     gen impl ::vessels::Kind for @Self where Self: ::vessels::kind::AsKind<#ty> {
                         type ConstructItem = ::vessels::channel::ForkHandle;
                         type ConstructError = ::vessels::void::Void;
@@ -219,6 +222,7 @@ pub fn derive(mut s: Structure) -> TokenStream {
             s.add_where_predicate(predicate);
         }
         stream.extend(s.gen_impl(quote!{
+            #[::vessels::kind]
             gen impl ::vessels::Kind for @Self {
                 type ConstructItem = _DERIVE_Items;
                 type ConstructError = ::vessels::void::Void;
@@ -262,4 +266,19 @@ pub fn derive(mut s: Structure) -> TokenStream {
         };
     })
     .into()
+}
+
+pub fn annotate(item: &mut ItemImpl) {
+    let mut context = Context::new(&SHA256);
+    context.update(item.clone().into_token_stream().to_string().as_bytes());
+    let call_site = Span::call_site();
+    context.update(format!("{:?}", call_site).as_bytes());
+    let hash = context.finish();
+    let mut hash_stream = TokenStream::new();
+    for byte in hash.as_ref() {
+        hash_stream.extend(quote!(#byte,))
+    }
+    item.items.push(parse_quote!(
+        const USE_KIND_MACRO_TO_GENERATE_THIS_FIELD: [u8; 32] = [#hash_stream];
+    ));
 }

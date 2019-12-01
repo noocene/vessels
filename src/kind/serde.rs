@@ -2,7 +2,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use futures::{SinkExt, StreamExt};
 
-use crate::{channel::Channel, kind::Future, ConstructResult, DeconstructResult, Kind};
+use crate::{channel::Channel, kind, kind::Future, ConstructResult, DeconstructResult, Kind};
 
 use super::{using, AsKind, WrappedError};
 
@@ -44,6 +44,7 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> AsKind<usi
     }
 }
 
+#[kind]
 impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> Kind for Serde<T> {
     type ConstructItem = T;
     type ConstructError = WrappedError<Void>;

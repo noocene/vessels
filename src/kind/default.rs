@@ -4,6 +4,7 @@ use std::{default::Default as IDefault, ops::Deref};
 
 use crate::{
     channel::Channel,
+    kind,
     kind::{ConstructResult, DeconstructResult},
     Kind,
 };
@@ -46,6 +47,7 @@ impl<T: IDefault> Default<T> {
     }
 }
 
+#[kind]
 impl<T: IDefault + Unpin + Sync + Send + 'static> Kind for Default<T> {
     type ConstructItem = ();
     type ConstructError = Void;

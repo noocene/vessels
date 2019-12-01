@@ -1,5 +1,6 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind,
     kind::Future,
     ConstructResult, DeconstructResult, Kind,
 };
@@ -8,6 +9,7 @@ use futures::{SinkExt, StreamExt};
 
 use super::WrappedError;
 
+#[kind]
 impl<T> Kind for Future<T>
 where
     T: Kind,

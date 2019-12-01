@@ -20,6 +20,13 @@ pub fn object(attribute: TokenStream, item: TokenStream) -> TokenStream {
     item.into()
 }
 
+#[proc_macro_attribute]
+pub fn kind(_: TokenStream, item: TokenStream) -> TokenStream {
+    let mut item = parse(item.clone()).unwrap_or_else(|_| panic!("expected trait implementation"));
+    kind::annotate(&mut item);
+    item.into_token_stream().into()
+}
+
 #[proc_macro]
 pub fn export(item: TokenStream) -> TokenStream {
     export::build(item.into()).into()

@@ -1,6 +1,7 @@
 use super::WrappedError;
 use crate::{
     channel::{Channel, ForkHandle},
+    kind,
     kind::{ConstructResult, DeconstructResult, Future},
     Kind,
 };
@@ -50,6 +51,7 @@ impl ErrorShim {
     }
 }
 
+#[kind]
 impl Kind for Error {
     type ConstructItem = ForkHandle;
     type ConstructError = WrappedError<Void>;

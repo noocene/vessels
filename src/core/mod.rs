@@ -1,11 +1,10 @@
 use failure::{Error, Fail};
-use futures::{Future as IFuture, SinkExt, StreamExt};
+use futures::{lock, SinkExt, StreamExt};
 use lazy_static::lazy_static;
 use std::{
-    any::{Any, TypeId},
+    any::Any,
     collections::HashMap,
     fmt::{self, Display, Formatter},
-    mem::transmute,
     sync::{Arc, Mutex},
 };
 
@@ -54,6 +53,7 @@ impl Display for CoreError {
     }
 }
 
+#[doc(hidden)]
 pub struct Logger(());
 
 impl Logger {
@@ -68,6 +68,7 @@ impl Logger {
 }
 
 lazy_static! {
+    #[doc(hidden)]
     pub static ref LOG: Logger = Logger(());
 }
 
@@ -77,6 +78,7 @@ lazy_static! {
 }
 
 #[cfg(all(target_arch = "wasm32", not(feature = "core")))]
+#[doc(hidden)]
 pub fn register_handle(item: Handle) {
     let mut handle = HANDLE.lock().unwrap();
     if handle.is_none() {
@@ -98,27 +100,11 @@ pub fn acquire<K: Any + Kind>() -> Future<Result<K, CoreError>> {
     Box::pin(async { Err(CoreError::Unavailable) })
 }
 
-#[derive(Kind)]
-pub struct Identifier(u64);
-
-impl Identifier {
-    pub fn new<T: Any>() -> Self {
-        let item = format!("{:?}", TypeId::of::<T>());
-        Identifier(item.split_whitespace().nth(3).unwrap().parse().unwrap())
-    }
-}
-
-impl From<Identifier> for TypeId {
-    fn from(input: Identifier) -> Self {
-        unsafe { transmute(input) }
-    }
-}
-
 #[object]
 trait HandleInner {
     fn acquire(
         &self,
-        ty: Identifier,
+        ty: [u8; 32],
     ) -> Future<Result<SinkStream<Vec<u8>, Error, Vec<u8>>, CoreError>>;
 }
 
@@ -127,7 +113,7 @@ pub struct Handle(Box<dyn HandleInner>);
 
 impl Handle {
     pub fn acquire<K: Any + Kind>(&self) -> Future<Result<K, CoreError>> {
-        let channel = self.0.acquire(Identifier::new::<K>());
+        let channel = self.0.acquire(K::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD);
         Box::pin(async move {
             channel
                 .await?
@@ -143,7 +129,7 @@ pub struct Core {
     capabilities: Arc<
         Mutex<
             HashMap<
-                TypeId,
+                [u8; 32],
                 Box<
                     dyn Fn() -> Future<Result<SinkStream<Vec<u8>, Error, Vec<u8>>, CoreError>>
                         + Sync
@@ -157,9 +143,9 @@ pub struct Core {
 impl HandleInner for Core {
     fn acquire(
         &self,
-        ty: Identifier,
+        ty: [u8; 32],
     ) -> Future<Result<SinkStream<Vec<u8>, Error, Vec<u8>>, CoreError>> {
-        if let Some(capability) = self.capabilities.lock().unwrap().get(&ty.into()) {
+        if let Some(capability) = self.capabilities.lock().unwrap().get(&ty) {
             capability()
         } else {
             Box::pin(async move { Err(CoreError::Unavailable) })
@@ -173,19 +159,24 @@ impl Core {
             capabilities: Arc::new(Mutex::new(HashMap::new())),
         }
     }
-    pub fn register<K: Kind + Any + Share>(&mut self, item: K) {
+    pub fn register<K: Kind + Any>(&mut self, item: impl Fn() -> K + Sync + Send + 'static) {
+        let item = Arc::new(lock::Mutex::new(item));
         self.capabilities.lock().unwrap().insert(
-            TypeId::of::<K>(),
+            K::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD,
             Box::new(move || {
-                let item = item.share();
+                let item = item.clone();
                 Box::pin(async move {
-                    let (sink, stream) = item.on_to::<IdChannel>().await.encode::<Cbor>().split();
+                    let (sink, stream) = (item.lock().await)()
+                        .on_to::<IdChannel>()
+                        .await
+                        .encode::<Cbor>()
+                        .split();
                     Ok(SinkStream::new(sink.sink_map_err(Error::from), stream))
                 })
             }),
         );
     }
-    pub fn as_handle(self) -> Handle {
+    pub fn into_handle(self) -> Handle {
         Handle(Box::new(self))
     }
 }

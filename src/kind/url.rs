@@ -1,4 +1,4 @@
-use crate::{channel::Channel, kind::Future, ConstructResult, DeconstructResult, Kind};
+use crate::{channel::Channel, kind, kind::Future, ConstructResult, DeconstructResult, Kind};
 
 use futures::{SinkExt, StreamExt};
 use url::{ParseError, Url};
@@ -7,6 +7,7 @@ use super::WrappedError;
 
 use void::Void;
 
+#[kind]
 impl Kind for Url {
     type ConstructItem = String;
     type ConstructError = WrappedError<ParseError>;

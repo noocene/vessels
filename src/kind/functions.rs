@@ -1,5 +1,6 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind,
     kind::{ConstructResult, DeconstructResult, Flatten, Future},
     Kind,
 };
@@ -10,6 +11,7 @@ use std::sync::Arc;
 
 use void::Void;
 
+#[kind]
 impl<U: Kind + Flatten> Kind for Box<dyn Fn() -> U + Send + Sync> {
     type ConstructItem = ForkHandle;
     type ConstructError = Void;
@@ -51,6 +53,7 @@ impl<U: Kind + Flatten> Kind for Box<dyn Fn() -> U + Send + Sync> {
     }
 }
 
+#[kind]
 impl<U: Kind + Flatten> Kind for Box<dyn FnMut() -> U + Send + Sync> {
     type ConstructItem = ForkHandle;
     type ConstructError = Void;
@@ -92,6 +95,7 @@ impl<U: Kind + Flatten> Kind for Box<dyn FnMut() -> U + Send + Sync> {
     }
 }
 
+#[kind]
 impl<U: Kind + Flatten> Kind for Box<dyn FnOnce() -> U + Send + Sync> {
     type ConstructItem = ForkHandle;
     type ConstructError = Void;
@@ -132,6 +136,7 @@ impl<U: Kind + Flatten> Kind for Box<dyn FnOnce() -> U + Send + Sync> {
 macro_rules! functions_impl {
     ($($len:expr => ($($n:tt $name:ident $nn:ident)+))+) => {$(
         #[allow(non_snake_case)]
+        #[kind]
         impl<U: Kind + Flatten, $($name),+> Kind for Box<dyn Fn($($name),+) -> U + Send + Sync>
             where $($name: Kind),+
         {
@@ -184,6 +189,7 @@ macro_rules! functions_impl {
             }
         }
         #[allow(non_snake_case)]
+        #[kind]
         impl<U: Kind + Flatten, $($name),+> Kind for Box<dyn FnMut($($name),+) -> U + Send + Sync>
             where $($name: Kind),+
         {
@@ -236,6 +242,7 @@ macro_rules! functions_impl {
             }
         }
         #[allow(non_snake_case)]
+        #[kind]
         impl<U: Kind + Flatten, $($name),+> Kind for Box<dyn FnOnce($($name),+) -> U + Send + Sync>
             where $($name: Kind),+
         {

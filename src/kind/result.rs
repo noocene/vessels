@@ -1,5 +1,6 @@
 use crate::{
     channel::{Channel, ForkHandle},
+    kind,
     kind::Future,
     ConstructResult, DeconstructResult, Kind,
 };
@@ -17,6 +18,7 @@ pub enum ResultError<T: Fail, E: Fail> {
     Err(#[fail(cause)] E),
 }
 
+#[kind]
 impl<T, E> Kind for Result<T, E>
 where
     T: Kind,
