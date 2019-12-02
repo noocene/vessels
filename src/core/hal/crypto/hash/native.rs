@@ -1,12 +1,12 @@
-use super::Hash as IHash;
+use super::Hasher as IHasher;
 
 use crate::{core::data::Checksum, kind::Future};
 
 use ring::digest::{digest, SHA256};
 
-pub struct Hash;
+pub struct Hasher;
 
-impl IHash for Hash {
+impl IHasher for Hasher {
     fn hash(&self, data: Vec<u8>) -> Future<Checksum> {
         Box::pin(async move {
             let hash = digest(&SHA256, &data);
@@ -17,8 +17,8 @@ impl IHash for Hash {
     }
 }
 
-impl Hash {
-    pub fn new() -> Box<dyn IHash> {
-        Box::new(Hash)
+impl Hasher {
+    pub fn new() -> Box<dyn IHasher> {
+        Box::new(Hasher)
     }
 }

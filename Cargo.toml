@@ -8,7 +8,7 @@ edition = "2018"
 members = [".", "./derive", "examples/vessel", "examples/native_vessel", "examples/test_vessel"]
 
 [features]
-cbor = ["serde_cbor"]
+cbor = []
 json = ["serde_json"]
 bincode = ["serde_bincode"]
 core = ["wasm-bindgen", "web-sys", "wasmer-runtime", "derive/core", "js-sys", "wasm-bindgen-futures", "ring", "base64", "gstreamer", "gstreamer-webrtc", "gstreamer-sdp", "glib", "ws"]
@@ -20,7 +20,7 @@ serde = { version = "1.0.101", features = ["derive"] }
 failure = "0.1.5"
 erased-serde = "0.3.9"
 serde_json = { version = "1.0.41", optional = true }
-serde_cbor = { version = "0.10.2", optional = true }
+serde_cbor = "0.10.2"
 serde_bincode = {version = "1.2.0", optional = true, package = "bincode" }
 lazy_static = "1.4.0"
 void = "1.0.2"

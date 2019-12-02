@@ -1,13 +1,13 @@
-use super::Hash as IHash;
+use super::Hasher as IHasher;
 
 use crate::{core::data::Checksum, kind::Future, SyncSendAssert};
 
 use js_sys::Uint8Array;
 use wasm_bindgen_futures::JsFuture;
 
-pub struct Hash;
+pub struct Hasher;
 
-impl IHash for Hash {
+impl IHasher for Hasher {
     fn hash(&self, mut data: Vec<u8>) -> Future<Checksum> {
         Box::pin(SyncSendAssert(Box::pin(async move {
             let mut sum = [0u8; 32];
@@ -32,8 +32,8 @@ impl IHash for Hash {
     }
 }
 
-impl Hash {
-    pub fn new() -> Box<dyn IHash> {
-        Box::new(Hash)
+impl Hasher {
+    pub fn new() -> Box<dyn IHasher> {
+        Box::new(Hasher)
     }
 }
