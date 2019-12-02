@@ -219,3 +219,34 @@ macro_rules! log {
         $crate::core::LOG.info(formatted)
     );
 }
+
+#[cfg(all(feature = "core", target_arch = "wasm32"))]
+use ::{
+    futures::task::{Context, Poll},
+    std::pin::Pin,
+};
+
+#[cfg(all(
+    feature = "core",
+    target_arch = "wasm32",
+    not(target_feature = "atomics")
+))]
+unsafe impl<F: Future> Send for SyncSendAssert<F> {}
+#[cfg(all(
+    feature = "core",
+    target_arch = "wasm32",
+    not(target_feature = "atomics")
+))]
+unsafe impl<F: Future> Sync for SyncSendAssert<F> {}
+
+#[cfg(all(feature = "core", target_arch = "wasm32"))]
+impl<F: Future> Future for SyncSendAssert<F> {
+    type Output = F::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        self.0.as_mut().poll(cx)
+    }
+}
+
+#[cfg(all(feature = "core", target_arch = "wasm32"))]
+pub(crate) struct SyncSendAssert<F: Future>(Pin<Box<F>>);

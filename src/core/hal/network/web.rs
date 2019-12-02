@@ -1,6 +1,6 @@
 use super::{ConnectError, ConnectionError, RawClient};
 
-use crate::{core::spawn, kind::Future, kind::SinkStream};
+use crate::{core::spawn, kind::Future, kind::SinkStream, SyncSendAssert};
 
 use failure::Fail;
 use futures::{
@@ -8,31 +8,14 @@ use futures::{
         mpsc::{unbounded, UnboundedReceiver},
         oneshot::channel,
     },
-    task::{Context, Poll},
-    Future as IFuture, SinkExt, StreamExt,
+    SinkExt, StreamExt,
 };
 use js_sys::Uint8Array;
-use std::pin::Pin;
 use url::Url;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{BinaryType, MessageEvent, WebSocket};
 
 pub(crate) struct Client;
-
-#[cfg(not(target_feature = "atomics"))]
-unsafe impl<F: IFuture> Send for SyncSendAssert<F> {}
-#[cfg(not(target_feature = "atomics"))]
-unsafe impl<F: IFuture> Sync for SyncSendAssert<F> {}
-
-impl<F: IFuture> IFuture for SyncSendAssert<F> {
-    type Output = F::Output;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        self.0.as_mut().poll(cx)
-    }
-}
-
-struct SyncSendAssert<F: IFuture>(Pin<Box<F>>);
 
 #[derive(Fail, Debug)]
 #[fail(display = "the target port is being blocked")]
