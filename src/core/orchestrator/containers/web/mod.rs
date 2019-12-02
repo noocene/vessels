@@ -10,6 +10,7 @@ use js_sys::{
     Function, Number, Uint8Array,
     WebAssembly::{compile, instantiate_module, Instance as WasmInstance, Memory, Module},
 };
+use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use std::{cell::RefCell, pin::Pin, rc::Rc};
 use void::Void;
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -57,6 +58,12 @@ impl Sink<Vec<u8>> for WebInstance {
 }
 
 pub struct WebContainers;
+
+impl WebContainers {
+    pub fn new() -> Self {
+        WebContainers
+    }
+}
 
 struct InstanceStateRead {
     handle: Function,
@@ -140,6 +147,24 @@ unsafe impl Sync for WebModule {}
 
 pub struct WebModule(Module);
 
+impl Serialize for WebModule {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        unimplemented!()
+    }
+}
+
+impl<'de> Deserialize<'de> for WebModule {
+    fn deserialize<D>(deserializer: D) -> Result<WebModule, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        unimplemented!()
+    }
+}
+
 #[cfg(not(target_feature = "atomics"))]
 unsafe impl Send for Compile {}
 #[cfg(not(target_feature = "atomics"))]
@@ -176,7 +201,7 @@ impl Containers for WebContainers {
     type Instance = WebInstance;
     type Instantiate = Instantiate;
 
-    fn compile<T: AsRef<[u8]>>(&mut self, data: T) -> Compile {
+    fn compile<T: AsRef<[u8]>>(&self, data: T) -> Compile {
         let data = data.as_ref().to_vec();
         Compile(Box::pin(async move {
             let data: Uint8Array = data.as_slice().into();
@@ -189,7 +214,7 @@ impl Containers for WebContainers {
             )
         }))
     }
-    fn instantiate(&mut self, module: &Self::Module) -> Instantiate {
+    fn instantiate(&self, module: &Self::Module) -> Instantiate {
         let module = module.0.clone();
         Instantiate(Box::pin(async move {
             let (sender, receiver) = unbounded();
