@@ -59,16 +59,14 @@ pub fn build(block: TokenStream) -> TokenStream {
                     #block
                 })
             };
-            let _test_shims: () = {
-                trait export_helper {
-                    type Kind: ::vessels::Kind;
-                }
-                struct export<T: ::vessels::Kind>(fn(::vessels::core::Handle) -> ::vessels::kind::Future<T>);
-                impl<T: ::vessels::Kind> export_helper for export<T> {
-                    type Kind = T;
-                }
-                export(_export_initializer);
-            };
+            trait _EXPORT_export_helper {
+                type Kind: ::vessels::Kind;
+            }
+            struct _EXPORT_export<T: ::vessels::Kind>(fn(::vessels::core::Handle) -> ::vessels::kind::Future<T>);
+            impl<T: ::vessels::Kind> _EXPORT_export_helper for _EXPORT_export<T> {
+                type Kind = T;
+            }
+            _EXPORT_export(_export_initializer);
             use ::vessels::{channel::IdChannel, OnTo, futures::{StreamExt, SinkExt, TryFutureExt}, format::{ApplyEncode, Cbor}, core};
             let vessel = Box::new(_export_initializer) as ::vessels::core::Constructor<_>;
             ::vessels::core::spawn(async move {

@@ -2,6 +2,7 @@ use crate::{
     core::{
         acquire,
         hal::crypto::{HashData, Hasher},
+        CoreError,
     },
     kind::{Future, Serde},
     replicate::Share,
@@ -9,11 +10,19 @@ use crate::{
 };
 
 use failure::{format_err, Error, Fail};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::{self, Debug, Formatter};
 
-#[derive(Hash, Kind, Clone, PartialEq, Eq)]
+#[derive(Hash, Kind, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Checksum(pub(crate) [u8; 32]);
+
+impl Checksum {
+    pub async fn new<T: Serialize + DeserializeOwned + Sync + Send + 'static>(
+        item: &T,
+    ) -> Result<Checksum, CoreError> {
+        Ok(acquire::<Box<dyn Hasher>>().await?.hash_data(item).await)
+    }
+}
 
 impl Debug for Checksum {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -56,31 +65,19 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + 'static> Resource<T> {
     {
         let item = item.share();
         Resource {
-            checksum: acquire::<Box<dyn Hasher>>()
-                .await
-                .unwrap()
-                .hash_data(&item)
-                .await,
+            checksum: Checksum::new(&item).await.unwrap(),
             acquire: Some(Box::new(move || Box::pin(async move { Serde(item) }))),
         }
     }
     pub async fn new(item: T) -> Self {
         Resource {
-            checksum: acquire::<Box<dyn Hasher>>()
-                .await
-                .unwrap()
-                .hash_data(&item)
-                .await,
+            checksum: Checksum::new(&item).await.unwrap(),
             acquire: Some(Box::new(move || Box::pin(async move { Serde(item) }))),
         }
     }
     pub async fn new_ref(item: &T) -> Self {
         Resource {
-            checksum: acquire::<Box<dyn Hasher>>()
-                .await
-                .unwrap()
-                .hash_data(item)
-                .await,
+            checksum: Checksum::new(item).await.unwrap(),
             acquire: None,
         }
     }

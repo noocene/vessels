@@ -1,8 +1,9 @@
-use super::{Containers, Instance};
-use crate::core::spawn;
+use super::LocalModule;
+use crate::core::{data::Checksum, spawn};
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver},
     future::LocalBoxFuture,
+    lock,
     task::{Context, Poll},
     Future, Sink, SinkExt, Stream, TryFutureExt,
 };
@@ -10,8 +11,8 @@ use js_sys::{
     Function, Number, Uint8Array,
     WebAssembly::{compile, instantiate_module, Instance as WasmInstance, Memory, Module},
 };
-use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
-use std::{cell::RefCell, pin::Pin, rc::Rc};
+use lazy_static::lazy_static;
+use std::{cell::RefCell, collections::HashMap, pin::Pin, rc::Rc};
 use void::Void;
 use wasm_bindgen::{closure::Closure, JsCast};
 use wasm_bindgen_futures::JsFuture;
@@ -28,8 +29,6 @@ pub struct WebInstance {
     _enqueue: Closure<dyn FnMut()>,
     receiver: Pin<Box<UnboundedReceiver<Vec<u8>>>>,
 }
-
-impl Instance for WebInstance {}
 
 impl Stream for WebInstance {
     type Item = Vec<u8>;
@@ -57,6 +56,7 @@ impl Sink<Vec<u8>> for WebInstance {
     }
 }
 
+#[derive(Clone)]
 pub struct WebContainers;
 
 impl WebContainers {
@@ -147,33 +147,15 @@ unsafe impl Sync for WebModule {}
 
 pub struct WebModule(Module);
 
-impl Serialize for WebModule {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        unimplemented!()
-    }
-}
-
-impl<'de> Deserialize<'de> for WebModule {
-    fn deserialize<D>(deserializer: D) -> Result<WebModule, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        unimplemented!()
-    }
-}
-
 #[cfg(not(target_feature = "atomics"))]
 unsafe impl Send for Compile {}
 #[cfg(not(target_feature = "atomics"))]
 unsafe impl Sync for Compile {}
 
-pub struct Compile(LocalBoxFuture<'static, WebModule>);
+pub(crate) struct Compile(LocalBoxFuture<'static, LocalModule>);
 
 impl Future for Compile {
-    type Output = WebModule;
+    type Output = LocalModule;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         self.0.as_mut().poll(cx)
@@ -195,28 +177,40 @@ impl Future for Instantiate {
     }
 }
 
-impl Containers for WebContainers {
-    type Module = WebModule;
-    type Compile = Compile;
-    type Instance = WebInstance;
-    type Instantiate = Instantiate;
+lazy_static! {
+    static ref TEMP_CACHE: lock::Mutex<HashMap<Checksum, WebModule>> =
+        lock::Mutex::new(HashMap::new());
+}
 
-    fn compile<T: AsRef<[u8]>>(&self, data: T) -> Compile {
-        let data = data.as_ref().to_vec();
+impl WebContainers {
+    pub(crate) fn compile(
+        &self,
+        data: Vec<u8>,
+    ) -> impl Future<Output = LocalModule> + Sync + Send + 'static {
         Compile(Box::pin(async move {
+            let mut cache = TEMP_CACHE.lock().await;
+            let sum = Checksum::new(&data).await.unwrap();
             let data: Uint8Array = data.as_slice().into();
-            WebModule(
-                JsFuture::from(compile(&data.into()))
-                    .await
-                    .unwrap()
-                    .dyn_into()
-                    .unwrap(),
-            )
+            cache.insert(
+                sum.clone(),
+                WebModule(
+                    JsFuture::from(compile(&data.into()))
+                        .await
+                        .unwrap()
+                        .dyn_into()
+                        .unwrap(),
+                ),
+            );
+            LocalModule(sum)
         }))
     }
-    fn instantiate(&self, module: &Self::Module) -> Instantiate {
+    pub(crate) fn instantiate(
+        &self,
+        module: &LocalModule,
+    ) -> impl Future<Output = WebInstance> + Sync + Send + 'static {
         let module = module.0.clone();
         Instantiate(Box::pin(async move {
+            let module = TEMP_CACHE.lock().await.get(&module).unwrap().0.clone();
             let (sender, receiver) = unbounded();
             let handle: Rc<RefCell<Option<InstanceStateRead>>> = Rc::new(RefCell::new(None));
             let imports = js_sys::Object::new();

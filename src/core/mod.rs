@@ -26,7 +26,8 @@ pub mod orchestrator;
 
 use hal::crypto::Hasher;
 
-pub(crate) type Constructor<T> = Box<dyn FnOnce(Handle) -> Future<T> + Send + Sync>;
+#[doc(hidden)]
+pub type Constructor<T> = Box<dyn FnOnce(Handle) -> Future<T> + Send + Sync>;
 
 #[derive(Fail, Debug, Kind)]
 #[fail(display = "{} is unimplemented on this target", feature)]
