@@ -25,7 +25,7 @@ pub fn main() {
         let mut core = Core::new();
         core.register(|| Box::new(Tester) as Box<dyn test_vessel::Test>);
         let data: String = orchestrator
-            .instantiate(Resource::new(Module::new(binary)).await, core.into_handle())
+            .instantiate(Resource::new(Module::new(binary)).await.unwrap(), core.into_handle())
             .await
             .unwrap();
         log!("{}", data);
