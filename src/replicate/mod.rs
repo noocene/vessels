@@ -1,8 +1,15 @@
-use crate::reflect::{
-    CallError, CastError, Erased, MethodIndex, MethodTypes, NameError, OutOfRangeError, Reflected,
-    Trait,
+use crate::{
+    channel::{Channel, ForkHandle},
+    kind,
+    kind::{ConstructResult, DeconstructResult, Future, WrappedError},
+    reflect::{
+        CallError, Cast, CastError, Erased, MethodIndex, MethodTypes, NameError, OutOfRangeError,
+        Reflected, Trait,
+    },
+    Kind,
 };
 
+use futures::{SinkExt, StreamExt};
 use std::{
     any::{Any, TypeId},
     sync::{Arc, Mutex},
@@ -94,5 +101,43 @@ impl<T: Trait<T> + Reflected + ?Sized> Trait<T> for Shared<T> {
             .into_inner()
             .unwrap()
             .erase()
+    }
+}
+
+#[kind]
+impl<T: Reflected + Trait<T> + ?Sized> Kind for Shared<T>
+where
+    Box<T>: Kind,
+{
+    type ConstructItem = ForkHandle;
+    type ConstructError = WrappedError<<Box<T> as Kind>::ConstructError>;
+    type ConstructFuture = Future<ConstructResult<Self>>;
+    type DeconstructItem = ();
+    type DeconstructError = WrappedError<<Box<T> as Kind>::DeconstructError>;
+    type DeconstructFuture = Future<DeconstructResult<Self>>;
+    fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
+        self,
+        mut channel: C,
+    ) -> Self::DeconstructFuture {
+        Box::pin(async move {
+            Ok(channel
+                .send(
+                    channel
+                        .fork::<Box<T>>(Box::new(self).erase().downcast().unwrap())
+                        .await?,
+                )
+                .await?)
+        })
+    }
+    fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
+        mut channel: C,
+    ) -> Self::ConstructFuture {
+        Box::pin(async move {
+            let handle = channel.next().await.ok_or(WrappedError::Insufficient {
+                got: 0,
+                expected: 1,
+            })?;
+            Ok(Shared::new(channel.get_fork(handle).await?))
+        })
     }
 }

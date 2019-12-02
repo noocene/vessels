@@ -50,7 +50,7 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + 'static> Debug for ReifyErr
 }
 
 impl<T: Serialize + DeserializeOwned + Sync + Send + 'static> Resource<T> {
-    pub async fn new(item: &T) -> Self
+    pub async fn new_shared(item: &T) -> Self
     where
         T: Share,
     {
@@ -64,7 +64,7 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + 'static> Resource<T> {
             acquire: Some(Box::new(move || Box::pin(async move { Serde(item) }))),
         }
     }
-    pub async fn new_move(item: T) -> Self {
+    pub async fn new(item: T) -> Self {
         Resource {
             checksum: acquire::<Box<dyn Hasher>>()
                 .await
