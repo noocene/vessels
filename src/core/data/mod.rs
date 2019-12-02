@@ -59,27 +59,27 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + 'static> Debug for ReifyErr
 }
 
 impl<T: Serialize + DeserializeOwned + Sync + Send + 'static> Resource<T> {
-    pub async fn new_shared(item: &T) -> Self
+    pub async fn new_shared(item: &T) -> Result<Self, CoreError>
     where
         T: Share,
     {
         let item = item.share();
-        Resource {
-            checksum: Checksum::new(&item).await.unwrap(),
+        Ok(Resource {
+            checksum: Checksum::new(&item).await?,
             acquire: Some(Box::new(move || Box::pin(async move { Serde(item) }))),
-        }
+        })
     }
-    pub async fn new(item: T) -> Self {
-        Resource {
-            checksum: Checksum::new(&item).await.unwrap(),
+    pub async fn new(item: T) -> Result<Self, CoreError> {
+        Ok(Resource {
+            checksum: Checksum::new(&item).await?,
             acquire: Some(Box::new(move || Box::pin(async move { Serde(item) }))),
-        }
+        })
     }
-    pub async fn new_ref(item: &T) -> Self {
-        Resource {
-            checksum: Checksum::new(item).await.unwrap(),
+    pub async fn new_ref(item: &T) -> Result<Self, CoreError> {
+        Ok(Resource {
+            checksum: Checksum::new(item).await?,
             acquire: None,
-        }
+        })
     }
     pub fn reify(self) -> Future<Result<T, ReifyError<T>>> {
         Box::pin(async move {
