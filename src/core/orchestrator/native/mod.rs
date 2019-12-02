@@ -1,29 +1,25 @@
-use super::{Containers, Instance};
-use crate::{core::spawn, kind::Future};
+use super::LocalModule;
+use crate::core::{data::Checksum, spawn};
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
     lock,
     task::{Context, Poll},
-    Sink, SinkExt, Stream,
+    Future, Sink, SinkExt, Stream,
 };
-use serde::{
-    de::{Deserializer, Visitor},
-    ser::Serializer,
-    Deserialize, Serialize,
-};
+use lazy_static::lazy_static;
 use std::{
+    collections::HashMap,
     ffi::c_void,
-    fmt,
     pin::Pin,
     sync::{Arc, Mutex},
 };
 use void::Void;
 use wasmer_runtime::{
-    cache::Artifact, compile, compiler_for_backend, func, imports, memory::MemoryView, wasm::Value,
-    Backend, Ctx, Export, Instance as WasmInstance, Memory, Module,
+    compile, func, imports, memory::MemoryView, wasm::Value, Ctx, Export, Instance as WasmInstance,
+    Memory, Module,
 };
-use wasmer_runtime_core::load_cache_with;
 
+#[derive(Clone)]
 pub struct NativeContainers;
 
 impl NativeContainers {
@@ -54,8 +50,6 @@ impl NativeInstance {
         }
     }
 }
-
-impl Instance for NativeInstance {}
 
 impl Stream for NativeInstance {
     type Item = Vec<u8>;
@@ -132,58 +126,30 @@ fn panic(cx: &mut Ctx, ptr: i32, len: i32) {
 #[derive(Clone)]
 pub struct NativeModule(Module);
 
-impl Serialize for NativeModule {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_bytes(self.0.cache().unwrap().serialize().unwrap().as_slice())
-    }
+lazy_static! {
+    static ref TEMP_CACHE: lock::Mutex<HashMap<Checksum, NativeModule>> =
+        lock::Mutex::new(HashMap::new());
 }
 
-pub struct ModuleVisitor;
-
-impl<'de> Visitor<'de> for ModuleVisitor {
-    type Value = NativeModule;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a vessels module")
+impl NativeContainers {
+    pub(crate) fn compile(
+        &self,
+        data: Vec<u8>,
+    ) -> impl Future<Output = LocalModule> + Sync + Send + 'static {
+        async move {
+            let mut cache = TEMP_CACHE.lock().await;
+            let sum = Checksum::new(&data).await.unwrap();
+            cache.insert(sum.clone(), NativeModule(compile(data.as_ref()).unwrap()));
+            LocalModule(sum)
+        }
     }
 
-    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E> {
-        Ok(NativeModule(unsafe {
-            load_cache_with(
-                Artifact::deserialize(v).unwrap(),
-                compiler_for_backend(Backend::default()).unwrap().as_ref(),
-            )
-            .unwrap()
-        }))
-    }
-}
-
-impl<'de> Deserialize<'de> for NativeModule {
-    fn deserialize<D>(deserializer: D) -> Result<NativeModule, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_bytes(ModuleVisitor)
-    }
-}
-
-impl Containers for NativeContainers {
-    type Module = NativeModule;
-    type Compile = Future<NativeModule>;
-    type Instance = NativeInstance;
-    type Instantiate = Future<NativeInstance>;
-
-    fn compile<T: AsRef<[u8]>>(&self, data: T) -> Self::Compile {
-        let data = data.as_ref().to_vec();
-        Box::pin(async move { NativeModule(compile(data.as_ref()).unwrap()) })
-    }
-
-    fn instantiate(&self, module: &Self::Module) -> Self::Instantiate {
+    pub(crate) fn instantiate(
+        &self,
+        module: &LocalModule,
+    ) -> impl Future<Output = NativeInstance> + Sync + Send + 'static {
         let module = module.clone();
-        Box::pin(async move {
+        async move {
             let import_object = imports! {
                 "env" => {
                     "_EXPORT_enqueue" => func!(enqueue),
@@ -191,7 +157,14 @@ impl Containers for NativeContainers {
                     "_EXPORT_panic" => func!(panic),
                 },
             };
-            let instance = module.0.instantiate(&import_object).unwrap();
+            let instance = TEMP_CACHE
+                .lock()
+                .await
+                .get(&module.0)
+                .unwrap()
+                .0
+                .instantiate(&import_object)
+                .unwrap();
             let instance = Arc::new(Mutex::new(instance));
             let inst = instance.clone();
             let inst_2 = inst.clone();
@@ -227,6 +200,6 @@ impl Containers for NativeContainers {
             };
             instance.call("_EXPORT_initialize", &[]).unwrap();
             ret
-        })
+        }
     }
 }
