@@ -1,6 +1,9 @@
 use crate::{
     channel::IdChannel,
-    core::{data::Resource, Constructor, Handle},
+    core::{
+        data::{Checksum, Resource},
+        Constructor, Handle, UnimplementedError,
+    },
     format::{ApplyDecode, Cbor},
     kind::{using, Future, SinkStream},
     object,
@@ -9,14 +12,21 @@ use crate::{
 };
 
 use failure::{Error, Fail};
-use futures::{SinkExt, StreamExt};
+use futures::SinkExt;
+#[cfg(feature = "core")]
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
-#[cfg(feature = "core")]
-mod containers;
+#[cfg(all(not(target_arch = "wasm32"), feature = "core"))]
+mod native;
+#[cfg(all(target_arch = "wasm32", feature = "core"))]
+mod web;
 
-use containers::{ConcreteContainers, Containers};
+#[cfg(all(target_arch = "wasm32", feature = "core"))]
+type ConcreteContainers = web::WebContainers;
+#[cfg(all(not(target_arch = "wasm32"), feature = "core"))]
+type ConcreteContainers = native::NativeContainers;
 
 #[derive(Serialize, Deserialize, Kind)]
 pub struct Module<T: Kind>(Vec<u8>, PhantomData<T>);
@@ -27,9 +37,9 @@ impl<T: Kind> Module<T> {
     }
 }
 
-#[derive(Serialize, Deserialize, Kind)]
+#[derive(Serialize, Deserialize, Kind, Clone)]
 #[kind(using::Serde)]
-struct LocalModule(<ConcreteContainers as Containers>::Module);
+pub(crate) struct LocalModule(pub(crate) Checksum);
 
 #[derive(Fail, Debug, Kind)]
 #[fail(display = "compile failed: {}", cause)]
@@ -79,21 +89,29 @@ impl Orchestrator {
             Ok(constructor(handle).await)
         })
     }
-    pub fn new() -> Orchestrator {
-        Orchestrator(Shared::new(Box::new(ConcreteContainers::new())))
+    pub fn new() -> Result<Orchestrator, UnimplementedError> {
+        #[cfg(feature = "core")]
+        return Ok(Orchestrator(Shared::new(Box::new(
+            ConcreteContainers::new(),
+        ))));
+        #[cfg(not(feature = "core"))]
+        return Err(UnimplementedError {
+            feature: "orchestrator".to_owned(),
+        });
     }
 }
 
+#[cfg(feature = "core")]
 impl OrchestratorInner for ConcreteContainers {
     fn compile(&self, source: Vec<u8>) -> Future<Result<LocalModule, CompileError>> {
-        let compile = Containers::compile(self, source);
-        Box::pin(async move { Ok(LocalModule(compile.await)) })
+        let compile = self.compile(source);
+        Box::pin(async move { Ok(compile.await) })
     }
     fn instantiate(
         &self,
         module: LocalModule,
     ) -> Future<Result<SinkStream<Vec<u8>, Error, Vec<u8>>, InstantiateError>> {
-        let instantiate = Containers::instantiate(self, &module.0);
+        let instantiate = self.instantiate(&module);
         Box::pin(async move {
             let (sink, stream) = instantiate.await.split();
             Ok(SinkStream::new(sink.sink_map_err(Error::from), stream))
