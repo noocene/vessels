@@ -15,15 +15,12 @@ pub struct Tester;
 
 impl test_vessel::Test for Tester {
     fn test(&self, message: String) -> Future<String> {
-        Box::pin(async move {
-            format!("passed through: {}", message)
-        })
+        Box::pin(async move { format!("passed through: {}", message) })
     }
 }
 
 pub fn main() {
-    let binary =
-        read("../../target/wasm32-unknown-unknown/debug/test_vessel.wasm").unwrap();
+    let binary = read("../../target/wasm32-unknown-unknown/debug/test_vessel.wasm").unwrap();
     run(async move {
         let mut containers = NativeContainers;
         let module = containers.compile(binary).await;

@@ -19,6 +19,7 @@ use crate::{
 mod executor;
 pub use executor::{run, spawn};
 
+pub mod data;
 pub mod hal;
 pub mod orchestrator;
 
