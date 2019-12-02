@@ -3,9 +3,7 @@ pub mod json;
 #[cfg(feature = "json")]
 #[doc(inline)]
 pub use json::Json;
-#[cfg(feature = "cbor")]
 pub mod cbor;
-#[cfg(feature = "cbor")]
 #[doc(inline)]
 pub use cbor::Cbor;
 #[cfg(feature = "bincode")]
