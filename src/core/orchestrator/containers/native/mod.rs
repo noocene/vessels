@@ -6,18 +6,31 @@ use futures::{
     task::{Context, Poll},
     Sink, SinkExt, Stream,
 };
+use serde::{
+    de::{Deserializer, Visitor},
+    ser::Serializer,
+    Deserialize, Serialize,
+};
 use std::{
     ffi::c_void,
+    fmt,
     pin::Pin,
     sync::{Arc, Mutex},
 };
 use void::Void;
 use wasmer_runtime::{
-    compile, func, imports, memory::MemoryView, wasm::Value, Ctx, Export, Instance as WasmInstance,
-    Memory, Module,
+    cache::Artifact, compile, compiler_for_backend, func, imports, memory::MemoryView, wasm::Value,
+    Backend, Ctx, Export, Instance as WasmInstance, Memory, Module,
 };
+use wasmer_runtime_core::load_cache_with;
 
 pub struct NativeContainers;
+
+impl NativeContainers {
+    pub fn new() -> Self {
+        NativeContainers
+    }
+}
 
 pub struct NativeInstance {
     instance: Arc<Mutex<WasmInstance>>,
@@ -116,18 +129,59 @@ fn panic(cx: &mut Ctx, ptr: i32, len: i32) {
     }
 }
 
+#[derive(Clone)]
+pub struct NativeModule(Module);
+
+impl Serialize for NativeModule {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_bytes(self.0.cache().unwrap().serialize().unwrap().as_slice())
+    }
+}
+
+pub struct ModuleVisitor;
+
+impl<'de> Visitor<'de> for ModuleVisitor {
+    type Value = NativeModule;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a vessels module")
+    }
+
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E> {
+        Ok(NativeModule(unsafe {
+            load_cache_with(
+                Artifact::deserialize(v).unwrap(),
+                compiler_for_backend(Backend::default()).unwrap().as_ref(),
+            )
+            .unwrap()
+        }))
+    }
+}
+
+impl<'de> Deserialize<'de> for NativeModule {
+    fn deserialize<D>(deserializer: D) -> Result<NativeModule, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_bytes(ModuleVisitor)
+    }
+}
+
 impl Containers for NativeContainers {
-    type Module = Module;
-    type Compile = Future<Module>;
+    type Module = NativeModule;
+    type Compile = Future<NativeModule>;
     type Instance = NativeInstance;
     type Instantiate = Future<NativeInstance>;
 
-    fn compile<T: AsRef<[u8]>>(&mut self, data: T) -> Self::Compile {
+    fn compile<T: AsRef<[u8]>>(&self, data: T) -> Self::Compile {
         let data = data.as_ref().to_vec();
-        Box::pin(async move { compile(data.as_ref()).unwrap() })
+        Box::pin(async move { NativeModule(compile(data.as_ref()).unwrap()) })
     }
 
-    fn instantiate(&mut self, module: &Self::Module) -> Self::Instantiate {
+    fn instantiate(&self, module: &Self::Module) -> Self::Instantiate {
         let module = module.clone();
         Box::pin(async move {
             let import_object = imports! {
@@ -137,7 +191,7 @@ impl Containers for NativeContainers {
                     "_EXPORT_panic" => func!(panic),
                 },
             };
-            let instance = module.instantiate(&import_object).unwrap();
+            let instance = module.0.instantiate(&import_object).unwrap();
             let instance = Arc::new(Mutex::new(instance));
             let inst = instance.clone();
             let inst_2 = inst.clone();

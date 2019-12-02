@@ -1,10 +1,9 @@
 use vessels::{
-    channel::IdChannel,
     core::{
-        orchestrator::containers::{native::NativeContainers, Containers},
-        run, Constructor, Core,
+        data::Resource,
+        orchestrator::{Module, Orchestrator},
+        run, Core,
     },
-    format::{ApplyDecode, Cbor},
     kind::Future,
     log,
 };
@@ -22,12 +21,13 @@ impl test_vessel::Test for Tester {
 pub fn main() {
     let binary = read("../../target/wasm32-unknown-unknown/debug/test_vessel.wasm").unwrap();
     run(async move {
-        let mut containers = NativeContainers;
-        let module = containers.compile(binary).await;
-        let instance = containers.instantiate(&module).await;
-        let data: Constructor<String> = instance.decode::<IdChannel, Cbor>().await.unwrap();
+        let orchestrator = Orchestrator::new();
         let mut core = Core::new();
         core.register(|| Box::new(Tester) as Box<dyn test_vessel::Test>);
-        log!("{}", data(core.into_handle()).await);
+        let data: String = orchestrator
+            .instantiate(Resource::new(Module::new(binary)).await, core.into_handle())
+            .await
+            .unwrap();
+        log!("{}", data);
     });
 }

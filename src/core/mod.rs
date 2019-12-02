@@ -2,6 +2,7 @@ use failure::{Error, Fail};
 use futures::{lock, SinkExt, StreamExt};
 use lazy_static::lazy_static;
 use std::{
+    any::Any,
     collections::HashMap,
     fmt::{self, Display, Formatter},
     sync::{Arc, Mutex},
@@ -23,7 +24,9 @@ pub mod data;
 pub mod hal;
 pub mod orchestrator;
 
-pub type Constructor<T> = Box<dyn FnOnce(Handle) -> Future<T> + Send + Sync>;
+use hal::crypto::Hasher;
+
+pub(crate) type Constructor<T> = Box<dyn FnOnce(Handle) -> Future<T> + Send + Sync>;
 
 #[derive(Fail, Debug, Kind)]
 #[fail(display = "{} is unimplemented on this target", feature)]
@@ -87,6 +90,14 @@ pub fn register_handle(item: Handle) {
 }
 
 pub fn acquire<K: Kind>() -> Future<Result<K, CoreError>> {
+    if K::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD
+        == <Box<dyn Hasher>>::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD
+    {
+        return Box::pin(async {
+            Ok(*Box::<dyn Any>::downcast(Box::new(Hasher::new().unwrap()))
+                .unwrap_or_else(|_| panic!()))
+        });
+    };
     #[cfg(all(target_arch = "wasm32", not(feature = "core")))]
     return {
         let handle = HANDLE.lock().unwrap();
