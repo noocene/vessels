@@ -1,9 +1,9 @@
 use vessels::{
     core::{
         data::Resource,
+        hal::crypto::Hasher,
         orchestrator::{Module, Orchestrator},
-        run, Core, register,
-        hal::crypto::Hasher
+        register, run, Core,
     },
     kind::Future,
     log,

@@ -1,2 +1,2 @@
-pub mod list;
+mod list;
 pub use list::List;
