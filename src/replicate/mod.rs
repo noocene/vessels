@@ -149,7 +149,7 @@ impl<T: Reactive + Kind> React<T> {
     pub fn split(self) -> (T, Stream<T::Mutation>) {
         (self.0, self.1.into_inner().unwrap())
     }
-    pub fn react(&self) -> Stream<T::Mutation>{
+    pub fn react(&self) -> Stream<T::Mutation> {
         let (mut sender, receiver) = unbounded();
         let mut stream = self.1.lock().unwrap();
         let mut n_stream = Box::pin(empty()) as Stream<T::Mutation>;
