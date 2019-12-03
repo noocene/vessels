@@ -24,8 +24,6 @@ pub mod data;
 pub mod hal;
 pub mod orchestrator;
 
-use hal::crypto::Hasher;
-
 #[doc(hidden)]
 pub type Constructor<T> = Box<dyn FnOnce(Handle) -> Future<T> + Send + Sync>;
 
@@ -78,31 +76,41 @@ lazy_static! {
 
 #[cfg(all(target_arch = "wasm32", not(feature = "core")))]
 lazy_static! {
-    static ref HANDLE: Mutex<Option<Handle>> = Mutex::new(None);
+    static ref HANDLE: Mutex<(
+        Option<Handle>,
+        HashMap<[u8; 32], Box<dyn Fn() -> Box<dyn Any + Sync + Send> + Sync + Send>>
+    )> = Mutex::new((None, HashMap::new()));
 }
 
 #[cfg(all(target_arch = "wasm32", not(feature = "core")))]
 #[doc(hidden)]
 pub fn register_handle(item: Handle) {
     let mut handle = HANDLE.lock().unwrap();
-    if handle.is_none() {
-        *handle = Some(item)
+    if handle.0.is_none() {
+        handle.0 = Some(item)
     }
 }
 
 pub fn acquire<K: Kind>() -> Future<Result<K, CoreError>> {
-    if K::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD
-        == <Box<dyn Hasher>>::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD
+    #[cfg(feature = "core")]
     {
-        return Box::pin(async {
-            Ok(*Box::<dyn Any>::downcast(Box::new(Hasher::new().unwrap()))
-                .unwrap_or_else(|_| panic!()))
-        });
-    };
+        if let Some(item) = LOCAL_CORE
+            .lock()
+            .unwrap()
+            .get(&K::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD)
+        {
+            let item = Ok(*Box::<dyn Any>::downcast((item)()).unwrap());
+            return Box::pin(async move { item });
+        }
+    }
     #[cfg(all(target_arch = "wasm32", not(feature = "core")))]
     return {
         let handle = HANDLE.lock().unwrap();
-        if let Some(handle) = &*handle {
+        if let Some(item) = handle.1.get(&K::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD) {
+            let item = Ok(*Box::<dyn Any>::downcast((item)()).unwrap());
+            return Box::pin(async move { item });
+        }
+        if let Some(handle) = &handle.0 {
             handle.acquire::<K>()
         } else {
             Box::pin(async { Err(CoreError::Unavailable) })
@@ -118,6 +126,12 @@ trait HandleInner {
         &self,
         ty: [u8; 32],
     ) -> Future<Result<SinkStream<Vec<u8>, Error, Vec<u8>>, CoreError>>;
+}
+
+#[cfg(feature = "core")]
+lazy_static! {
+    pub static ref LOCAL_CORE: Mutex<HashMap<[u8; 32], Box<dyn Fn() -> Box<dyn Any + Sync + Send> + Sync + Send>>> =
+        Mutex::new(HashMap::new());
 }
 
 #[derive(Kind)]
@@ -162,6 +176,23 @@ impl HandleInner for Core {
         } else {
             Box::pin(async move { Err(CoreError::Unavailable) })
         }
+    }
+}
+
+pub fn register<K: Kind>(item: impl Fn() -> K + Sync + Send + 'static) {
+    #[cfg(feature = "core")]
+    {
+        LOCAL_CORE.lock().unwrap().insert(
+            K::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD,
+            Box::new(move || Box::new(item())),
+        );
+    }
+    #[cfg(not(feature = "core"))]
+    {
+        HANDLE.lock().unwrap().1.insert(
+            K::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD,
+            Box::new(move || Box::new(item())),
+        );
     }
 }
 
