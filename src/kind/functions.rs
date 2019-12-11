@@ -289,6 +289,58 @@ macro_rules! functions_impl {
                     Ok(closure)
                 })
             }
+        }
+        #[allow(non_snake_case)]
+        #[kind]
+        impl<U: Kind + Flatten, $($name),+> Kind for Arc<Box<dyn Fn($($name),+) -> U + Send + Sync>>
+            where $($name: Kind),+
+        {
+            type ConstructItem = ForkHandle;
+            type ConstructError = Void;
+            type ConstructFuture = Future<ConstructResult<Self>>;
+            type DeconstructItem = Vec<ForkHandle>;
+            type DeconstructError = Void;
+            type DeconstructFuture = Future<DeconstructResult<Self>>;
+
+            fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
+                self,
+                mut channel: C,
+            ) -> Self::DeconstructFuture {
+                Box::pin(async move {
+                    let handles = channel.next().await.unwrap();
+                    channel
+                        .send(
+                            channel
+                                .fork((self)($(channel.get_fork::<$name>(handles[$n as usize]).await.unwrap()),+))
+                                .await
+                                .unwrap(),
+                        )
+                        .unwrap_or_else(|_| panic!())
+                        .await;
+                    Ok(())
+                })
+            }
+            fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
+                channel: C,
+            ) -> Self::ConstructFuture {
+                Box::pin(async move {
+                    let channel = Arc::new(Mutex::new(channel));
+                    let closure: Arc<Box<dyn Fn($($name),+) -> U + Send + Sync>> =
+                        Arc::new(Box::new(move |$($name),+| {
+                            let channel = channel.clone();
+                            U::flatten(async move {
+                                let mut channel = channel.lock().await;
+                                let handles = vec![
+                                    $(channel.fork::<$name>($name).await.unwrap()),+
+                                ];
+                                channel.send(handles).unwrap_or_else(|_| panic!()).await;
+                                let handle = channel.next().await.expect("test2");
+                                channel.get_fork(handle).await.expect("test3")
+                            })
+                        }));
+                    Ok(closure)
+                })
+            }
         })+
     }
 }
