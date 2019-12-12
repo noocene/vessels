@@ -133,6 +133,48 @@ impl<U: Kind + Flatten> Kind for Box<dyn FnOnce() -> U + Send + Sync> {
     }
 }
 
+#[kind]
+impl<U: Kind + Flatten> Kind for Arc<Box<dyn Fn() -> U + Send + Sync>> {
+    type ConstructItem = ForkHandle;
+    type ConstructError = Void;
+    type ConstructFuture = Future<ConstructResult<Self>>;
+    type DeconstructItem = ();
+    type DeconstructError = Void;
+    type DeconstructFuture = Future<DeconstructResult<Self>>;
+
+    fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
+        self,
+        mut channel: C,
+    ) -> Self::DeconstructFuture {
+        Box::pin(async move {
+            while let Some(()) = channel.next().await {
+                channel
+                    .send(channel.fork((self)()).await.unwrap())
+                    .unwrap_or_else(|_| panic!())
+                    .await;
+            }
+            Ok(())
+        })
+    }
+    fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
+        channel: C,
+    ) -> Self::ConstructFuture {
+        Box::pin(async move {
+            let channel = Arc::new(Mutex::new(channel));
+            let closure: Arc<Box<dyn Fn() -> U + Send + Sync>> = Arc::new(Box::new(move || {
+                let channel = channel.clone();
+                U::flatten(async move {
+                    let mut channel = channel.lock().await;
+                    channel.send(()).unwrap_or_else(|_| panic!()).await;
+                    let handle = channel.next().await.expect("test2");
+                    channel.get_fork(handle).await.expect("test3")
+                })
+            }));
+            Ok(closure)
+        })
+    }
+}
+
 macro_rules! functions_impl {
     ($($len:expr => ($($n:tt $name:ident $nn:ident)+))+) => {$(
         #[allow(non_snake_case)]
