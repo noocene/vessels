@@ -18,6 +18,8 @@ use std::{
 
 pub mod collections;
 
+pub use derive::Share;
+
 pub trait Share {
     fn share(&self) -> Self;
 }
