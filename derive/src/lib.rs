@@ -12,7 +12,7 @@ use synstructure::decl_derive;
 
 decl_derive!([Kind, attributes(kind)] => kind::derive);
 
-decl_derive!([Share, attributes(kind)] => share::derive);
+decl_derive!([Share] => share::derive);
 
 #[proc_macro_attribute]
 pub fn object(attribute: TokenStream, item: TokenStream) -> TokenStream {
