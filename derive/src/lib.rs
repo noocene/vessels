@@ -1,6 +1,7 @@
 mod export;
 mod kind;
 mod object;
+mod share;
 
 extern crate proc_macro;
 
@@ -10,6 +11,8 @@ use syn::parse;
 use synstructure::decl_derive;
 
 decl_derive!([Kind, attributes(kind)] => kind::derive);
+
+decl_derive!([Share, attributes(kind)] => share::derive);
 
 #[proc_macro_attribute]
 pub fn object(attribute: TokenStream, item: TokenStream) -> TokenStream {
