@@ -29,7 +29,7 @@ type ConcreteContainers = web::WebContainers;
 type ConcreteContainers = native::NativeContainers;
 
 #[derive(Serialize, Deserialize, Kind)]
-pub struct Module<T: Kind>(Vec<u8>, PhantomData<T>);
+pub struct Module<T: Kind>(#[kind(using::Serde)] Vec<u8>, PhantomData<T>);
 
 impl<T: Kind> Module<T> {
     pub fn new(data: Vec<u8>) -> Self {
