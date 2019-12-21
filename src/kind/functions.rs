@@ -1,7 +1,7 @@
 use crate::{
     channel::{Channel, ForkHandle},
     kind,
-    kind::{ConstructResult, DeconstructResult, Flatten, Future},
+    kind::{ConstructResult, DeconstructResult, Flatten, Future, WrappedError},
     Kind,
 };
 
@@ -17,7 +17,7 @@ impl<U: Kind + Flatten> Kind for Box<dyn Fn() -> U + Send + Sync> {
     type ConstructError = Void;
     type ConstructFuture = Future<ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = Void;
+    type DeconstructError = WrappedError<<U as Kind>::DeconstructError>;
     type DeconstructFuture = Future<DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -26,10 +26,7 @@ impl<U: Kind + Flatten> Kind for Box<dyn Fn() -> U + Send + Sync> {
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             while let Some(()) = channel.next().await {
-                channel
-                    .send(channel.fork((self)()).await.unwrap())
-                    .unwrap_or_else(|_| panic!())
-                    .await;
+                channel.send(channel.fork((self)()).await?).await?;
             }
             Ok(())
         })
@@ -59,7 +56,7 @@ impl<U: Kind + Flatten> Kind for Box<dyn FnMut() -> U + Send + Sync> {
     type ConstructError = Void;
     type ConstructFuture = Future<ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = Void;
+    type DeconstructError = WrappedError<<U as Kind>::DeconstructError>;
     type DeconstructFuture = Future<DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -68,10 +65,7 @@ impl<U: Kind + Flatten> Kind for Box<dyn FnMut() -> U + Send + Sync> {
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             while let Some(()) = channel.next().await {
-                channel
-                    .send(channel.fork((self)()).await.unwrap())
-                    .unwrap_or_else(|_| panic!())
-                    .await;
+                channel.send(channel.fork((self)()).await?).await?;
             }
             Ok(())
         })
@@ -101,7 +95,7 @@ impl<U: Kind + Flatten> Kind for Box<dyn FnOnce() -> U + Send + Sync> {
     type ConstructError = Void;
     type ConstructFuture = Future<ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = Void;
+    type DeconstructError = WrappedError<<U as Kind>::DeconstructError>;
     type DeconstructFuture = Future<DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -109,11 +103,9 @@ impl<U: Kind + Flatten> Kind for Box<dyn FnOnce() -> U + Send + Sync> {
         mut channel: C,
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
-            channel.next().await.unwrap();
-            channel
-                .send(channel.fork((self)()).await.unwrap())
-                .unwrap_or_else(|_| panic!())
-                .await;
+            if let Some(()) = channel.next().await {
+                channel.send(channel.fork((self)()).await?).await?;
+            }
             Ok(())
         })
     }
@@ -139,7 +131,7 @@ impl<U: Kind + Flatten> Kind for Arc<Box<dyn Fn() -> U + Send + Sync>> {
     type ConstructError = Void;
     type ConstructFuture = Future<ConstructResult<Self>>;
     type DeconstructItem = ();
-    type DeconstructError = Void;
+    type DeconstructError = WrappedError<<U as Kind>::DeconstructError>;
     type DeconstructFuture = Future<DeconstructResult<Self>>;
 
     fn deconstruct<C: Channel<Self::DeconstructItem, Self::ConstructItem>>(
@@ -148,10 +140,7 @@ impl<U: Kind + Flatten> Kind for Arc<Box<dyn Fn() -> U + Send + Sync>> {
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             while let Some(()) = channel.next().await {
-                channel
-                    .send(channel.fork((self)()).await.unwrap())
-                    .unwrap_or_else(|_| panic!())
-                    .await;
+                channel.send(channel.fork((self)()).await?).await?;
             }
             Ok(())
         })
