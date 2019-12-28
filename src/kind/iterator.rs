@@ -126,7 +126,8 @@ where
                     )
                     .await?,
                 )
-                .await?)
+                .await
+                .map_err(WrappedError::Send)?)
         })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

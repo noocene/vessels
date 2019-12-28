@@ -19,7 +19,12 @@ impl Kind for Url {
         self,
         mut channel: C,
     ) -> Self::DeconstructFuture {
-        Box::pin(async move { Ok(channel.send(self.into_string()).await?) })
+        Box::pin(async move {
+            Ok(channel
+                .send(self.into_string())
+                .await
+                .map_err(WrappedError::Send)?)
+        })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         mut channel: C,

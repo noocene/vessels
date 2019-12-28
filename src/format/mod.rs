@@ -22,7 +22,7 @@ use futures::{
 use crate::{
     channel::{Context, Shim, Target, Waiter},
     core::spawn,
-    kind::{Future, SinkStream},
+    kind::{Fallible, SinkStream},
     Kind,
 };
 
@@ -54,7 +54,7 @@ pub trait Format {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> Future<Result<T::Value, (Self::Error, Self::Representation)>>
+    ) -> Fallible<T::Value, (Self::Error, Self::Representation)>
     where
         T: Sync + Send + 'static,
         Self: Sized;
@@ -129,7 +129,7 @@ where
     Self::Representation: Sync + Send + Clone,
     <C as ISink<<Self as Format>::Representation>>::Error: Fail,
 {
-    type Output = Future<Result<K, K::ConstructError>>;
+    type Output = Fallible<K, K::ConstructError>;
 
     fn decode<U: Target<'de, K> + Sync + Send + 'static>(input: C) -> Self::Output
     where

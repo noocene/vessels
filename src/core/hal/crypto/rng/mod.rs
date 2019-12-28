@@ -1,8 +1,8 @@
-use crate::{core::UnimplementedError, kind::Future, object};
+use crate::{core::UnimplementedError, kind::Infallible, object};
 
 #[object]
 pub trait Rng {
-    fn bytes(&mut self, len: usize) -> Future<Vec<u8>>;
+    fn bytes(&mut self, len: usize) -> Infallible<Vec<u8>>;
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "core"))]

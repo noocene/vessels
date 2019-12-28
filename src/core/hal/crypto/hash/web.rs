@@ -1,6 +1,6 @@
 use super::Hasher as IHasher;
 
-use crate::{core::data::Checksum, kind::Future, SyncSendAssert};
+use crate::{core::data::Checksum, kind::Infallible, SyncSendAssert};
 
 use js_sys::Uint8Array;
 use wasm_bindgen_futures::JsFuture;
@@ -8,7 +8,7 @@ use wasm_bindgen_futures::JsFuture;
 pub struct Hasher;
 
 impl IHasher for Hasher {
-    fn hash(&self, mut data: Vec<u8>) -> Future<Checksum> {
+    fn hash(&self, mut data: Vec<u8>) -> Infallible<Checksum> {
         Box::pin(SyncSendAssert(Box::pin(async move {
             let mut sum = [0u8; 32];
             sum.copy_from_slice(
@@ -27,7 +27,7 @@ impl IHasher for Hasher {
                 )
                 .to_vec(),
             );
-            Checksum(sum)
+            Ok(Checksum(sum))
         })))
     }
 }

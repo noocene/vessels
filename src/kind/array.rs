@@ -67,7 +67,7 @@ macro_rules! array_impl {
                         vec![
                             $(channel.fork::<T>($nn).await?),+
                         ]
-                    ).await?)
+                    ).await.map_err(WrappedError::Send)?)
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

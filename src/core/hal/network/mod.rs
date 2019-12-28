@@ -2,7 +2,7 @@ use crate::{
     channel::{Context, OnTo, Target},
     core::{spawn, UnimplementedError},
     format::{ApplyDecode, ApplyEncode, Format},
-    kind::{Future, SinkStream},
+    kind::{Fallible, FromTransportError, Future, Infallible, SinkStream},
     object, Kind,
 };
 
@@ -20,6 +20,14 @@ pub enum ConnectError {
     Connect(#[cause] Error),
     #[fail(display = "construct failed: {}", _0)]
     Construct(#[cause] Error),
+    #[fail(display = "underlying transport failed: {}", _0)]
+    Transport(#[cause] Error),
+}
+
+impl FromTransportError for ConnectError {
+    fn from_transport_error(error: Error) -> Self {
+        ConnectError::Transport(error)
+    }
 }
 
 #[derive(Fail, Debug, Kind)]
@@ -29,6 +37,12 @@ pub struct ListenError {
     cause: Error,
 }
 
+impl FromTransportError for ListenError {
+    fn from_transport_error(cause: Error) -> Self {
+        ListenError { cause }
+    }
+}
+
 #[derive(Fail, Debug, Kind)]
 #[fail(display = "connection failed while open: {}", cause)]
 pub struct ConnectionError {
@@ -36,12 +50,18 @@ pub struct ConnectionError {
     cause: Error,
 }
 
+impl FromTransportError for ConnectionError {
+    fn from_transport_error(cause: Error) -> Self {
+        ConnectionError { cause }
+    }
+}
+
 #[object]
 pub(crate) trait RawClient {
     fn connect(
         &mut self,
         address: Url,
-    ) -> Future<Result<SinkStream<Vec<u8>, ConnectionError, Vec<u8>>, ConnectError>>;
+    ) -> Fallible<SinkStream<Vec<u8>, ConnectionError, Vec<u8>>, ConnectError>;
 }
 
 #[derive(Kind)]
@@ -77,9 +97,11 @@ pub(crate) trait RawServer {
         &mut self,
         address: SocketAddr,
         handler: Box<
-            dyn FnMut(SinkStream<Vec<u8>, ConnectionError, Vec<u8>>) -> Future<()> + Sync + Send,
+            dyn FnMut(SinkStream<Vec<u8>, ConnectionError, Vec<u8>>) -> Infallible<()>
+                + Sync
+                + Send,
         >,
-    ) -> Future<Result<(), ListenError>>;
+    ) -> Fallible<(), ListenError>;
 }
 
 #[derive(Kind)]
@@ -118,6 +140,7 @@ impl Server {
                         .split();
                     spawn(stream.map(Ok).forward(sender).then(|_| ready(())));
                     spawn(receiver.map(Ok).forward(sink).then(|_| ready(())));
+                    Ok(())
                 })
             }),
         )

@@ -5,7 +5,7 @@ use crate::{
         Constructor, Handle, UnimplementedError,
     },
     format::{ApplyDecode, Cbor},
-    kind::{using, Future, SinkStream},
+    kind::{using, Fallible, FromTransportError, Future, SinkStream},
     object,
     replicate::{Share, Shared},
     Kind,
@@ -47,13 +47,19 @@ pub struct CompileError {
     cause: Error,
 }
 
+impl FromTransportError for CompileError {
+    fn from_transport_error(cause: Error) -> Self {
+        CompileError { cause }
+    }
+}
+
 #[object]
 trait OrchestratorInner {
-    fn compile(&self, source: Vec<u8>) -> Future<Result<LocalModule, CompileError>>;
+    fn compile(&self, source: Vec<u8>) -> Fallible<LocalModule, CompileError>;
     fn instantiate(
         &self,
         module: LocalModule,
-    ) -> Future<Result<SinkStream<Vec<u8>, Error, Vec<u8>>, InstantiateError>>;
+    ) -> Fallible<SinkStream<Vec<u8>, Error, Vec<u8>>, InstantiateError>;
 }
 
 #[derive(Kind)]
@@ -65,12 +71,24 @@ pub struct InstantiateError {
     cause: Error,
 }
 
+impl FromTransportError for InstantiateError {
+    fn from_transport_error(cause: Error) -> Self {
+        InstantiateError { cause }
+    }
+}
+
+impl From<Error> for InstantiateError {
+    fn from(cause: Error) -> Self {
+        InstantiateError { cause }
+    }
+}
+
 impl Orchestrator {
     pub fn instantiate<K: Kind>(
         &self,
         module: Resource<Module<K>>,
         handle: Handle,
-    ) -> Future<Result<K, InstantiateError>> {
+    ) -> Fallible<K, InstantiateError> {
         let inner = self.0.share();
         Box::pin(async move {
             let constructor: Constructor<K> = inner
@@ -86,7 +104,7 @@ impl Orchestrator {
                 .decode::<IdChannel, Cbor>()
                 .await
                 .unwrap();
-            Ok(constructor(handle).await)
+            Ok(constructor(handle).await?)
         })
     }
     pub fn new() -> Result<Orchestrator, UnimplementedError> {
@@ -110,7 +128,7 @@ impl OrchestratorInner for ConcreteContainers {
     fn instantiate(
         &self,
         module: LocalModule,
-    ) -> Future<Result<SinkStream<Vec<u8>, Error, Vec<u8>>, InstantiateError>> {
+    ) -> Fallible<SinkStream<Vec<u8>, Error, Vec<u8>>, InstantiateError> {
         let instantiate = self.instantiate(&module);
         Box::pin(async move {
             let (sink, stream) = instantiate.await.split();

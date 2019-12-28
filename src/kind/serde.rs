@@ -57,7 +57,7 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static> Kind for S
         self,
         mut channel: C,
     ) -> Self::DeconstructFuture {
-        Box::pin(async move { Ok(channel.send(self.0).await?) })
+        Box::pin(async move { Ok(channel.send(self.0).await.map_err(WrappedError::Send)?) })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         mut channel: C,
