@@ -5,7 +5,7 @@ use crate::{
         Constructor, Handle, UnimplementedError,
     },
     format::{ApplyDecode, Cbor},
-    kind::{using, Fallible, FromTransportError, Future, SinkStream},
+    kind::{using, Fallible, FromTransportError, SinkStream},
     object,
     replicate::{Share, Shared},
     Kind,
@@ -121,7 +121,7 @@ impl Orchestrator {
 
 #[cfg(feature = "core")]
 impl OrchestratorInner for ConcreteContainers {
-    fn compile(&self, source: Vec<u8>) -> Future<Result<LocalModule, CompileError>> {
+    fn compile(&self, source: Vec<u8>) -> Fallible<LocalModule, CompileError> {
         let compile = self.compile(source);
         Box::pin(async move { Ok(compile.await) })
     }
