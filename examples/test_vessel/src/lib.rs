@@ -1,6 +1,6 @@
-use vessels::{kind::Future, object};
+use vessels::{kind::Infallible, object};
 
 #[object]
 pub trait Test {
-    fn test(&self, message: String) -> Future<String>;
+    fn test(&self, message: String) -> Infallible<String>;
 }

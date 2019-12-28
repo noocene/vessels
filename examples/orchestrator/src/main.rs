@@ -5,7 +5,7 @@ use vessels::{
         orchestrator::{Module, Orchestrator},
         register, run, Core,
     },
-    kind::Future,
+    kind::Infallible,
     log,
 };
 
@@ -14,8 +14,8 @@ use std::fs::read;
 pub struct Tester;
 
 impl test_vessel::Test for Tester {
-    fn test(&self, message: String) -> Future<String> {
-        Box::pin(async move { format!("passed through: {}", message) })
+    fn test(&self, message: String) -> Infallible<String> {
+        Box::pin(async move { Ok(format!("passed through: {}", message)) })
     }
 }
 
