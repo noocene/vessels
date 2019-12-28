@@ -2,7 +2,7 @@ use super::Format;
 
 use serde::{de::DeserializeSeed, Serialize};
 
-use crate::kind::Future;
+use crate::kind::Fallible;
 
 /// A format implementing the Compact Binary Object Representation.
 ///
@@ -27,7 +27,7 @@ impl Format for Cbor {
     fn deserialize<'de, T: DeserializeSeed<'de>>(
         item: Self::Representation,
         context: T,
-    ) -> Future<Result<T::Value, (Self::Error, Self::Representation)>>
+    ) -> Fallible<T::Value, (Self::Error, Self::Representation)>
     where
         T: Sync + Send + 'static,
     {

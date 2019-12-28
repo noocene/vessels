@@ -26,9 +26,12 @@ where
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             while let Some(item) = self.next().await {
-                channel.send(Some(channel.fork(item).await?)).await?
+                channel
+                    .send(Some(channel.fork(item).await?))
+                    .await
+                    .map_err(WrappedError::Send)?
             }
-            channel.send(None).await?;
+            channel.send(None).await.map_err(WrappedError::Send)?;
             Ok(())
         })
     }

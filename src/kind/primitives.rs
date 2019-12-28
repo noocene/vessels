@@ -32,7 +32,7 @@ macro_rules! primitive_impl {
                 mut channel: C,
             ) -> Self::DeconstructFuture {
                 Box::pin(async move {
-                    Ok(channel.send(self).await?)
+                    Ok(channel.send(self).await.map_err(WrappedError::Send)?)
                 })
             }
             fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

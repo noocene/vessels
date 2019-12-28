@@ -85,7 +85,7 @@ where
                     .await
                 {
                     let handle = channel.fork::<E>(error).await.unwrap();
-                    channel.send(handle).await?;
+                    channel.send(handle).await.map_err(WrappedError::Send)?;
                 }
             }
             Ok(())
