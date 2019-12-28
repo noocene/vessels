@@ -2,7 +2,7 @@ use super::super::{ConnectionError, ListenError, RawServer};
 
 use crate::{
     core::spawn,
-    kind::{Future, SinkStream},
+    kind::{Fallible, Infallible, SinkStream},
 };
 
 use futures::{channel::mpsc::unbounded, lock::Mutex, SinkExt, StreamExt};
@@ -16,9 +16,11 @@ impl RawServer for Server {
         &mut self,
         address: SocketAddr,
         handler: Box<
-            dyn FnMut(SinkStream<Vec<u8>, ConnectionError, Vec<u8>>) -> Future<()> + Sync + Send,
+            dyn FnMut(SinkStream<Vec<u8>, ConnectionError, Vec<u8>>) -> Infallible<()>
+                + Sync
+                + Send,
         >,
-    ) -> Future<Result<(), ListenError>> {
+    ) -> Fallible<(), ListenError> {
         Box::pin(async move {
             let handler = Arc::new(Mutex::new(handler));
             listen(address, move |peer| {

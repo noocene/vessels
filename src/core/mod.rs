@@ -11,7 +11,7 @@ use std::{
 use crate::{
     channel::IdChannel,
     format::{ApplyDecode, ApplyEncode, Cbor},
-    kind::{Future, SinkStream},
+    kind::{Fallible, FromTransportError, Future, Infallible, SinkStream},
     object,
     replicate::Share,
     Kind, OnTo,
@@ -25,7 +25,7 @@ pub mod hal;
 pub mod orchestrator;
 
 #[doc(hidden)]
-pub type Constructor<T> = Box<dyn FnOnce(Handle) -> Future<T> + Send + Sync>;
+pub type Constructor<T> = Box<dyn FnOnce(Handle) -> Infallible<T> + Send + Sync>;
 
 #[derive(Fail, Debug, Kind)]
 #[fail(display = "{} is unimplemented on this target", feature)]
@@ -38,11 +38,12 @@ pub enum CoreError {
     Unavailable,
     Unimplemented(#[fail(cause)] UnimplementedError),
     Construct(#[fail(cause)] Error),
+    Transport(#[fail(cause)] Error),
 }
 
 impl Display for CoreError {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        use CoreError::{Construct, Unavailable, Unimplemented};
+        use CoreError::{Construct, Transport, Unavailable, Unimplemented};
         write!(
             formatter,
             "{}",
@@ -50,8 +51,15 @@ impl Display for CoreError {
                 Unavailable => "this feature is unavailable or unregistered".to_owned(),
                 Unimplemented(feature) => format!("{}", feature),
                 Construct(e) => format!("handle transfer failed: {}", e),
+                Transport(e) => format!("underlying transport failed: {}", e),
             }
         )
+    }
+}
+
+impl FromTransportError for CoreError {
+    fn from_transport_error(error: Error) -> Self {
+        CoreError::Transport(error)
     }
 }
 
@@ -91,7 +99,7 @@ pub fn register_handle(item: Handle) {
     }
 }
 
-pub fn acquire<K: Kind>() -> Future<Result<K, CoreError>> {
+pub fn acquire<K: Kind>() -> Fallible<K, CoreError> {
     #[cfg(feature = "core")]
     {
         if let Some(item) = LOCAL_CORE
@@ -122,10 +130,7 @@ pub fn acquire<K: Kind>() -> Future<Result<K, CoreError>> {
 
 #[object]
 trait HandleInner {
-    fn acquire(
-        &self,
-        ty: [u8; 32],
-    ) -> Future<Result<SinkStream<Vec<u8>, Error, Vec<u8>>, CoreError>>;
+    fn acquire(&self, ty: [u8; 32]) -> Fallible<SinkStream<Vec<u8>, Error, Vec<u8>>, CoreError>;
 }
 
 #[cfg(feature = "core")]

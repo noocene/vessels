@@ -4,7 +4,7 @@ use crate::{
         hal::crypto::{HashData, Hasher},
         CoreError,
     },
-    kind::{Future, Serde},
+    kind::{Future, Infallible, Serde},
     replicate::Share,
     Kind,
 };
@@ -20,7 +20,11 @@ impl Checksum {
     pub async fn new<T: Serialize + DeserializeOwned + Sync + Send + 'static>(
         item: &T,
     ) -> Result<Checksum, CoreError> {
-        Ok(acquire::<Box<dyn Hasher>>().await?.hash_data(item).await)
+        acquire::<Box<dyn Hasher>>()
+            .await?
+            .hash_data(item)
+            .await
+            .map_err(CoreError::Transport)
     }
 }
 
@@ -41,7 +45,7 @@ impl Debug for Checksum {
 #[derive(Kind)]
 pub struct Resource<T: Serialize + DeserializeOwned + Sync + Send + 'static> {
     checksum: Checksum,
-    acquire: Option<Box<dyn FnOnce() -> Future<Serde<T>> + Sync + Send>>,
+    acquire: Option<Box<dyn FnOnce() -> Infallible<Serde<T>> + Sync + Send>>,
 }
 
 #[derive(Fail, Kind)]
@@ -66,13 +70,13 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + 'static> Resource<T> {
         let item = item.share();
         Ok(Resource {
             checksum: Checksum::new(&item).await?,
-            acquire: Some(Box::new(move || Box::pin(async move { Serde(item) }))),
+            acquire: Some(Box::new(move || Box::pin(async move { Ok(Serde(item)) }))),
         })
     }
     pub async fn new(item: T) -> Result<Self, CoreError> {
         Ok(Resource {
             checksum: Checksum::new(&item).await?,
-            acquire: Some(Box::new(move || Box::pin(async move { Serde(item) }))),
+            acquire: Some(Box::new(move || Box::pin(async move { Ok(Serde(item)) }))),
         })
     }
     pub async fn new_ref(item: &T) -> Result<Self, CoreError> {
@@ -84,7 +88,7 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + 'static> Resource<T> {
     pub fn reify(self) -> Future<Result<T, ReifyError<T>>> {
         Box::pin(async move {
             if let Some(acquire) = self.acquire {
-                Ok(acquire().await.0)
+                Ok(acquire().await.unwrap().0)
             } else {
                 // TODO reify from abstract acquisition methods
                 Err(ReifyError {

@@ -1,7 +1,10 @@
 pub mod id_channel;
 pub use id_channel::IdChannel;
 
-use crate::{kind::Future, Kind};
+use crate::{
+    kind::{Fallible, Future},
+    Kind,
+};
 
 use failure::{Error, Fail};
 use futures::{Sink, Stream};
@@ -25,18 +28,12 @@ impl Display for ForkHandle {
 }
 
 pub trait Fork: Sync + Send + 'static {
-    fn fork<K: Kind>(&self, kind: K) -> Future<Result<ForkHandle, K::DeconstructError>>;
-    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Future<Result<K, K::ConstructError>>;
+    fn fork<K: Kind>(&self, kind: K) -> Fallible<ForkHandle, K::DeconstructError>;
+    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Fallible<K, K::ConstructError>;
 }
 
-#[derive(Debug)]
-pub struct ChannelError(pub(crate) Error);
-
-impl<T: Fail> From<T> for ChannelError {
-    fn from(input: T) -> Self {
-        ChannelError(input.into())
-    }
-}
+#[derive(Debug, Fail)]
+pub struct ChannelError(#[fail(cause)] pub(crate) Error);
 
 impl Display for ChannelError {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
@@ -63,7 +60,7 @@ pub trait Shim<'a, T: Target<'a, K>, K: Kind>:
     >(
         self,
         input: C,
-    ) -> Future<Result<K, K::ConstructError>>;
+    ) -> Fallible<K, K::ConstructError>;
 }
 
 pub trait Target<'a, K: Kind>: Context<'a> + Sized + Send + Sync {

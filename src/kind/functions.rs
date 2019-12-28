@@ -26,7 +26,10 @@ impl<U: Kind + Flatten> Kind for Box<dyn Fn() -> U + Send + Sync> {
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             while let Some(()) = channel.next().await {
-                channel.send(channel.fork((self)()).await?).await?;
+                channel
+                    .send(channel.fork((self)()).await?)
+                    .await
+                    .map_err(WrappedError::Send)?;
             }
             Ok(())
         })
@@ -42,7 +45,7 @@ impl<U: Kind + Flatten> Kind for Box<dyn Fn() -> U + Send + Sync> {
                     let mut channel = channel.lock().await;
                     channel.send(()).unwrap_or_else(|_| panic!()).await;
                     let handle = channel.next().await.expect("test2");
-                    channel.get_fork(handle).await.expect("test3")
+                    channel.get_fork(handle).await
                 })
             });
             Ok(closure)
@@ -65,7 +68,10 @@ impl<U: Kind + Flatten> Kind for Box<dyn FnMut() -> U + Send + Sync> {
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             while let Some(()) = channel.next().await {
-                channel.send(channel.fork((self)()).await?).await?;
+                channel
+                    .send(channel.fork((self)()).await?)
+                    .await
+                    .map_err(WrappedError::Send)?;
             }
             Ok(())
         })
@@ -81,7 +87,7 @@ impl<U: Kind + Flatten> Kind for Box<dyn FnMut() -> U + Send + Sync> {
                     let mut channel = channel.lock().await;
                     channel.send(()).unwrap_or_else(|_| panic!()).await;
                     let handle = channel.next().await.expect("test2");
-                    channel.get_fork(handle).await.expect("test3")
+                    channel.get_fork(handle).await
                 })
             });
             Ok(closure)
@@ -104,7 +110,10 @@ impl<U: Kind + Flatten> Kind for Box<dyn FnOnce() -> U + Send + Sync> {
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             if let Some(()) = channel.next().await {
-                channel.send(channel.fork((self)()).await?).await?;
+                channel
+                    .send(channel.fork((self)()).await?)
+                    .await
+                    .map_err(WrappedError::Send)?;
             }
             Ok(())
         })
@@ -117,7 +126,7 @@ impl<U: Kind + Flatten> Kind for Box<dyn FnOnce() -> U + Send + Sync> {
                 U::flatten(async move {
                     channel.send(()).unwrap_or_else(|_| panic!()).await;
                     let handle = channel.next().await.expect("test2");
-                    channel.get_fork(handle).await.expect("test3")
+                    channel.get_fork(handle).await
                 })
             });
             Ok(closure)
@@ -140,7 +149,10 @@ impl<U: Kind + Flatten> Kind for Arc<Box<dyn Fn() -> U + Send + Sync>> {
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             while let Some(()) = channel.next().await {
-                channel.send(channel.fork((self)()).await?).await?;
+                channel
+                    .send(channel.fork((self)()).await?)
+                    .await
+                    .map_err(WrappedError::Send)?;
             }
             Ok(())
         })
@@ -156,7 +168,7 @@ impl<U: Kind + Flatten> Kind for Arc<Box<dyn Fn() -> U + Send + Sync>> {
                     let mut channel = channel.lock().await;
                     channel.send(()).unwrap_or_else(|_| panic!()).await;
                     let handle = channel.next().await.expect("test2");
-                    channel.get_fork(handle).await.expect("test3")
+                    channel.get_fork(handle).await
                 })
             }));
             Ok(closure)
@@ -212,7 +224,7 @@ macro_rules! functions_impl {
                                 ];
                                 channel.send(handles).unwrap_or_else(|_| panic!()).await;
                                 let handle = channel.next().await.expect("test2");
-                                channel.get_fork(handle).await.expect("test3")
+                                channel.get_fork(handle).await
                             })
                         });
                     Ok(closure)
@@ -265,7 +277,7 @@ macro_rules! functions_impl {
                                 ];
                                 channel.send(handles).unwrap_or_else(|_| panic!()).await;
                                 let handle = channel.next().await.expect("test2");
-                                channel.get_fork(handle).await.expect("test3")
+                                channel.get_fork(handle).await
                             })
                         });
                     Ok(closure)
@@ -314,7 +326,7 @@ macro_rules! functions_impl {
                                 ];
                                 channel.send(handles).unwrap_or_else(|_| panic!()).await;
                                 let handle = channel.next().await.expect("test2");
-                                channel.get_fork(handle).await.expect("test3")
+                                channel.get_fork(handle).await
                             })
                         });
                     Ok(closure)
@@ -366,7 +378,7 @@ macro_rules! functions_impl {
                                 ];
                                 channel.send(handles).unwrap_or_else(|_| panic!()).await;
                                 let handle = channel.next().await.expect("test2");
-                                channel.get_fork(handle).await.expect("test3")
+                                channel.get_fork(handle).await
                             })
                         }));
                     Ok(closure)

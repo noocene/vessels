@@ -40,7 +40,8 @@ where
                     Ok(item) => Ok(channel.fork(item).await.map_err(ResultError::Ok)?),
                     Err(item) => Err(channel.fork(item).await.map_err(ResultError::Err)?),
                 })
-                .await?)
+                .await
+                .map_err(WrappedError::Send)?)
         })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(

@@ -2,7 +2,7 @@ use vessels::{
     channel::IdChannel,
     core::run,
     format::{ApplyDecode, ApplyEncode, Cbor},
-    kind::Future,
+    kind::Infallible,
     log, object, Kind, OnTo,
 };
 
@@ -10,14 +10,14 @@ use std::fmt::Display;
 
 #[object]
 pub trait ExampleObject<T: Kind + Display> {
-    fn test(&self, message: T) -> Future<usize>;
+    fn test(&self, message: T) -> Infallible<usize>;
 }
 
 pub struct Implementor;
 
 impl<T: Kind + Display> ExampleObject<T> for Implementor {
-    fn test(&self, message: T) -> Future<usize> {
-        Box::pin(async move { format!("{}", message).len() })
+    fn test(&self, message: T) -> Infallible<usize> {
+        Box::pin(async move { Ok(format!("{}", message).len()) })
     }
 }
 
@@ -29,6 +29,6 @@ fn main() {
             .encode::<Cbor>();
         let decoded: Box<dyn ExampleObject<String>> =
             encoded.decode::<IdChannel, Cbor>().await.unwrap();
-        log!("{}", decoded.test("four".to_owned()).await);
+        log!("{}", decoded.test("four".to_owned()).await.unwrap());
     });
 }

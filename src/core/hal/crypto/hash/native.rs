@@ -1,18 +1,18 @@
 use super::Hasher as IHasher;
 
-use crate::{core::data::Checksum, kind::Future};
+use crate::{core::data::Checksum, kind::Infallible};
 
 use ring::digest::{digest, SHA256};
 
 pub struct Hasher;
 
 impl IHasher for Hasher {
-    fn hash(&self, data: Vec<u8>) -> Future<Checksum> {
+    fn hash(&self, data: Vec<u8>) -> Infallible<Checksum> {
         Box::pin(async move {
             let hash = digest(&SHA256, &data);
             let mut sum = [0u8; 32];
             sum.copy_from_slice(hash.as_ref());
-            Checksum(sum)
+            Ok(Checksum(sum))
         })
     }
 }

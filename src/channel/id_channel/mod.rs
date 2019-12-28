@@ -8,7 +8,7 @@ use id::REGISTRY;
 
 use failure::Fail;
 use futures::{
-    channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
+    channel::mpsc::{unbounded, SendError, UnboundedReceiver, UnboundedSender},
     future::ok,
     task::{Context as FContext, Poll},
     Future as IFuture, FutureExt, Sink as ISink, SinkExt, Stream, StreamExt, TryFutureExt,
@@ -25,7 +25,7 @@ use std::{
 use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle, Waiter},
     core::spawn,
-    kind::{Future, Sink},
+    kind::{Fallible, Future, Sink},
     Kind, SerdeAny, Target,
 };
 
@@ -229,7 +229,7 @@ impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
     fn complete<C: Sync + Send + Stream<Item = Item> + ISink<Item> + 'static>(
         self,
         input: C,
-    ) -> Future<Result<K, K::ConstructError>> {
+    ) -> Fallible<K, K::ConstructError> {
         let (sink, stream) = input.split();
         let (sender, receiver) = unbounded();
         let channel = IdChannel {
@@ -260,7 +260,7 @@ impl<'a, K: Kind> IContext<'a> for Shim<K> {
 }
 
 impl IdChannelHandle {
-    fn fork<K: Kind>(&self, kind: K) -> Future<Result<ForkHandle, K::DeconstructError>> {
+    fn fork<K: Kind>(&self, kind: K) -> Fallible<ForkHandle, K::DeconstructError> {
         REGISTRY.add_deconstruct::<K>();
         let id = self.context.create::<K>();
         let context = self.context.clone();
@@ -278,19 +278,23 @@ impl IdChannelHandle {
                 let mut in_channels = in_channels.lock().unwrap();
                 in_channels.insert(
                     id,
-                    Box::pin(sender.with(|item: Box<dyn SerdeAny>| {
-                        ok(*(item
-                            .downcast::<K::DeconstructItem>()
-                            .map_err(|e| panic!(e))
-                            .unwrap()))
-                    })),
+                    Box::pin(
+                        sender
+                            .with(|item: Box<dyn SerdeAny>| {
+                                ok(*(item
+                                    .downcast::<K::DeconstructItem>()
+                                    .map_err(|e| panic!(e))
+                                    .unwrap()))
+                            })
+                            .sink_map_err(|e: SendError| ChannelError(e.into())),
+                    ),
                 );
                 Ok(id)
             }),
         )
     }
 
-    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Future<Result<K, K::ConstructError>> {
+    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Fallible<K, K::ConstructError> {
         let out_channel = self.out_channel.clone();
         REGISTRY.add_construct::<K>();
         self.context.add::<K>(fork_ref);
@@ -302,10 +306,10 @@ impl IdChannelHandle {
                 Err(_) => panic!(),
             }))
         });
-        self.in_channels
-            .lock()
-            .unwrap()
-            .insert(fork_ref, Box::pin(isender));
+        self.in_channels.lock().unwrap().insert(
+            fork_ref,
+            Box::pin(isender.sink_map_err(|e: SendError| ChannelError(e.into()))),
+        );
         let ct = self.context.clone();
         spawn(
             ireceiver
@@ -333,7 +337,7 @@ impl IdChannel {
             in_channels: self.in_channels.clone(),
         }
     }
-    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Future<Result<K, K::ConstructError>> {
+    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Fallible<K, K::ConstructError> {
         self.clone().get_fork(fork_ref)
     }
 }
@@ -364,10 +368,10 @@ impl<
         O: Serialize + DeserializeOwned + Sync + Send + Unpin + 'static,
     > IFork for IdChannelFork<I, O>
 {
-    fn fork<K: Kind>(&self, kind: K) -> Future<Result<ForkHandle, K::DeconstructError>> {
+    fn fork<K: Kind>(&self, kind: K) -> Fallible<ForkHandle, K::DeconstructError> {
         self.channel.fork(kind)
     }
-    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Future<Result<K, K::ConstructError>> {
+    fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Fallible<K, K::ConstructError> {
         self.channel.get_fork(fork_ref)
     }
 }
@@ -450,12 +454,16 @@ impl<
             let handle = context.create::<K>();
             in_channels.insert(
                 handle,
-                Box::pin(sender.with(|item: Box<dyn SerdeAny>| {
-                    ok(*(item
-                        .downcast::<K::DeconstructItem>()
-                        .map_err(|_| panic!())
-                        .unwrap()))
-                })) as Sink<Box<dyn SerdeAny>, ChannelError>,
+                Box::pin(
+                    sender
+                        .with(|item: Box<dyn SerdeAny>| {
+                            ok(*(item
+                                .downcast::<K::DeconstructItem>()
+                                .map_err(|_| panic!())
+                                .unwrap()))
+                        })
+                        .sink_map_err(|e: SendError| ChannelError(e.into())),
+                ) as Sink<Box<dyn SerdeAny>, ChannelError>,
             );
             let ct = context.clone();
             let (csender, creceiver) = unbounded();
@@ -493,16 +501,29 @@ impl<
     type Error = ChannelError;
 
     fn start_send(mut self: Pin<&mut Self>, item: O) -> Result<(), Self::Error> {
-        Ok(self.o.as_mut().start_send(item)?)
+        Ok(self
+            .o
+            .as_mut()
+            .start_send(item)
+            .map_err(|e| ChannelError(e.into()))?)
     }
     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
-        self.o.as_mut().poll_ready(cx).map_err(From::from)
+        self.o
+            .as_mut()
+            .poll_ready(cx)
+            .map_err(|e| ChannelError(e.into()))
     }
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
-        self.o.as_mut().poll_flush(cx).map_err(From::from)
+        self.o
+            .as_mut()
+            .poll_flush(cx)
+            .map_err(|e| ChannelError(e.into()))
     }
     fn poll_close(mut self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
-        self.o.as_mut().poll_close(cx).map_err(From::from)
+        self.o
+            .as_mut()
+            .poll_close(cx)
+            .map_err(|e| ChannelError(e.into()))
     }
 }
 

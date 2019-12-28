@@ -23,14 +23,18 @@ pub use default::Default;
 pub use iterator::Iterator;
 pub use sink_stream::SinkStream;
 
-use failure::Fail;
-use futures::{Future as IFuture, FutureExt, Sink as ISink, Stream as IStream, StreamExt};
+use failure::{Error, Fail};
+use futures::{
+    stream::once, Future as IFuture, FutureExt, Sink as ISink, Stream as IStream, StreamExt,
+};
 use std::pin::Pin;
 
 use crate::{channel::ChannelError, Kind};
 
-pub type Stream<T> = Pin<Box<dyn IStream<Item = T> + Sync + Send>>;
 pub type Future<T> = Pin<Box<dyn IFuture<Output = T> + Sync + Send>>;
+pub type Fallible<T, E> = Future<Result<T, E>>;
+pub type Stream<T> = Pin<Box<dyn IStream<Item = T> + Sync + Send>>;
+pub type Infallible<T> = Fallible<T, Error>;
 pub type Sink<T, E> = Pin<Box<dyn ISink<T, Error = E> + Sync + Send>>;
 
 /// The result of reconstructing a Kind.
@@ -38,19 +42,59 @@ pub type ConstructResult<K> = Result<K, <K as Kind>::ConstructError>;
 /// The result of deconstructing a Kind.
 pub type DeconstructResult<K> = Result<(), <K as Kind>::DeconstructError>;
 
-pub trait Flatten: Sized {
-    fn flatten<F: IFuture<Output = Self> + Sync + Send + 'static>(fut: F) -> Self;
+pub trait FromTransportError: Send + Sync {
+    fn from_transport_error(error: Error) -> Self;
 }
 
-impl<T> Flatten for Future<T> {
-    fn flatten<F: IFuture<Output = Self> + Sync + Send + 'static>(fut: F) -> Self {
-        Box::pin(fut.flatten())
+impl FromTransportError for Error {
+    fn from_transport_error(error: Error) -> Self {
+        error
     }
 }
 
-impl<T> Flatten for Stream<T> {
-    fn flatten<F: IFuture<Output = Self> + Sync + Send + 'static>(fut: F) -> Self {
-        Box::pin(fut.into_stream().flatten())
+pub trait Flatten: Sized {
+    fn flatten<
+        E: 'static + Sync + Send + Into<Error>,
+        F: IFuture<Output = Result<Self, E>> + Sync + Send + 'static,
+    >(
+        fut: F,
+    ) -> Self;
+}
+
+impl<U: FromTransportError, T> Flatten for Fallible<T, U> {
+    fn flatten<
+        E: 'static + Sync + Send + Into<Error>,
+        F: IFuture<Output = Result<Self, E>> + Sync + Send + 'static,
+    >(
+        fut: F,
+    ) -> Self {
+        Box::pin(async move {
+            fut.await
+                .map_err(|e| U::from_transport_error(e.into()))?
+                .await
+        })
+    }
+}
+
+impl<U: FromTransportError, T> Flatten for Stream<Result<T, U>> {
+    fn flatten<
+        E: 'static + Sync + Send + Into<Error>,
+        F: IFuture<Output = Result<Self, E>> + Sync + Send + 'static,
+    >(
+        fut: F,
+    ) -> Self {
+        Box::pin(
+            async move {
+                let r = fut.await;
+                match r {
+                    Err(e) => Box::pin(once(async move { Err(U::from_transport_error(e.into())) }))
+                        as Stream<Result<T, U>>,
+                    Ok(s) => Box::pin(s),
+                }
+            }
+                .into_stream()
+                .flatten(),
+        )
     }
 }
 
@@ -69,12 +113,6 @@ pub enum WrappedError<T: Fail> {
 impl<T: Fail> From<T> for WrappedError<T> {
     fn from(input: T) -> Self {
         WrappedError::Concrete(input)
-    }
-}
-
-impl<T: Fail> From<ChannelError> for WrappedError<T> {
-    fn from(input: ChannelError) -> Self {
-        WrappedError::Send(input)
     }
 }
 

@@ -24,7 +24,12 @@ where
         self,
         mut channel: C,
     ) -> Self::DeconstructFuture {
-        Box::pin(async move { Ok(channel.send(channel.fork(self.await).await?).await?) })
+        Box::pin(async move {
+            Ok(channel
+                .send(channel.fork(self.await).await?)
+                .await
+                .map_err(WrappedError::Send)?)
+        })
     }
     fn construct<C: Channel<Self::ConstructItem, Self::DeconstructItem>>(
         mut channel: C,
