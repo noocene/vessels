@@ -250,13 +250,13 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             });
             supertrait_impls.extend(quote! {
                 impl<#kind_bounded_params> ::vessels::reflect::Trait<dyn #path> for _DERIVED_Shim<#params> {
-                    fn call(&self, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                    fn call(&self, index: ::vessels::reflect::MethodIndex, mut args: DERIVE_alloc::vec::Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                         ::vessels::reflect::Trait::<dyn #path>::call(self.#id.lock().unwrap().as_ref() as &dyn #path, index, args)
                     }
-                    fn call_mut(&mut self, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                    fn call_mut(&mut self, index: ::vessels::reflect::MethodIndex, mut args: DERIVE_alloc::vec::Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                         ::vessels::reflect::Trait::<dyn #path>::call_mut(self.#id.lock().unwrap().as_mut() as &mut dyn #path, index, args)
                     }
-                    fn call_move(self: DERIVE_alloc::boxed::Box<Self>, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                    fn call_move(self: DERIVE_alloc::boxed::Box<Self>, index: ::vessels::reflect::MethodIndex, mut args: DERIVE_alloc::vec::Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                         ::vessels::reflect::Trait::<dyn #path>::call_move(DERIVE_alloc::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as DERIVE_alloc::boxed::Box<dyn #path>, index, args)
                     }
                     fn by_name(&self, name: &'_ str) -> ::core::result::Result<::vessels::reflect::MethodIndex, ::vessels::reflect::NameError> {
@@ -360,13 +360,13 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 }
             }
             impl<#kind_bounded_params> ::vessels::reflect::Trait<::vessels::reflect::SomeTrait> for _DERIVED_ErasedShim<#params> {
-                fn call(&self, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                fn call(&self, index: ::vessels::reflect::MethodIndex, mut args: DERIVE_alloc::vec::Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                     ::vessels::reflect::Trait::call(self.0.as_ref(), index, args)
                 }
-                fn call_mut(&mut self, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                fn call_mut(&mut self, index: ::vessels::reflect::MethodIndex, mut args: DERIVE_alloc::vec::Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                     ::vessels::reflect::Trait::call_mut(self.0.as_mut(), index, args)
                 }
-                fn call_move(self: DERIVE_alloc::boxed::Box<Self>, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                fn call_move(self: DERIVE_alloc::boxed::Box<Self>, index: ::vessels::reflect::MethodIndex, mut args: DERIVE_alloc::vec::Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                     ::vessels::reflect::Trait::call_move(self.0, index, args)
                 }
                 fn by_name(&self, name: &'_ str) -> ::core::result::Result<::vessels::reflect::MethodIndex, ::vessels::reflect::NameError> {
@@ -399,7 +399,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             }
             #[doc(hidden)]
             impl<#kind_bounded_params> ::vessels::reflect::Trait<dyn #ident<#params>> for dyn #ident<#params> {
-                fn call(&self, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                fn call(&self, index: ::vessels::reflect::MethodIndex, mut args: DERIVE_alloc::vec::Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                     args.reverse();
                     match index {
                         #call_arms
@@ -408,7 +408,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                         })),
                     }
                 }
-                fn call_mut(&mut self, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                fn call_mut(&mut self, index: ::vessels::reflect::MethodIndex, mut args: DERIVE_alloc::vec::Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                     args.reverse();
                     match index {
                         #call_mut_arms
@@ -417,7 +417,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                         })),
                     }
                 }
-                fn call_move(self: DERIVE_alloc::boxed::Box<Self>, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Sync + Send>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                fn call_move(self: DERIVE_alloc::boxed::Box<Self>, index: ::vessels::reflect::MethodIndex, mut args: DERIVE_alloc::vec::Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Sync + Send>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                     args.reverse();
                     match index {
                         #call_move_arms
