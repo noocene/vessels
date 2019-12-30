@@ -1,5 +1,7 @@
 use super::LocalModule;
 use crate::core::{data::Checksum, spawn};
+use alloc::rc::Rc;
+use core::{cell::RefCell, pin::Pin};
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver},
     future::LocalBoxFuture,
@@ -12,7 +14,7 @@ use js_sys::{
     WebAssembly::{compile, instantiate_module, Instance as WasmInstance, Memory, Module},
 };
 use lazy_static::lazy_static;
-use std::{cell::RefCell, collections::HashMap, pin::Pin, rc::Rc};
+use std::collections::HashMap;
 use void::Void;
 use wasm_bindgen::{closure::Closure, JsCast};
 use wasm_bindgen_futures::JsFuture;

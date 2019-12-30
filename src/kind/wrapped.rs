@@ -7,7 +7,8 @@ use crate::{
 
 use futures::{SinkExt, StreamExt};
 
-use std::sync::{Arc, Mutex};
+use alloc::sync::Arc;
+use std::sync::Mutex;
 
 use super::WrappedError;
 

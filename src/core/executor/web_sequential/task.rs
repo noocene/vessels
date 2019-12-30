@@ -1,9 +1,11 @@
-use std::cell::{Cell, RefCell};
-use std::future::Future;
-use std::mem::ManuallyDrop;
-use std::pin::Pin;
-use std::rc::Rc;
-use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+use alloc::rc::Rc;
+use core::{
+    cell::{Cell, RefCell},
+    future::Future,
+    mem::ManuallyDrop,
+    pin::Pin,
+    task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
+};
 
 struct Inner {
     future: Pin<Box<dyn Future<Output = ()> + 'static>>,

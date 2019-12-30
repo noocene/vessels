@@ -9,11 +9,10 @@ use crate::{
     Kind,
 };
 
+use alloc::sync::Arc;
+use core::any::{Any, TypeId};
 use futures::{SinkExt, StreamExt};
-use std::{
-    any::{Any, TypeId},
-    sync::{Arc, Mutex},
-};
+use std::sync::Mutex;
 
 pub use derive::Share;
 

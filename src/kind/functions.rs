@@ -7,7 +7,7 @@ use crate::{
 
 use futures::{lock::Mutex, SinkExt, StreamExt, TryFutureExt};
 
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 use void::Void;
 

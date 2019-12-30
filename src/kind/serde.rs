@@ -6,7 +6,7 @@ use crate::{channel::Channel, kind, kind::Future, ConstructResult, DeconstructRe
 
 use super::{using, AsKind, WrappedError};
 
-use std::ops::Deref;
+use core::ops::Deref;
 
 use void::Void;
 

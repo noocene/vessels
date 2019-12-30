@@ -1,12 +1,12 @@
+use alloc::sync::Arc;
+use core::{
+    any::Any,
+    fmt::{self, Display, Formatter},
+};
 use failure::{Error, Fail};
 use futures::{lock, SinkExt, StreamExt};
 use lazy_static::lazy_static;
-use std::{
-    any::Any,
-    collections::HashMap,
-    fmt::{self, Display, Formatter},
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Mutex};
 
 use crate::{
     channel::IdChannel,

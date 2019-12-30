@@ -6,9 +6,9 @@ use crate::{
     Kind,
 };
 
+use core::fmt::{self, Debug, Display, Formatter};
 use failure::{Error, Fail};
 use futures::{SinkExt, StreamExt};
-use std::fmt::{self, Debug, Display, Formatter};
 use void::Void;
 
 #[derive(Kind)]

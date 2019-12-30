@@ -1,5 +1,7 @@
 use super::LocalModule;
 use crate::core::{data::Checksum, spawn};
+use alloc::sync::Arc;
+use core::{ffi::c_void, pin::Pin};
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
     lock,
@@ -7,12 +9,7 @@ use futures::{
     Future, Sink, SinkExt, Stream,
 };
 use lazy_static::lazy_static;
-use std::{
-    collections::HashMap,
-    ffi::c_void,
-    pin::Pin,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Mutex};
 use void::Void;
 use wasmer_runtime::{
     compile, func, imports, memory::MemoryView, wasm::Value, Ctx, Export, Instance as WasmInstance,

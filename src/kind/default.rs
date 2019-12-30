@@ -1,6 +1,6 @@
 use futures::future::{ok, Ready};
 
-use std::{default::Default as IDefault, ops::Deref};
+use core::{default::Default as IDefault, ops::Deref};
 
 use crate::{
     channel::Channel,

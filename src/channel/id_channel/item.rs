@@ -10,7 +10,7 @@ use serde::{
 
 use crate::channel::ForkHandle;
 
-use std::fmt;
+use core::fmt;
 
 pub struct Item(pub(crate) ForkHandle, pub(crate) Box<dyn SerdeAny>, Context);
 
