@@ -7,7 +7,9 @@ use serde::{
     Serialize,
 };
 
-use std::{any::TypeId, collections::HashMap, sync::RwLock};
+use std::{collections::HashMap, sync::RwLock};
+
+use core::any::TypeId;
 
 use lazy_static::lazy_static;
 

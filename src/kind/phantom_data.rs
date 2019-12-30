@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 use crate::{channel::Channel, kind, ConstructResult, DeconstructResult, Kind};
 

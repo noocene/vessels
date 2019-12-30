@@ -6,15 +6,15 @@ use crate::{
     Kind,
 };
 
+use core::{
+    fmt::{self, Display, Formatter},
+    marker::Unpin,
+};
 use failure::{Error, Fail};
 use futures::{Sink, Stream};
 use serde::{
     de::{DeserializeOwned, DeserializeSeed},
     Deserialize, Serialize,
-};
-use std::{
-    fmt::{self, Display, Formatter},
-    marker::Unpin,
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, Copy)]

@@ -1,8 +1,7 @@
+use alloc::{collections::VecDeque, rc::Rc};
+use core::cell::{Cell, RefCell};
 #[cfg(feature = "core")]
 use js_sys::Promise;
-use std::cell::{Cell, RefCell};
-use std::collections::VecDeque;
-use std::rc::Rc;
 #[cfg(feature = "core")]
 use wasm_bindgen::{closure::Closure, JsValue};
 

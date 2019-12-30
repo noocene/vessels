@@ -3,6 +3,8 @@ extern crate erased_serde;
 
 extern crate self as vessels;
 
+extern crate alloc;
+
 pub mod channel;
 #[doc(inline)]
 pub use channel::OnTo;
@@ -16,12 +18,12 @@ use kind::{ConstructResult, DeconstructResult};
 pub mod reflect;
 pub mod replicate;
 
+use ::core::any::Any;
 use downcast_rs::{impl_downcast, Downcast};
 use erased_serde::Serialize as ErasedSerialize;
 use failure::Fail;
 use futures::Future;
 use serde::{de::DeserializeOwned, Serialize};
-use std::any::Any;
 
 /// Generates an implementation of `Kind` for trait objects.
 ///
@@ -222,8 +224,8 @@ macro_rules! log {
 
 #[cfg(all(feature = "core", target_arch = "wasm32"))]
 use {
+    ::core::pin::Pin,
     futures::task::{Context, Poll},
-    std::pin::Pin,
 };
 
 #[cfg(all(

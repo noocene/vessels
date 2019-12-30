@@ -9,7 +9,7 @@ use crate::{
 
 use super::{using, AsKind, WrappedError};
 
-use std::{iter::FromIterator, ops::Deref};
+use core::{iter::FromIterator, ops::Deref};
 
 #[derive(Clone, Debug, Copy, Hash, Eq, Ord, PartialOrd, PartialEq, Default)]
 pub struct Iterator<

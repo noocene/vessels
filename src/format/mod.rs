@@ -28,7 +28,7 @@ use crate::{
 
 use serde::{de::DeserializeSeed, Serialize};
 
-use std::fmt::{Debug, Display, Formatter};
+use core::fmt::{Debug, Display, Formatter};
 
 use failure::Fail;
 
@@ -161,7 +161,7 @@ where
                             })
                             .unwrap_or_else(|e| panic!(format!("{:?}", e.0)))
                     })
-                    .buffer_unordered(std::usize::MAX),
+                    .buffer_unordered(core::usize::MAX),
             )),
         )
     }
@@ -184,7 +184,7 @@ where
     T::Error: Fail,
     S::Error: Fail,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match *self {
             EncodeError::Format(ref err) => {
                 write!(f, "Error occurred in deserialization `{}`", err)
@@ -199,7 +199,7 @@ where
     T::Error: Fail,
     S::Error: Fail,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match *self {
             EncodeError::Format(ref err) => {
                 write!(f, "Error occurred in deserialization `{:?}`", err)
@@ -258,7 +258,7 @@ where
                     panic!(format!("{:?}", e))
                 })
             })
-            .buffer_unordered(std::usize::MAX);
+            .buffer_unordered(core::usize::MAX);
         spawn(
             receiver
                 .forward(sink.sink_map_err(|e| panic!(format!("{}", e))))

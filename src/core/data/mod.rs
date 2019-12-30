@@ -9,9 +9,9 @@ use crate::{
     Kind,
 };
 
+use core::fmt::{self, Debug, Formatter};
 use failure::{format_err, Error, Fail};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::fmt::{self, Debug, Formatter};
 
 #[derive(Hash, Kind, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Checksum(pub(crate) [u8; 32]);

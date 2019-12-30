@@ -11,12 +11,12 @@ use crate::{
     Kind,
 };
 
+use core::marker::PhantomData;
 use failure::{Error, Fail};
 use futures::SinkExt;
 #[cfg(feature = "core")]
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "core"))]
 mod native;
