@@ -61,11 +61,12 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             let mut receiver = None;
             let mut args = TokenStream::new();
             let inputs = &method.sig.inputs;
-            let boxed_receiver: PatType = if let FnArg::Typed(ty) = parse_quote!(self: Box<Self>) {
-                ty
-            } else {
-                panic!("could not parse hard-coded move receiver")
-            };
+            let boxed_receiver: PatType =
+                if let FnArg::Typed(ty) = parse_quote!(self: DERIVE_alloc::boxed::Box<Self>) {
+                    ty
+                } else {
+                    panic!("could not parse hard-coded move receiver")
+                };
             for input in inputs {
                 use FnArg::{Receiver, Typed};
                 if let Typed(ty) = input {
@@ -81,7 +82,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 }
             }
             if receiver.is_none() {
-                return quote_spanned!(method.span() => const #hygiene: () = { compile_error!("object-safe trait methods must have a borrowed or `Box<Self>` receiver") };);
+                return quote_spanned!(method.span() => const #hygiene: () = { compile_error!("object-safe trait methods must have a borrowed or `DERIVE_alloc::boxed::Box<Self>` receiver") };);
             }
             let receiver = receiver.unwrap();
             let output = &method.sig.output;
@@ -91,7 +92,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 lock = quote!(object.lock().unwrap());
                 ty = quote!(Fn(#args));
             } else {
-                lock = quote!(::std::sync::Arc::try_unwrap(object)
+                lock = quote!(DERIVE_alloc::sync::Arc::try_unwrap(object)
                     .map_err(|_| panic!("arc is not held exclusively"))
                     .unwrap()
                     .into_inner()
@@ -99,7 +100,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 ty = quote!(FnOnce(#args));
             }
             fields.extend(quote! {
-                #mident: ::std::boxed::Box<dyn #ty #output + Send + Sync>,
+                #mident: DERIVE_alloc::boxed::Box<dyn #ty #output + Send + Sync>,
             });
             let inputs: Punctuated<_, Token![,]> = inputs
                 .iter()
@@ -116,7 +117,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 })
                 .collect();
             from_fields.extend(quote! {
-                #mident: { let object = object.clone(); ::std::boxed::Box::new(move |#inputs| #lock.#mident(#inputs)) },
+                #mident: { let object = object.clone(); DERIVE_alloc::boxed::Box::new(move |#inputs| #lock.#mident(#inputs)) },
             });
             shim_items.extend(quote! {
                 #sig {
@@ -136,7 +137,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             let arg_idents: Vec<_> = inputs.iter().map(|arg| arg.clone()).collect();
             reflected_items.extend(quote! {
                 #sig {
-                    *::std::boxed::Box::<dyn ::std::any::Any>::downcast(::vessels::reflect::Trait::<dyn #ident<#params>>::#call_method(self, #idx as ::vessels::reflect::MethodIndex, vec![#( ::std::boxed::Box::new(#arg_idents) as ::std::boxed::Box<dyn ::std::any::Any + Send + Sync> ),*]).unwrap()).unwrap()
+                    *DERIVE_alloc::boxed::Box::<dyn ::core::any::Any>::downcast(::vessels::reflect::Trait::<dyn #ident<#params>>::#call_method(self, #idx as ::vessels::reflect::MethodIndex, vec![#( DERIVE_alloc::boxed::Box::new(#arg_idents) as DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync> ),*]).unwrap()).unwrap()
                 }
             });
             use ReturnType::Type;
@@ -178,8 +179,8 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         types_arms.extend(quote! {
             #idx => {
                 Ok(::vessels::reflect::MethodTypes {
-                    arguments: vec![#(::std::any::TypeId::of::<#args>()),*],
-                    output: ::std::any::TypeId::of::<#output>(),
+                    arguments: vec![#(::core::any::TypeId::of::<#args>()),*],
+                    output: ::core::any::TypeId::of::<#output>(),
                     receiver: #receiver
                 })
             },
@@ -193,14 +194,14 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
         for (idx, arg) in args.iter().enumerate() {
             let o_idx = idx as MethodIndex;
             arg_stream.extend(quote! {
-                *::std::boxed::Box::<dyn ::std::any::Any>::downcast::<#arg>(args.pop().unwrap()).map_err(|_| ::vessels::reflect::CallError::Type(#o_idx))?,
+                *DERIVE_alloc::boxed::Box::<dyn ::core::any::Any>::downcast::<#arg>(args.pop().unwrap()).map_err(|_| ::vessels::reflect::CallError::Type(#o_idx))?,
             })
         }
         let args_len = args.len();
         let arm = quote! {
             #idx => {
                 if args.len() == #args_len {
-                    Ok(::std::boxed::Box::new(self.#mident(#arg_stream)) as ::std::boxed::Box<dyn ::std::any::Any + Send + Sync>)
+                    Ok(DERIVE_alloc::boxed::Box::new(self.#mident(#arg_stream)) as DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>)
                 } else {
                     Err(::vessels::reflect::CallError::ArgumentCount(::vessels::reflect::ArgumentCountError {
                         got: args.len(),
@@ -245,82 +246,83 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             let id = format_ident!("_SUPERTRAIT_{}_", idx);
             let path = supertrait.path.clone();
             fields.extend(quote! {
-                #id: ::std::sync::Arc<::std::sync::Mutex<::std::boxed::Box<<dyn #path as ::vessels::reflect::Reflected>::Shim>>>,
+                #id: DERIVE_alloc::sync::Arc<::std::sync::Mutex<DERIVE_alloc::boxed::Box<<dyn #path as ::vessels::reflect::Reflected>::Shim>>>,
             });
             supertrait_impls.extend(quote! {
                 impl<#kind_bounded_params> ::vessels::reflect::Trait<dyn #path> for _DERIVED_Shim<#params> {
-                    fn call(&self, index: ::vessels::reflect::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send + Sync>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                    fn call(&self, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                         ::vessels::reflect::Trait::<dyn #path>::call(self.#id.lock().unwrap().as_ref() as &dyn #path, index, args)
                     }
-                    fn call_mut(&mut self, index: ::vessels::reflect::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send + Sync>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                    fn call_mut(&mut self, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                         ::vessels::reflect::Trait::<dyn #path>::call_mut(self.#id.lock().unwrap().as_mut() as &mut dyn #path, index, args)
                     }
-                    fn call_move(self: Box<Self>, index: ::vessels::reflect::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send + Sync>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
-                        ::vessels::reflect::Trait::<dyn #path>::call_move(::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as Box<dyn #path>, index, args)
+                    fn call_move(self: DERIVE_alloc::boxed::Box<Self>, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                        ::vessels::reflect::Trait::<dyn #path>::call_move(DERIVE_alloc::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as DERIVE_alloc::boxed::Box<dyn #path>, index, args)
                     }
-                    fn by_name(&self, name: &'_ str) -> ::std::result::Result<::vessels::reflect::MethodIndex, ::vessels::reflect::NameError> {
+                    fn by_name(&self, name: &'_ str) -> ::core::result::Result<::vessels::reflect::MethodIndex, ::vessels::reflect::NameError> {
                         ::vessels::reflect::Trait::<dyn #path>::by_name(self.#id.lock().unwrap().as_ref() as &dyn #path, name)
                     }
                     fn count(&self) -> ::vessels::reflect::MethodIndex {
                         ::vessels::reflect::Trait::<dyn #path>::count(self.#id.lock().unwrap().as_ref() as &dyn #path)
                     }
-                    fn name_of(&self, index: ::vessels::reflect::MethodIndex) -> ::std::result::Result<::std::string::String, ::vessels::reflect::OutOfRangeError> {
+                    fn name_of(&self, index: ::vessels::reflect::MethodIndex) -> ::core::result::Result<DERIVE_alloc::string::String, ::vessels::reflect::OutOfRangeError> {
                         ::vessels::reflect::Trait::<dyn #path>::name_of(self.#id.lock().unwrap().as_ref() as &dyn #path, index)
                     }
-                    fn types(&self, index: ::vessels::reflect::MethodIndex) -> ::std::result::Result<::vessels::reflect::MethodTypes, ::vessels::reflect::OutOfRangeError> {
+                    fn types(&self, index: ::vessels::reflect::MethodIndex) -> ::core::result::Result<::vessels::reflect::MethodTypes, ::vessels::reflect::OutOfRangeError> {
                         ::vessels::reflect::Trait::<dyn #path>::types(self.#id.lock().unwrap().as_ref() as &dyn #path, index)
                     }
-                    fn this(&self) -> ::std::any::TypeId {
+                    fn this(&self) -> ::core::any::TypeId {
                         ::vessels::reflect::Trait::<dyn #path>::this(self.#id.lock().unwrap().as_ref() as &dyn #path)
                     }
-                    fn name(&self) -> ::std::string::String {
+                    fn name(&self) -> DERIVE_alloc::string::String {
                         ::vessels::reflect::Trait::<dyn #path>::name(self.#id.lock().unwrap().as_ref() as &dyn #path)
                     }
-                    fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
+                    fn supertraits(&self) -> DERIVE_alloc::vec::Vec<::core::any::TypeId> {
                         ::vessels::reflect::Trait::<dyn #path>::supertraits(self.#id.lock().unwrap().as_ref() as &dyn #path)
                     }
-                    fn upcast_erased(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflect::Erased>, ::vessels::reflect::CastError> {
-                        ::vessels::reflect::Trait::<dyn #path>::upcast_erased(::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as ::std::boxed::Box<dyn #path>, ty)
+                    fn upcast_erased(self: DERIVE_alloc::boxed::Box<Self>, ty: ::core::any::TypeId) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::vessels::reflect::Erased>, ::vessels::reflect::CastError> {
+                        ::vessels::reflect::Trait::<dyn #path>::upcast_erased(DERIVE_alloc::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as DERIVE_alloc::boxed::Box<dyn #path>, ty)
                     }
-                    fn erase(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn ::vessels::reflect::Erased> {
-                        ::vessels::reflect::Trait::<dyn #path>::erase(::std::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as ::std::boxed::Box<dyn #path>)
+                    fn erase(self: DERIVE_alloc::boxed::Box<Self>) -> DERIVE_alloc::boxed::Box<dyn ::vessels::reflect::Erased> {
+                        ::vessels::reflect::Trait::<dyn #path>::erase(DERIVE_alloc::sync::Arc::try_unwrap(self.#id).map_err(|_| panic!("arc is not held exclusively")).unwrap().into_inner().unwrap() as DERIVE_alloc::boxed::Box<dyn #path>)
                     }
                 }
             });
             from_fields.extend(quote! {
-                #id: ::std::sync::Arc::new(::std::sync::Mutex::new(::std::boxed::Box::new(<dyn #path as ::vessels::reflect::Reflected>::Shim::from_instance(object)))),
+                #id: DERIVE_alloc::sync::Arc::new(::std::sync::Mutex::new(DERIVE_alloc::boxed::Box::new(<dyn #path as ::vessels::reflect::Reflected>::Shim::from_instance(object)))),
             });
             derive_param_bounds.extend(quote! {
                 + #path
             });
             supertrait_ids.extend(quote! {
-                ::std::any::TypeId::of::<dyn #path>(),
+                ::core::any::TypeId::of::<dyn #path>(),
             });
             upcast_arms.extend(quote! {
-                if ty == ::std::any::TypeId::of::<dyn #path>() {
-                    return Ok(::std::boxed::Box::new(<dyn #path as ::vessels::reflect::Reflected>::ErasedShim::from(Box::new(<dyn #path as ::vessels::reflect::Reflected>::Shim::from_instance(::std::sync::Arc::new(::std::sync::Mutex::new(self)))) as Box<dyn #path>)) as ::std::boxed::Box<dyn ::vessels::reflect::Erased>);
+                if ty == ::core::any::TypeId::of::<dyn #path>() {
+                    return Ok(DERIVE_alloc::boxed::Box::new(<dyn #path as ::vessels::reflect::Reflected>::ErasedShim::from(DERIVE_alloc::boxed::Box::new(<dyn #path as ::vessels::reflect::Reflected>::Shim::from_instance(DERIVE_alloc::sync::Arc::new(::std::sync::Mutex::new(self)))) as DERIVE_alloc::boxed::Box<dyn #path>)) as DERIVE_alloc::boxed::Box<dyn ::vessels::reflect::Erased>);
                 }
             })
         }
     }
-    item.supertraits.push(parse_quote!(::std::marker::Send));
-    item.supertraits.push(parse_quote!(::std::marker::Sync));
+    item.supertraits.push(parse_quote!(::core::marker::Send));
+    item.supertraits.push(parse_quote!(::core::marker::Sync));
     let name = ident.to_string();
     quote! {
         #[allow(non_upper_case_globals)]
         #[allow(non_snake_case)]
         #[allow(non_camel_case_types)]
         const #hygiene: () = {
+            extern crate alloc as DERIVE_alloc;
             #[derive(::vessels::Kind)]
             #vis struct _DERIVED_Shim<#kind_bounded_params> {
                 #fields
-                _marker: ::std::marker::PhantomData<(#params)>
+                _marker: ::core::marker::PhantomData<(#params)>
             }
             impl<#kind_bounded_params> _DERIVED_Shim<#params> {
-                #vis fn from_instance<DERIVEPARAM: ?Sized + #ident<#params> + 'static>(object: ::std::sync::Arc<::std::sync::Mutex<::std::boxed::Box<DERIVEPARAM>>>) -> Self {
+                #vis fn from_instance<DERIVEPARAM: ?Sized + #ident<#params> + 'static>(object: DERIVE_alloc::sync::Arc<::std::sync::Mutex<DERIVE_alloc::boxed::Box<DERIVEPARAM>>>) -> Self {
                     _DERIVED_Shim {
                        #from_fields
-                       _marker: ::std::marker::PhantomData
+                       _marker: ::core::marker::PhantomData
                     }
                 }
             }
@@ -336,8 +338,8 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 #[doc(hidden)]
                 const DO_NOT_IMPLEMENT_THIS_MARKER_TRAIT_MANUALLY: () = ();
             }
-            impl<#kind_bounded_params> From<Box<dyn #ident<#params>>> for _DERIVED_ErasedShim<#params> {
-                fn from(input: Box<dyn #ident<#params>>) -> _DERIVED_ErasedShim<#params> {
+            impl<#kind_bounded_params> From<DERIVE_alloc::boxed::Box<dyn #ident<#params>>> for _DERIVED_ErasedShim<#params> {
+                fn from(input: DERIVE_alloc::boxed::Box<dyn #ident<#params>>) -> _DERIVED_ErasedShim<#params> {
                     _DERIVED_ErasedShim(input)
                 }
             }
@@ -345,11 +347,11 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
             impl<DERIVEPARAM: 'static + Sync + Send + ::vessels::reflect::Trait<dyn #ident<#params>> #derive_param_bounds, #kind_bounded_params> #ident<#params> for DERIVEPARAM {
                 #reflected_items
             }
-            #vis struct _DERIVED_ErasedShim<#kind_bounded_params>(Box<dyn #ident<#params>>);
+            #vis struct _DERIVED_ErasedShim<#kind_bounded_params>(DERIVE_alloc::boxed::Box<dyn #ident<#params>>);
             impl<#kind_bounded_params> ::vessels::reflect::Erased for _DERIVED_ErasedShim<#params> {
-                fn cast(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::std::any::Any + Send + Sync>, ::vessels::reflect::CastError> {
-                    if ty == ::std::any::TypeId::of::<dyn #ident<#params>>() {
-                        Ok(::std::boxed::Box::new(self.0 as ::std::boxed::Box<dyn #ident<#params>>) as ::std::boxed::Box<dyn ::std::any::Any + Send + Sync>)
+                fn cast(self: DERIVE_alloc::boxed::Box<Self>, ty: ::core::any::TypeId) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CastError> {
+                    if ty == ::core::any::TypeId::of::<dyn #ident<#params>>() {
+                        Ok(DERIVE_alloc::boxed::Box::new(self.0 as DERIVE_alloc::boxed::Box<dyn #ident<#params>>) as DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>)
                     } else {
                         Err(::vessels::reflect::CastError {
                             target: ty,
@@ -358,46 +360,46 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 }
             }
             impl<#kind_bounded_params> ::vessels::reflect::Trait<::vessels::reflect::SomeTrait> for _DERIVED_ErasedShim<#params> {
-                fn call(&self, index: ::vessels::reflect::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send + Sync>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                fn call(&self, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                     ::vessels::reflect::Trait::call(self.0.as_ref(), index, args)
                 }
-                fn call_mut(&mut self, index: ::vessels::reflect::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send + Sync>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                fn call_mut(&mut self, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                     ::vessels::reflect::Trait::call_mut(self.0.as_mut(), index, args)
                 }
-                fn call_move(self: Box<Self>, index: ::vessels::reflect::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send + Sync>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                fn call_move(self: DERIVE_alloc::boxed::Box<Self>, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                     ::vessels::reflect::Trait::call_move(self.0, index, args)
                 }
-                fn by_name(&self, name: &'_ str) -> ::std::result::Result<::vessels::reflect::MethodIndex, ::vessels::reflect::NameError> {
+                fn by_name(&self, name: &'_ str) -> ::core::result::Result<::vessels::reflect::MethodIndex, ::vessels::reflect::NameError> {
                     ::vessels::reflect::Trait::by_name(self.0.as_ref(), name)
                 }
                 fn count(&self) -> ::vessels::reflect::MethodIndex {
                     ::vessels::reflect::Trait::count(self.0.as_ref())
                 }
-                fn name_of(&self, index: ::vessels::reflect::MethodIndex) -> ::std::result::Result<::std::string::String, ::vessels::reflect::OutOfRangeError> {
+                fn name_of(&self, index: ::vessels::reflect::MethodIndex) -> ::core::result::Result<DERIVE_alloc::string::String, ::vessels::reflect::OutOfRangeError> {
                     ::vessels::reflect::Trait::name_of(self.0.as_ref(), index)
                 }
-                fn this(&self) -> ::std::any::TypeId {
+                fn this(&self) -> ::core::any::TypeId {
                     ::vessels::reflect::Trait::this(self.0.as_ref())
                 }
-                fn name(&self) -> ::std::string::String {
+                fn name(&self) -> DERIVE_alloc::string::String {
                     ::vessels::reflect::Trait::name(self.0.as_ref())
                 }
-                fn types(&self, index: ::vessels::reflect::MethodIndex) -> ::std::result::Result<::vessels::reflect::MethodTypes, ::vessels::reflect::OutOfRangeError> {
+                fn types(&self, index: ::vessels::reflect::MethodIndex) -> ::core::result::Result<::vessels::reflect::MethodTypes, ::vessels::reflect::OutOfRangeError> {
                     ::vessels::reflect::Trait::types(self.0.as_ref(), index)
                 }
-                fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
+                fn supertraits(&self) -> DERIVE_alloc::vec::Vec<::core::any::TypeId> {
                     ::vessels::reflect::Trait::supertraits(self.0.as_ref())
                 }
-                fn upcast_erased(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflect::Erased>, ::vessels::reflect::CastError> {
+                fn upcast_erased(self: DERIVE_alloc::boxed::Box<Self>, ty: ::core::any::TypeId) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::vessels::reflect::Erased>, ::vessels::reflect::CastError> {
                     ::vessels::reflect::Trait::upcast_erased(self, ty)
                 }
-                fn erase(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn ::vessels::reflect::Erased> {
+                fn erase(self: DERIVE_alloc::boxed::Box<Self>) -> DERIVE_alloc::boxed::Box<dyn ::vessels::reflect::Erased> {
                     ::vessels::reflect::Trait::erase(self)
                 }
             }
             #[doc(hidden)]
             impl<#kind_bounded_params> ::vessels::reflect::Trait<dyn #ident<#params>> for dyn #ident<#params> {
-                fn call(&self, index: ::vessels::reflect::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send + Sync>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                fn call(&self, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                     args.reverse();
                     match index {
                         #call_arms
@@ -406,7 +408,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                         })),
                     }
                 }
-                fn call_mut(&mut self, index: ::vessels::reflect::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Send + Sync>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                fn call_mut(&mut self, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                     args.reverse();
                     match index {
                         #call_mut_arms
@@ -415,7 +417,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                         })),
                     }
                 }
-                fn call_move(self: Box<Self>, index: ::vessels::reflect::MethodIndex, mut args: Vec<::std::boxed::Box<dyn ::std::any::Any + Sync + Send>>) -> ::std::result::Result<std::boxed::Box<dyn ::std::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
+                fn call_move(self: DERIVE_alloc::boxed::Box<Self>, index: ::vessels::reflect::MethodIndex, mut args: Vec<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Sync + Send>>) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::core::any::Any + Send + Sync>, ::vessels::reflect::CallError> {
                     args.reverse();
                     match index {
                         #call_move_arms
@@ -424,7 +426,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                         })),
                     }
                 }
-                fn by_name(&self, name: &'_ str) -> ::std::result::Result<::vessels::reflect::MethodIndex, ::vessels::reflect::NameError> {
+                fn by_name(&self, name: &'_ str) -> ::core::result::Result<::vessels::reflect::MethodIndex, ::vessels::reflect::NameError> {
                     match name {
                         #name_arms
                         _ => {
@@ -437,7 +439,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                 fn count(&self) -> ::vessels::reflect::MethodIndex {
                     #methods_count as ::vessels::reflect::MethodIndex
                 }
-                fn name_of(&self, index: ::vessels::reflect::MethodIndex) -> ::std::result::Result<::std::string::String, ::vessels::reflect::OutOfRangeError> {
+                fn name_of(&self, index: ::vessels::reflect::MethodIndex) -> ::core::result::Result<DERIVE_alloc::string::String, ::vessels::reflect::OutOfRangeError> {
                     match index {
                         #index_name_arms
                         _ => {
@@ -447,7 +449,7 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                         }
                     }
                 }
-                fn types(&self, index: ::vessels::reflect::MethodIndex) -> ::std::result::Result<::vessels::reflect::MethodTypes, ::vessels::reflect::OutOfRangeError> {
+                fn types(&self, index: ::vessels::reflect::MethodIndex) -> ::core::result::Result<::vessels::reflect::MethodTypes, ::vessels::reflect::OutOfRangeError> {
                     match index {
                         #types_arms
                         _ => {
@@ -457,27 +459,27 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                         }
                     }
                 }
-                fn this(&self) -> ::std::any::TypeId {
-                    ::std::any::TypeId::of::<dyn #ident<#params>>()
+                fn this(&self) -> ::core::any::TypeId {
+                    ::core::any::TypeId::of::<dyn #ident<#params>>()
                 }
-                fn name(&self) -> ::std::string::String {
+                fn name(&self) -> DERIVE_alloc::string::String {
                     #name.to_owned()
                 }
-                fn supertraits(&self) -> ::std::vec::Vec<::std::any::TypeId> {
+                fn supertraits(&self) -> DERIVE_alloc::vec::Vec<::core::any::TypeId> {
                     vec![#supertrait_ids]
                 }
-                fn upcast_erased(self: ::std::boxed::Box<Self>, ty: ::std::any::TypeId) -> ::std::result::Result<::std::boxed::Box<dyn ::vessels::reflect::Erased>, ::vessels::reflect::CastError> {
+                fn upcast_erased(self: DERIVE_alloc::boxed::Box<Self>, ty: ::core::any::TypeId) -> ::core::result::Result<DERIVE_alloc::boxed::Box<dyn ::vessels::reflect::Erased>, ::vessels::reflect::CastError> {
                     #upcast_arms
                     Err(::vessels::reflect::CastError {
                         target: ty,
                     })
                 }
-                fn erase(self: ::std::boxed::Box<Self>) -> Box<dyn ::vessels::reflect::Erased> {
-                    Box::new(_DERIVED_ErasedShim::from(self)) as ::std::boxed::Box<dyn ::vessels::reflect::Erased>
+                fn erase(self: DERIVE_alloc::boxed::Box<Self>) -> DERIVE_alloc::boxed::Box<dyn ::vessels::reflect::Erased> {
+                    DERIVE_alloc::boxed::Box::new(_DERIVED_ErasedShim::from(self)) as DERIVE_alloc::boxed::Box<dyn ::vessels::reflect::Erased>
                 }
             }
             #[::vessels::kind]
-            impl<#kind_bounded_params> ::vessels::Kind for ::std::boxed::Box<dyn #ident<#params>> {
+            impl<#kind_bounded_params> ::vessels::Kind for DERIVE_alloc::boxed::Box<dyn #ident<#params>> {
                 type ConstructItem = ::vessels::channel::ForkHandle;
                 type ConstructError = ::vessels::void::Void;
                 type ConstructFuture = ::vessels::kind::Future<::vessels::kind::ConstructResult<Self>>;
@@ -490,8 +492,8 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     mut channel: C,
                 ) -> <Self as ::vessels::Kind>::DeconstructFuture {
                     use ::vessels::futures::{SinkExt, TryFutureExt};
-                    ::std::boxed::Box::pin(async move {
-                        channel.send(channel.fork::<_DERIVED_Shim<#params>>(_DERIVED_Shim::from_instance(::std::sync::Arc::new(::std::sync::Mutex::new(self)))).await.unwrap()).unwrap_or_else(|_| panic!("arc is not held exclusively")).await;
+                    DERIVE_alloc::boxed::Box::pin(async move {
+                        channel.send(channel.fork::<_DERIVED_Shim<#params>>(_DERIVED_Shim::from_instance(DERIVE_alloc::sync::Arc::new(::std::sync::Mutex::new(self)))).await.unwrap()).unwrap_or_else(|_| panic!("arc is not held exclusively")).await;
                         Ok(())
                     })
                 }
@@ -500,9 +502,9 @@ pub fn build(_: TokenStream, item: &mut ItemTrait) -> TokenStream {
                     mut channel: C,
                 ) -> <Self as ::vessels::Kind>::ConstructFuture {
                     use ::vessels::futures::StreamExt;
-                    ::std::boxed::Box::pin(async move {
+                    DERIVE_alloc::boxed::Box::pin(async move {
                         let handle = channel.next().await.unwrap();
-                        Ok(::std::boxed::Box::new(channel.get_fork::<_DERIVED_Shim<#params>>(handle).await.unwrap()) as ::std::boxed::Box<dyn #ident<#params>>)
+                        Ok(DERIVE_alloc::boxed::Box::new(channel.get_fork::<_DERIVED_Shim<#params>>(handle).await.unwrap()) as DERIVE_alloc::boxed::Box<dyn #ident<#params>>)
                     })
                 }
             }
