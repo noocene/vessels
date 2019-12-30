@@ -3,6 +3,7 @@ use quote::quote;
 
 pub fn build(block: TokenStream) -> TokenStream {
     quote! {
+        extern crate alloc as EXPORT_alloc;
         #[cfg(target_arch = "wasm32")]
         extern "C" {
             fn _EXPORT_output(ptr: *const u8, len: usize);
@@ -16,7 +17,8 @@ pub fn build(block: TokenStream) -> TokenStream {
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn _EXPORT_make_buffer(len: usize) -> *mut u8 {
-            use ::std::{mem::{size_of, forget, align_of}, ptr::write, alloc::{alloc, Layout}};
+            use ::core::{mem::{size_of, forget, align_of}, ptr::write};
+            use EXPORT_alloc::alloc::{alloc, Layout};
             let len_size = size_of::<usize>();
             unsafe {
                 let ptr = alloc(Layout::from_size_align(len + len_size, align_of::<u8>()).unwrap());
@@ -25,12 +27,12 @@ pub fn build(block: TokenStream) -> TokenStream {
             }
         }
         ::vessels::lazy_static::lazy_static! {
-            static ref DATA: ::vessels::futures::lock::Mutex<(::vessels::futures::channel::mpsc::UnboundedSender<Vec<u8>>, Option<::vessels::futures::channel::mpsc::UnboundedReceiver<Vec<u8>>>)> = { let (sender, receiver) = ::vessels::futures::channel::mpsc::unbounded(); ::vessels::futures::lock::Mutex::new((sender, Some(receiver))) };
+            static ref DATA: ::vessels::futures::lock::Mutex<(::vessels::futures::channel::mpsc::UnboundedSender<EXPORT_alloc::vec::Vec<u8>>, Option<::vessels::futures::channel::mpsc::UnboundedReceiver<EXPORT_alloc::vec::Vec<u8>>>)> = { let (sender, receiver) = ::vessels::futures::channel::mpsc::unbounded(); ::vessels::futures::lock::Mutex::new((sender, Some(receiver))) };
         }
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn _EXPORT_input(data: *mut u8) {
-            use ::std::{mem::size_of, slice};
+            use ::core::{mem::size_of, slice};
             unsafe {
                 let len = Box::from_raw(data.sub(size_of::<usize>()) as *mut usize);
                 let data = slice::from_raw_parts_mut(data, *len).to_vec();
@@ -43,9 +45,9 @@ pub fn build(block: TokenStream) -> TokenStream {
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn _EXPORT_initialize() {
-            std::panic::set_hook(Box::new(|info| {
-                use ::std::ops::Deref;
-                let cause = info.payload().downcast_ref::<String>().map(String::deref);
+            ::std::panic::set_hook(Box::new(|info| {
+                use ::core::ops::Deref;
+                let cause = info.payload().downcast_ref::<EXPORT_alloc::string::String>().map(EXPORT_alloc::string::String::deref);
                 let cause = cause.unwrap_or_else(||
                     info.payload().downcast_ref::<&str>().map(|s| *s)
                         .unwrap_or("<cause unknown>")
