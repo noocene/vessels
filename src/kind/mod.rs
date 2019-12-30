@@ -23,11 +23,11 @@ pub use default::Default;
 pub use iterator::Iterator;
 pub use sink_stream::SinkStream;
 
+use core::pin::Pin;
 use failure::{Error, Fail};
 use futures::{
     stream::once, Future as IFuture, FutureExt, Sink as ISink, Stream as IStream, StreamExt,
 };
-use std::pin::Pin;
 
 use crate::{channel::ChannelError, Kind};
 

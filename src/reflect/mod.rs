@@ -1,9 +1,9 @@
 use crate::Kind;
-use failure::Fail;
-use std::{
+use core::{
     any::{Any, TypeId},
     fmt::{self, Display, Formatter},
 };
+use failure::Fail;
 
 pub type MethodIndex = u8;
 

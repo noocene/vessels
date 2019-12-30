@@ -5,10 +5,9 @@ use crate::{
     Kind,
 };
 
-use std::{
-    collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque},
-    hash::Hash,
-};
+use alloc::collections::{BTreeMap, BTreeSet, BinaryHeap, LinkedList, VecDeque};
+use core::hash::Hash;
+use std::collections::{HashMap, HashSet};
 
 use futures::{future::try_join_all, SinkExt, StreamExt, TryFutureExt};
 

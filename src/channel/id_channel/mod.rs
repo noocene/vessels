@@ -6,6 +6,12 @@ mod id;
 pub(crate) use id::Id;
 use id::REGISTRY;
 
+use alloc::sync::Arc;
+use core::{
+    fmt::{self, Display, Formatter},
+    marker::PhantomData,
+    pin::Pin,
+};
 use failure::Fail;
 use futures::{
     channel::mpsc::{unbounded, SendError, UnboundedReceiver, UnboundedSender},
@@ -14,13 +20,7 @@ use futures::{
     Future as IFuture, FutureExt, Sink as ISink, SinkExt, Stream, StreamExt, TryFutureExt,
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::{
-    collections::HashMap,
-    fmt::{self, Display, Formatter},
-    marker::PhantomData,
-    pin::Pin,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Mutex};
 
 use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle, Waiter},

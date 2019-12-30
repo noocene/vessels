@@ -14,7 +14,8 @@ use futures::{
 
 use super::WrappedError;
 
-use std::{marker::PhantomData, pin::Pin, sync::Arc};
+use alloc::sync::Arc;
+use core::{marker::PhantomData, pin::Pin};
 
 use void::Void;
 

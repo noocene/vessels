@@ -5,12 +5,12 @@ use crate::{
     Kind,
 };
 
+use core::{mem::MaybeUninit, ptr};
 use failure::Fail;
 use futures::{
     future::{ok, try_join_all, Ready},
     FutureExt, SinkExt, StreamExt, TryFutureExt,
 };
-use std::{mem::MaybeUninit, ptr};
 use void::Void;
 
 use super::WrappedError;

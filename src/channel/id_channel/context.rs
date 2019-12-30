@@ -1,8 +1,8 @@
+use alloc::sync::{Arc, Weak};
+use core::{any::TypeId, pin::Pin};
 use std::{
-    any::TypeId,
     collections::HashMap,
-    pin::Pin,
-    sync::{Arc, Mutex, RwLock, Weak},
+    sync::{Mutex, RwLock},
 };
 
 use crate::{channel::ForkHandle, Kind};
