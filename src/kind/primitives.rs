@@ -87,8 +87,3 @@ primitive_impl!(
     NonZeroI64,
     NonZeroIsize
 );
-
-#[cfg(not(target_arch = "wasm32"))]
-use std::ffi::OsString;
-#[cfg(not(target_arch = "wasm32"))]
-primitive_impl!(OsString);
