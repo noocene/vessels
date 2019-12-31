@@ -1,8 +1,7 @@
 use alloc::sync::Arc;
-use core::{
-    any::Any,
-    fmt::{self, Display, Formatter},
-};
+#[cfg(any(feature = "core", target_arch = "wasm32"))]
+use core::any::Any;
+use core::fmt::{self, Display, Formatter};
 use failure::{Error, Fail};
 use futures::{lock, SinkExt, StreamExt};
 use lazy_static::lazy_static;
@@ -192,7 +191,7 @@ pub fn register<K: Kind>(item: impl Fn() -> K + Sync + Send + 'static) {
             Box::new(move || Box::new(item())),
         );
     }
-    #[cfg(not(feature = "core"))]
+    #[cfg(all(not(feature = "core"), target_arch = "wasm32"))]
     {
         HANDLE.lock().unwrap().1.insert(
             K::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD,
