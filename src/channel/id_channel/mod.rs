@@ -21,6 +21,7 @@ use futures::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::HashMap, sync::Mutex};
+use thiserror::Error;
 
 use crate::{
     channel::{Channel, Context as IContext, Fork as IFork, ForkHandle, Waiter},
@@ -84,39 +85,12 @@ impl Display for SinkStage {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum IdChannelError {
+    #[error("send on underlying channel `{1}` in `{0}` stage failed: `{2}`")]
     Channel(SinkStage, ForkHandle, ChannelError),
+    #[error("underlying channel `{0}` does not exist")]
     InvalidId(ForkHandle),
-}
-
-impl Fail for IdChannelError {
-    fn name(&self) -> Option<&str> {
-        Some("IdChannelError")
-    }
-    fn cause(&self) -> Option<&dyn Fail> {
-        if let IdChannelError::Channel(_, _, error) = self {
-            return Some(error.0.as_fail());
-        }
-        None
-    }
-}
-
-impl Display for IdChannelError {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        use IdChannelError::{Channel, InvalidId};
-        write!(
-            formatter,
-            "{}",
-            match self {
-                Channel(stage, handle, error) => format!(
-                    "send on underlying channel {} in {} stage failed: {}",
-                    handle, stage, error
-                ),
-                InvalidId(handle) => format!("underlying channel {} does not exist", handle),
-            }
-        )
-    }
 }
 
 impl Drop for IdChannel {

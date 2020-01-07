@@ -9,9 +9,10 @@ use crate::{
     Kind,
 };
 
+use anyhow::{anyhow, Error};
 use core::fmt::{self, Debug, Formatter};
-use failure::{format_err, Error, Fail};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Hash, Kind, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Checksum(pub(crate) [u8; 32]);
@@ -48,17 +49,17 @@ pub struct Resource<T: Serialize + DeserializeOwned + Sync + Send + 'static> {
     acquire: Option<Box<dyn FnOnce() -> Infallible<Serde<T>> + Sync + Send>>,
 }
 
-#[derive(Fail, Kind)]
-#[fail(display = "reification failed: {}", cause)]
+#[derive(Error, Kind)]
+#[error("reification failed: {source}")]
 pub struct ReifyError<T: Serialize + DeserializeOwned + Sync + Send + 'static> {
-    #[fail(cause)]
-    cause: Error,
+    #[source]
+    source: Error,
     pub resource: Resource<T>,
 }
 
 impl<T: Serialize + DeserializeOwned + Sync + Send + 'static> Debug for ReifyError<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "ReifyError {{ cause: {:?} }}", self.cause)
+        write!(f, "ReifyError {{ source: {:?} }}", self.source)
     }
 }
 
@@ -92,7 +93,7 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + 'static> Resource<T> {
             } else {
                 // TODO reify from abstract acquisition methods
                 Err(ReifyError {
-                    cause: format_err!("no suitable acquisition method"),
+                    source: anyhow!("no suitable acquisition method"),
                     resource: self,
                 })
             }

@@ -6,9 +6,11 @@ use crate::{
     object, Kind,
 };
 
-use failure::{Error, Fail};
+use anyhow::Error;
+use failure::Fail;
 use futures::{future::ready, lock::Mutex, FutureExt, Sink, StreamExt};
 use std::{net::SocketAddr, sync::Arc};
+use thiserror::Error;
 use url::Url;
 
 #[object]
@@ -43,10 +45,10 @@ impl FromTransportError for ListenError {
     }
 }
 
-#[derive(Fail, Debug, Kind)]
-#[fail(display = "connection failed while open: {}", cause)]
+#[derive(Error, Debug, Kind)]
+#[error("connection failed while open: {cause}")]
 pub struct ConnectionError {
-    #[fail(cause)]
+    #[source]
     cause: Error,
 }
 
@@ -123,7 +125,7 @@ impl Server {
     ) -> Future<Result<(), ListenError>>
     where
         T: ApplyEncode<'a>,
-        <T as Sink<<T as Context<'a>>::Item>>::Error: Fail,
+        <T as Sink<<T as Context<'a>>::Item>>::Error: std::error::Error + Sync + Send + 'static,
     {
         let handler = Arc::new(Mutex::new(handler));
         self.0.listen(
