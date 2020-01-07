@@ -28,9 +28,10 @@ use crate::{
 
 use serde::{de::DeserializeSeed, Serialize};
 
-use core::fmt::{Debug, Display, Formatter};
+use core::fmt::{self, Debug, Formatter};
+use std::error::Error;
 
-use failure::Fail;
+use thiserror::Error;
 
 pub trait UniformStreamSink<T>: ISink<T> + IStream<Item = T> {}
 
@@ -44,7 +45,7 @@ pub trait Format {
     /// binary formats and `String` for those of a human-readable nature.
     type Representation;
     /// The failure condition of this format. This may be encountered during deserialization.
-    type Error: Fail;
+    type Error: Error + Sync + Send + 'static;
 
     /// Serializes the provided item.
     fn serialize<T: Serialize>(item: T) -> Self::Representation
@@ -62,6 +63,8 @@ pub trait Format {
 
 pub trait ApplyEncode<'de>:
     Sized + UniformStreamSink<<Self as Context<'de>>::Item> + Context<'de>
+where
+    <Self as ISink<<Self as Context<'de>>::Item>>::Error: Error + 'static,
 {
     fn encode<F: Format + Encode<'de, Self>>(self) -> <F as Encode<'de, Self>>::Output;
 }
@@ -69,6 +72,7 @@ pub trait ApplyEncode<'de>:
 impl<'de, T> ApplyEncode<'de> for T
 where
     T: UniformStreamSink<<Self as Context<'de>>::Item> + Context<'de>,
+    <T as ISink<<Self as Context<'de>>::Item>>::Error: Error + 'static,
 {
     fn encode<F: Format + Encode<'de, Self>>(self) -> <F as Encode<'de, Self>>::Output {
         <F as Encode<_>>::encode(self)
@@ -82,7 +86,7 @@ pub trait ApplyDecode<'de, K: Kind> {
     where
         Self: UniformStreamSink<F::Representation> + Sync + Send + Sized + 'static,
         F::Representation: Clone + Sync + Send + 'static,
-        <Self as ISink<F::Representation>>::Error: Fail,
+        <Self as ISink<F::Representation>>::Error: Error + Sync + Send + 'static,
         T::Item: Sync + Send + 'static;
 }
 
@@ -93,7 +97,7 @@ impl<'de, U, K: Kind> ApplyDecode<'de, K> for U {
     where
         Self: UniformStreamSink<F::Representation> + Sync + Send + Sized + 'static,
         F::Representation: Clone + Sync + Send,
-        <Self as ISink<F::Representation>>::Error: Fail,
+        <Self as ISink<F::Representation>>::Error: Error + Sync + Send + 'static,
         T::Item: Sync + Send,
     {
         <F as Decode<'de, Self, K>>::decode::<T>(self)
@@ -102,6 +106,8 @@ impl<'de, U, K: Kind> ApplyDecode<'de, K> for U {
 
 pub trait Decode<'de, C: UniformStreamSink<<Self as Format>::Representation> + 'static, K: Kind>:
     Format
+where
+    C::Error: 'static,
 {
     type Output: IFuture<Output = Result<K, K::ConstructError>>;
 
@@ -112,6 +118,8 @@ pub trait Decode<'de, C: UniformStreamSink<<Self as Format>::Representation> + '
 
 pub trait Encode<'de, C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de>>:
     Format + Sized
+where
+    <C as ISink<<C as Context<'de>>::Item>>::Error: Error + 'static,
 {
     type Output: IStream<Item = <Self as Format>::Representation>
         + ISink<Self::Representation, Error = EncodeError<Self, <C as Context<'de>>::Item, C>>;
@@ -127,7 +135,7 @@ impl<
     > Decode<'de, C, K> for T
 where
     Self::Representation: Sync + Send + Clone,
-    <C as ISink<<Self as Format>::Representation>>::Error: Fail,
+    <C as ISink<<Self as Format>::Representation>>::Error: Error + Sync + Send + 'static,
 {
     type Output = Fallible<K, K::ConstructError>;
 
@@ -167,51 +175,37 @@ where
     }
 }
 
-pub enum EncodeError<T: Format, I, S: ISink<I>> {
-    Format(T::Error),
-    Sink(S::Error),
-}
-
-impl<I: 'static, T: Format + 'static, S: ISink<I> + 'static> Fail for EncodeError<T, I, S>
+#[derive(Error)]
+pub enum EncodeError<T: Format, I, S: ISink<I>>
 where
-    T::Error: Fail,
-    S::Error: Fail,
+    S::Error: Error + 'static,
 {
-}
-
-impl<T: Format, I, S: ISink<I>> Display for EncodeError<T, I, S>
-where
-    T::Error: Fail,
-    S::Error: Fail,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match *self {
-            EncodeError::Format(ref err) => {
-                write!(f, "Error occurred in deserialization `{}`", err)
-            }
-            EncodeError::Sink(ref err) => write!(f, "Error occurred in underlying sink `{}`", err),
-        }
-    }
+    #[error("`{0}`")]
+    Format(#[source] T::Error),
+    #[error("`{0}`")]
+    Sink(#[source] S::Error),
 }
 
 impl<T: Format, I, S: ISink<I>> Debug for EncodeError<T, I, S>
 where
-    T::Error: Fail,
-    S::Error: Fail,
+    S::Error: Error + 'static,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match *self {
-            EncodeError::Format(ref err) => {
-                write!(f, "Error occurred in deserialization `{:?}`", err)
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                EncodeError::Format(e) => format!("Format ({:?})", e),
+                EncodeError::Sink(e) => format!("Sink ({:?})", e),
             }
-            EncodeError::Sink(ref err) => {
-                write!(f, "Error occurred in underlying sink `{:?}`", err)
-            }
-        }
+        )
     }
 }
 
-impl<T: Format, I, S: ISink<I>> EncodeError<T, I, S> {
+impl<T: Format, I, S: ISink<I>> EncodeError<T, I, S>
+where
+    S::Error: Error,
+{
     fn from_sink_error(err: S::Error) -> Self {
         EncodeError::Sink(err)
     }
@@ -228,7 +222,7 @@ impl<
 where
     T::Representation: Sync + Send + Clone,
     <C as Context<'de>>::Item: Sync + Send,
-    <C as ISink<<C as Context<'de>>::Item>>::Error: Fail,
+    <C as ISink<<C as Context<'de>>::Item>>::Error: Error + Sync + Send + 'static,
 {
     type Output = SinkStream<
         Self::Representation,

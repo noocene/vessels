@@ -11,12 +11,14 @@ use crate::{
     Kind,
 };
 
+use anyhow::Error;
 use core::marker::PhantomData;
-use failure::{Error, Fail};
+use failure::Fail;
 use futures::SinkExt;
 #[cfg(feature = "core")]
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "core"))]
 mod native;
@@ -65,8 +67,8 @@ trait OrchestratorInner {
 #[derive(Kind)]
 pub struct Orchestrator(Shared<dyn OrchestratorInner>);
 
-#[derive(Fail, Debug, Kind)]
-#[fail(display = "instantiate failed: {}", cause)]
+#[derive(Error, Debug, Kind)]
+#[error("instantiate failed: {cause}")]
 pub struct InstantiateError {
     cause: Error,
 }

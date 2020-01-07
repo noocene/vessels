@@ -6,15 +6,15 @@ use crate::{
     Kind,
 };
 
+use anyhow::Error;
 use core::fmt::{self, Debug, Display, Formatter};
-use failure::{Error, Fail};
 use futures::{SinkExt, StreamExt};
+use std::error::Error as StdError;
 use void::Void;
 
 #[derive(Kind)]
 struct ErrorShim {
-    name: Option<String>,
-    cause: Option<Box<ErrorShim>>,
+    source: Option<Box<ErrorShim>>,
     debug: String,
     display: String,
 }
@@ -31,22 +31,20 @@ impl Debug for ErrorShim {
     }
 }
 
-impl Fail for ErrorShim {
-    fn name(&self) -> Option<&str> {
-        self.name.as_ref().map(|item| item.as_str())
-    }
-    fn cause(&self) -> Option<&dyn Fail> {
-        self.cause.as_ref().map(|item| item.as_ref() as &dyn Fail)
+impl StdError for ErrorShim {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        self.source
+            .as_ref()
+            .map(|item| item.as_ref() as &dyn StdError)
     }
 }
 
-impl ErrorShim {
-    fn from_fail<F: Fail + ?Sized>(failure: &F) -> Self {
+impl<T: StdError + ?Sized> From<&T> for ErrorShim {
+    fn from(input: &T) -> Self {
         ErrorShim {
-            name: failure.name().map(str::to_owned),
-            cause: failure.cause().map(|e| Box::new(ErrorShim::from_fail(e))),
-            debug: format!("{:?}", failure),
-            display: format!("{}", failure),
+            source: input.source().map(|e| Box::new(ErrorShim::from(e))),
+            debug: format!("{:?}", input),
+            display: format!("{}", input),
         }
     }
 }
@@ -65,7 +63,7 @@ impl Kind for Error {
     ) -> Self::DeconstructFuture {
         Box::pin(async move {
             Ok(channel
-                .send(channel.fork(ErrorShim::from_fail(self.as_fail())).await?)
+                .send(channel.fork(ErrorShim::from(&*self)).await?)
                 .await
                 .map_err(WrappedError::Send)?)
         })
