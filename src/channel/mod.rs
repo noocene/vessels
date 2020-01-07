@@ -6,16 +6,14 @@ use crate::{
     Kind,
 };
 
-use core::{
-    fmt::{self, Display, Formatter},
-    marker::Unpin,
-};
-use failure::{Error, Fail};
+use anyhow::Error;
+use core::fmt::{self, Display, Formatter};
 use futures::{Sink, Stream};
 use serde::{
     de::{DeserializeOwned, DeserializeSeed},
     Deserialize, Serialize,
 };
+use thiserror::Error;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, Copy)]
 #[repr(transparent)]
@@ -32,8 +30,8 @@ pub trait Fork: Sync + Send + 'static {
     fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Fallible<K, K::ConstructError>;
 }
 
-#[derive(Debug, Fail)]
-pub struct ChannelError(#[fail(cause)] pub(crate) Error);
+#[derive(Debug, Error)]
+pub struct ChannelError(#[source] pub(crate) Error);
 
 impl Display for ChannelError {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {

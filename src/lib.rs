@@ -19,9 +19,9 @@ pub mod reflect;
 pub mod replicate;
 
 use ::core::any::Any;
+use std::error::Error;
 use downcast_rs::{impl_downcast, Downcast};
 use erased_serde::Serialize as ErasedSerialize;
-use failure::Fail;
 use futures::Future;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -159,7 +159,7 @@ pub trait Kind: Any + Sized + Sync + Send + Unpin + 'static {
     /// from deconstruction.
     type ConstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
     /// The failure condition of constructing a concrete type from communicated data.
-    type ConstructError: Fail;
+    type ConstructError: Error + Sync + Send + 'static;
     /// The concrete future type returned by the construction process.
     type ConstructFuture: Future<Output = ConstructResult<Self>> + Sync + Send + 'static;
 
@@ -174,7 +174,7 @@ pub trait Kind: Any + Sized + Sync + Send + Unpin + 'static {
     /// to deconstruction.
     type DeconstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
     /// The failure condition of constructing a concrete type from communicated data.
-    type DeconstructError: Fail;
+    type DeconstructError: Error + Sync + Send + 'static;
     /// The concrete future type returned by the deconstruction process. This is
     /// used to only to communicate failure of deconstruction and does not return
     /// a value.
@@ -224,7 +224,7 @@ macro_rules! log {
 
 #[cfg(all(feature = "core", target_arch = "wasm32"))]
 use {
-    ::core::pin::Pin,
+    core::pin::Pin,
     futures::task::{Context, Poll},
 };
 

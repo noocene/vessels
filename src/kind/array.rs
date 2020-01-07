@@ -6,11 +6,12 @@ use crate::{
 };
 
 use core::{mem::MaybeUninit, ptr};
-use failure::Fail;
 use futures::{
     future::{ok, try_join_all, Ready},
     FutureExt, SinkExt, StreamExt, TryFutureExt,
 };
+use std::error::Error;
+use thiserror::Error;
 use void::Void;
 
 use super::WrappedError;
@@ -37,11 +38,11 @@ impl<T: Unpin + Sync + Send + 'static> Kind for [T; 0] {
     }
 }
 
-#[derive(Fail, Debug)]
-pub enum ArrayError<T: Fail> {
-    #[fail(display = "{}", _0)]
-    Construct(#[fail(cause)] T),
-    #[fail(display = "expected {} elements in array, got {}", expected, got)]
+#[derive(Error, Debug)]
+pub enum ArrayError<T: Error + 'static> {
+    #[error("`{0}`")]
+    Construct(#[source] T),
+    #[error("expected {expected} elements in array, got {got}")]
     Length { got: usize, expected: usize },
 }
 
