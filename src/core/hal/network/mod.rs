@@ -7,7 +7,6 @@ use crate::{
 };
 
 use anyhow::Error;
-use failure::Fail;
 use futures::{future::ready, lock::Mutex, FutureExt, Sink, StreamExt};
 use std::{net::SocketAddr, sync::Arc};
 use thiserror::Error;
@@ -16,14 +15,14 @@ use url::Url;
 #[object]
 pub trait Peer {}
 
-#[derive(Fail, Debug, Kind)]
+#[derive(Error, Debug, Kind)]
 pub enum ConnectError {
-    #[fail(display = "connection failed: {}", _0)]
-    Connect(#[cause] Error),
-    #[fail(display = "construct failed: {}", _0)]
-    Construct(#[cause] Error),
-    #[fail(display = "underlying transport failed: {}", _0)]
-    Transport(#[cause] Error),
+    #[error("connection failed: `{0}`")]
+    Connect(#[source] Error),
+    #[error("construct failed: `{0}`")]
+    Construct(#[source] Error),
+    #[error("underlying transport failed: `{0}`")]
+    Transport(#[source] Error),
 }
 
 impl FromTransportError for ConnectError {
@@ -32,10 +31,10 @@ impl FromTransportError for ConnectError {
     }
 }
 
-#[derive(Fail, Debug, Kind)]
-#[fail(display = "listening failed: {}", cause)]
+#[derive(Error, Debug, Kind)]
+#[error("listening failed: {cause}")]
 pub struct ListenError {
-    #[fail(cause)]
+    #[source]
     cause: Error,
 }
 
