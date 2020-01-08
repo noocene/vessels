@@ -6,7 +6,7 @@ use vessels::{
     log, OnTo,
 };
 
-use failure::Error;
+use anyhow::Error;
 
 use futures::{stream::iter, StreamExt};
 

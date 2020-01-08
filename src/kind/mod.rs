@@ -1,7 +1,7 @@
 mod array;
 mod collections;
 mod default;
-mod failure_error;
+mod error;
 mod functions;
 mod future;
 mod iterator;
@@ -23,11 +23,13 @@ pub use default::Default;
 pub use iterator::Iterator;
 pub use sink_stream::SinkStream;
 
+use anyhow::Error;
 use core::pin::Pin;
-use failure::{Error, Fail};
 use futures::{
     stream::once, Future as IFuture, FutureExt, Sink as ISink, Stream as IStream, StreamExt,
 };
+use std::error::Error as StdError;
+use thiserror::Error;
 
 use crate::{channel::ChannelError, Kind};
 
@@ -100,20 +102,14 @@ impl<U: FromTransportError, T> Flatten for Stream<Result<T, U>> {
 
 pub trait AsKindMarker {}
 
-#[derive(Fail, Debug)]
-pub enum WrappedError<T: Fail> {
-    #[fail(display = "{}", _0)]
-    Concrete(#[fail(cause)] T),
-    #[fail(display = "got {} items in construct, expected {}", got, expected)]
+#[derive(Error, Debug)]
+pub enum WrappedError<T: StdError + 'static> {
+    #[error("`{0}`")]
+    Concrete(#[from] T),
+    #[error("got {got} items in construct, expected {expected}")]
     Insufficient { got: usize, expected: usize },
-    #[fail(display = "failed to send on underlying channel: {}", _0)]
+    #[error("failed to send on underlying channel: `{0}`")]
     Send(ChannelError),
-}
-
-impl<T: Fail> From<T> for WrappedError<T> {
-    fn from(input: T) -> Self {
-        WrappedError::Concrete(input)
-    }
 }
 
 pub trait AsKind<M: AsKindMarker>: Sized {
