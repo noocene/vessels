@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::{
     channel::IdChannel,
     format::{ApplyDecode, ApplyEncode, Cbor},
-    kind::{Fallible, FromTransportError, Future, Infallible, SinkStream},
+    kind::{Fallible, Future, Infallible, SinkStream, TransportError},
     object,
     replicate::Share,
     Kind, OnTo,
@@ -41,13 +41,7 @@ pub enum CoreError {
     #[error("`handle transfer failed: {0}`")]
     Construct(#[source] Error),
     #[error("`underlying transport failed: {0}`")]
-    Transport(#[source] Error),
-}
-
-impl FromTransportError for CoreError {
-    fn from_transport_error(error: Error) -> Self {
-        CoreError::Transport(error)
-    }
+    Transport(#[from] TransportError),
 }
 
 #[doc(hidden)]

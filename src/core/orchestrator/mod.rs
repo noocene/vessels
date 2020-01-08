@@ -5,7 +5,7 @@ use crate::{
         Constructor, Handle, UnimplementedError,
     },
     format::{ApplyDecode, Cbor},
-    kind::{using, Fallible, FromTransportError, SinkStream},
+    kind::{using, Fallible, SinkStream, TransportError},
     object,
     replicate::{Share, Shared},
     Kind,
@@ -45,12 +45,13 @@ pub(crate) struct LocalModule(pub(crate) Checksum);
 #[derive(Error, Debug, Kind)]
 #[error("compile failed: {cause}")]
 pub struct CompileError {
+    #[source]
     cause: Error,
 }
 
-impl FromTransportError for CompileError {
-    fn from_transport_error(cause: Error) -> Self {
-        CompileError { cause }
+impl From<TransportError> for CompileError {
+    fn from(error: TransportError) -> Self {
+        CompileError { cause: error.into() }
     }
 }
 
@@ -69,18 +70,13 @@ pub struct Orchestrator(Shared<dyn OrchestratorInner>);
 #[derive(Error, Debug, Kind)]
 #[error("instantiate failed: {cause}")]
 pub struct InstantiateError {
+    #[source]
     cause: Error,
 }
 
-impl FromTransportError for InstantiateError {
-    fn from_transport_error(cause: Error) -> Self {
-        InstantiateError { cause }
-    }
-}
-
-impl From<Error> for InstantiateError {
-    fn from(cause: Error) -> Self {
-        InstantiateError { cause }
+impl From<TransportError> for InstantiateError {
+    fn from(error: TransportError) -> Self {
+        InstantiateError { cause: error.into() }
     }
 }
 
