@@ -2,7 +2,6 @@ use super::{ConnectError, ConnectionError, RawClient};
 
 use crate::{core::spawn, kind::Future, kind::SinkStream, SyncSendAssert};
 
-use failure::Fail;
 use futures::{
     channel::{
         mpsc::{unbounded, UnboundedReceiver},
@@ -12,13 +11,14 @@ use futures::{
 };
 use js_sys::Uint8Array;
 use url::Url;
+use thiserror::Error;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{BinaryType, MessageEvent, WebSocket};
 
 pub(crate) struct Client;
 
-#[derive(Fail, Debug)]
-#[fail(display = "the target port is being blocked")]
+#[derive(Error, Debug)]
+#[error("the target port is being blocked")]
 pub struct SecurityError;
 
 impl RawClient for Client {
