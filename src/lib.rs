@@ -229,7 +229,7 @@ macro_rules! log {
 
 #[cfg(all(feature = "core", target_arch = "wasm32"))]
 use {
-    core::pin::Pin,
+    ::core::pin::Pin,
     futures::task::{Context, Poll},
 };
 

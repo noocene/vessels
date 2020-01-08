@@ -3,7 +3,7 @@ use core::{
     any::{Any, TypeId},
     fmt::{self, Display, Formatter},
 };
-use failure::Fail;
+use thiserror::Error;
 
 pub type MethodIndex = u8;
 
@@ -13,52 +13,39 @@ pub struct MethodTypes {
     pub receiver: Receiver,
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum CallError {
+    #[error("invalid type for argument `{0}`")]
     Type(u8),
-    ArgumentCount(#[fail(cause)] ArgumentCountError),
-    OutOfRange(#[fail(cause)] OutOfRangeError),
+    #[error("`{0}`")]
+    ArgumentCount(#[source] ArgumentCountError),
+    #[error("`{0}`")]
+    OutOfRange(#[source] OutOfRangeError),
+    #[error("expected `{0}` receiver")]
     IncorrectReceiver(Receiver),
 }
 
-impl Display for CallError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        use CallError::{ArgumentCount, IncorrectReceiver, OutOfRange, Type};
-
-        write!(
-            f,
-            "{}",
-            match self {
-                Type(position) => format!("invalid type for argument {}", position),
-                OutOfRange(error) => format!("{}", error),
-                ArgumentCount(error) => format!("{}", error),
-                IncorrectReceiver(expected) => format!("expected {} receiver", expected),
-            }
-        )
-    }
-}
-
-#[derive(Debug, Fail)]
-#[fail(display = "method {} out of range", index)]
+#[derive(Debug, Error)]
+#[error("method {index} out of range")]
 pub struct OutOfRangeError {
     pub index: MethodIndex,
 }
 
-#[derive(Debug, Fail)]
-#[fail(display = "got {} arguments, expected {}", got, expected)]
+#[derive(Debug, Error)]
+#[error("got {got} arguments, expected {expected}")]
 pub struct ArgumentCountError {
     pub expected: usize,
     pub got: usize,
 }
 
-#[derive(Debug, Fail)]
-#[fail(display = "no method with name {}", name)]
+#[derive(Debug, Error)]
+#[error("no method with name {name}")]
 pub struct NameError {
     pub name: String,
 }
 
-#[derive(Debug, Fail)]
-#[fail(display = "cannot cast to {:?} in this context", target)]
+#[derive(Debug, Error)]
+#[error("cannot cast to {target:?} in this context")]
 pub struct CastError {
     pub target: TypeId,
 }
