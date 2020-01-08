@@ -17,7 +17,6 @@ default = ["cbor", "json", "bincode"]
 [dependencies]
 futures = { version = "0.3.1", features = ["thread-pool"] }
 serde = { version = "1.0.101", features = ["derive"] }
-failure = "0.1.5"
 erased-serde = "0.3.9"
 serde_json = { version = "1.0.41", optional = true }
 serde_cbor = "0.10.2"

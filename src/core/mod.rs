@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 use anyhow::Error;
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", feature = "core"))]
 use core::any::Any;
 use futures::{lock, SinkExt, StreamExt};
 use lazy_static::lazy_static;
