@@ -10,8 +10,8 @@ use futures::{
     SinkExt, StreamExt,
 };
 use js_sys::Uint8Array;
-use url::Url;
 use thiserror::Error;
+use url::Url;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{BinaryType, MessageEvent, WebSocket};
 

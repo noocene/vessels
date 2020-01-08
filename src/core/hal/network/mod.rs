@@ -2,7 +2,7 @@ use crate::{
     channel::{Context, OnTo, Target},
     core::{spawn, UnimplementedError},
     format::{ApplyDecode, ApplyEncode, Format},
-    kind::{Fallible, FromTransportError, Future, Infallible, SinkStream},
+    kind::{Fallible, Future, Infallible, SinkStream, TransportError},
     object, Kind,
 };
 
@@ -22,13 +22,7 @@ pub enum ConnectError {
     #[error("construct failed: `{0}`")]
     Construct(#[source] Error),
     #[error("underlying transport failed: `{0}`")]
-    Transport(#[source] Error),
-}
-
-impl FromTransportError for ConnectError {
-    fn from_transport_error(error: Error) -> Self {
-        ConnectError::Transport(error)
-    }
+    Transport(#[from] TransportError),
 }
 
 #[derive(Error, Debug, Kind)]
@@ -38,9 +32,11 @@ pub struct ListenError {
     cause: Error,
 }
 
-impl FromTransportError for ListenError {
-    fn from_transport_error(cause: Error) -> Self {
-        ListenError { cause }
+impl From<TransportError> for ListenError {
+    fn from(error: TransportError) -> Self {
+        ListenError {
+            cause: error.into(),
+        }
     }
 }
 
@@ -51,9 +47,9 @@ pub struct ConnectionError {
     cause: Error,
 }
 
-impl FromTransportError for ConnectionError {
-    fn from_transport_error(cause: Error) -> Self {
-        ConnectionError { cause }
+impl From<TransportError> for ConnectionError {
+    fn from(error: TransportError) -> Self {
+        ConnectionError { cause: error.into() }
     }
 }
 
