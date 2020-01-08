@@ -2,7 +2,6 @@ use alloc::sync::Arc;
 use anyhow::Error;
 #[cfg(target_arch = "wasm32")]
 use core::any::Any;
-use failure::Fail;
 use futures::{lock, SinkExt, StreamExt};
 use lazy_static::lazy_static;
 use std::{collections::HashMap, sync::Mutex};
@@ -27,8 +26,8 @@ pub mod orchestrator;
 #[doc(hidden)]
 pub type Constructor<T> = Box<dyn FnOnce(Handle) -> Infallible<T> + Send + Sync>;
 
-#[derive(Fail, Debug, Kind)]
-#[fail(display = "{} is unimplemented on this target", feature)]
+#[derive(Error, Debug, Kind)]
+#[error("{feature} is unimplemented on this target")]
 pub struct UnimplementedError {
     feature: String,
 }

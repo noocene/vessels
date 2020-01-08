@@ -19,11 +19,11 @@ pub mod reflect;
 pub mod replicate;
 
 use ::core::any::Any;
-use std::error::Error;
 use downcast_rs::{impl_downcast, Downcast};
 use erased_serde::Serialize as ErasedSerialize;
 use futures::Future;
 use serde::{de::DeserializeOwned, Serialize};
+use std::error::Error;
 
 /// Generates an implementation of `Kind` for trait objects.
 ///
@@ -159,7 +159,7 @@ pub trait Kind: Any + Sized + Sync + Send + Unpin + 'static {
     /// from deconstruction.
     type ConstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
     /// The failure condition of constructing a concrete type from communicated data.
-    type ConstructError: Error + Sync + Send + 'static;
+    type ConstructError: ErrorBound;
     /// The concrete future type returned by the construction process.
     type ConstructFuture: Future<Output = ConstructResult<Self>> + Sync + Send + 'static;
 
@@ -174,7 +174,7 @@ pub trait Kind: Any + Sized + Sync + Send + Unpin + 'static {
     /// to deconstruction.
     type DeconstructItem: Serialize + DeserializeOwned + Send + Sync + Unpin + 'static;
     /// The failure condition of constructing a concrete type from communicated data.
-    type DeconstructError: Error + Sync + Send + 'static;
+    type DeconstructError: ErrorBound;
     /// The concrete future type returned by the deconstruction process. This is
     /// used to only to communicate failure of deconstruction and does not return
     /// a value.
@@ -194,6 +194,11 @@ pub trait Kind: Any + Sized + Sync + Send + Unpin + 'static {
 /// An erased representation of any serializable type used in communication
 /// by `Kind`.
 pub(crate) trait SerdeAny: erased_serde::Serialize + Downcast + Sync + Send {}
+
+#[doc(hidden)]
+pub trait ErrorBound: Error + Sync + Send + 'static {}
+
+impl<T: Error + Sync + Send + 'static> ErrorBound for T {}
 
 impl_downcast!(SerdeAny);
 

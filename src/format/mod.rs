@@ -23,13 +23,12 @@ use crate::{
     channel::{Context, Shim, Target, Waiter},
     core::spawn,
     kind::{Fallible, SinkStream},
-    Kind,
+    ErrorBound, Kind,
 };
 
 use serde::{de::DeserializeSeed, Serialize};
 
 use core::fmt::{self, Debug, Formatter};
-use std::error::Error;
 
 use thiserror::Error;
 
@@ -45,7 +44,7 @@ pub trait Format {
     /// binary formats and `String` for those of a human-readable nature.
     type Representation;
     /// The failure condition of this format. This may be encountered during deserialization.
-    type Error: Error + Sync + Send + 'static;
+    type Error: ErrorBound;
 
     /// Serializes the provided item.
     fn serialize<T: Serialize>(item: T) -> Self::Representation
@@ -64,7 +63,7 @@ pub trait Format {
 pub trait ApplyEncode<'de>:
     Sized + UniformStreamSink<<Self as Context<'de>>::Item> + Context<'de>
 where
-    <Self as ISink<<Self as Context<'de>>::Item>>::Error: Error + 'static,
+    <Self as ISink<<Self as Context<'de>>::Item>>::Error: ErrorBound,
 {
     fn encode<F: Format + Encode<'de, Self>>(self) -> <F as Encode<'de, Self>>::Output;
 }
@@ -72,7 +71,7 @@ where
 impl<'de, T> ApplyEncode<'de> for T
 where
     T: UniformStreamSink<<Self as Context<'de>>::Item> + Context<'de>,
-    <T as ISink<<Self as Context<'de>>::Item>>::Error: Error + 'static,
+    <T as ISink<<Self as Context<'de>>::Item>>::Error: ErrorBound,
 {
     fn encode<F: Format + Encode<'de, Self>>(self) -> <F as Encode<'de, Self>>::Output {
         <F as Encode<_>>::encode(self)
@@ -86,7 +85,7 @@ pub trait ApplyDecode<'de, K: Kind> {
     where
         Self: UniformStreamSink<F::Representation> + Sync + Send + Sized + 'static,
         F::Representation: Clone + Sync + Send + 'static,
-        <Self as ISink<F::Representation>>::Error: Error + Sync + Send + 'static,
+        <Self as ISink<F::Representation>>::Error: ErrorBound,
         T::Item: Sync + Send + 'static;
 }
 
@@ -97,7 +96,7 @@ impl<'de, U, K: Kind> ApplyDecode<'de, K> for U {
     where
         Self: UniformStreamSink<F::Representation> + Sync + Send + Sized + 'static,
         F::Representation: Clone + Sync + Send,
-        <Self as ISink<F::Representation>>::Error: Error + Sync + Send + 'static,
+        <Self as ISink<F::Representation>>::Error: ErrorBound,
         T::Item: Sync + Send,
     {
         <F as Decode<'de, Self, K>>::decode::<T>(self)
@@ -119,7 +118,7 @@ where
 pub trait Encode<'de, C: UniformStreamSink<<C as Context<'de>>::Item> + Context<'de>>:
     Format + Sized
 where
-    <C as ISink<<C as Context<'de>>::Item>>::Error: Error + 'static,
+    <C as ISink<<C as Context<'de>>::Item>>::Error: ErrorBound,
 {
     type Output: IStream<Item = <Self as Format>::Representation>
         + ISink<Self::Representation, Error = EncodeError<Self, <C as Context<'de>>::Item, C>>;
@@ -135,7 +134,7 @@ impl<
     > Decode<'de, C, K> for T
 where
     Self::Representation: Sync + Send + Clone,
-    <C as ISink<<Self as Format>::Representation>>::Error: Error + Sync + Send + 'static,
+    <C as ISink<<Self as Format>::Representation>>::Error: ErrorBound,
 {
     type Output = Fallible<K, K::ConstructError>;
 
@@ -178,7 +177,7 @@ where
 #[derive(Error)]
 pub enum EncodeError<T: Format, I, S: ISink<I>>
 where
-    S::Error: Error + 'static,
+    S::Error: ErrorBound,
 {
     #[error("`{0}`")]
     Format(#[source] T::Error),
@@ -188,7 +187,7 @@ where
 
 impl<T: Format, I, S: ISink<I>> Debug for EncodeError<T, I, S>
 where
-    S::Error: Error + 'static,
+    S::Error: ErrorBound,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
@@ -204,7 +203,7 @@ where
 
 impl<T: Format, I, S: ISink<I>> EncodeError<T, I, S>
 where
-    S::Error: Error,
+    S::Error: ErrorBound,
 {
     fn from_sink_error(err: S::Error) -> Self {
         EncodeError::Sink(err)
@@ -222,7 +221,7 @@ impl<
 where
     T::Representation: Sync + Send + Clone,
     <C as Context<'de>>::Item: Sync + Send,
-    <C as ISink<<C as Context<'de>>::Item>>::Error: Error + Sync + Send + 'static,
+    <C as ISink<<C as Context<'de>>::Item>>::Error: ErrorBound,
 {
     type Output = SinkStream<
         Self::Representation,
