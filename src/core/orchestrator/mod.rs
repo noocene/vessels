@@ -11,12 +11,13 @@ use crate::{
     Kind,
 };
 
+use anyhow::Error;
 use core::marker::PhantomData;
-use failure::{Error, Fail};
 use futures::SinkExt;
 #[cfg(feature = "core")]
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "core"))]
 mod native;
@@ -41,8 +42,8 @@ impl<T: Kind> Module<T> {
 #[kind(using::Serde)]
 pub(crate) struct LocalModule(pub(crate) Checksum);
 
-#[derive(Fail, Debug, Kind)]
-#[fail(display = "compile failed: {}", cause)]
+#[derive(Error, Debug, Kind)]
+#[error("compile failed: {cause}")]
 pub struct CompileError {
     cause: Error,
 }
@@ -65,8 +66,8 @@ trait OrchestratorInner {
 #[derive(Kind)]
 pub struct Orchestrator(Shared<dyn OrchestratorInner>);
 
-#[derive(Fail, Debug, Kind)]
-#[fail(display = "instantiate failed: {}", cause)]
+#[derive(Error, Debug, Kind)]
+#[error("instantiate failed: {cause}")]
 pub struct InstantiateError {
     cause: Error,
 }

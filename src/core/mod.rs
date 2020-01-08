@@ -1,11 +1,11 @@
 use alloc::sync::Arc;
-#[cfg(any(feature = "core", target_arch = "wasm32"))]
+use anyhow::Error;
+#[cfg(any(target_arch = "wasm32", feature = "core"))]
 use core::any::Any;
-use core::fmt::{self, Display, Formatter};
-use failure::{Error, Fail};
 use futures::{lock, SinkExt, StreamExt};
 use lazy_static::lazy_static;
 use std::{collections::HashMap, sync::Mutex};
+use thiserror::Error;
 
 use crate::{
     channel::IdChannel,
@@ -26,34 +26,22 @@ pub mod orchestrator;
 #[doc(hidden)]
 pub type Constructor<T> = Box<dyn FnOnce(Handle) -> Infallible<T> + Send + Sync>;
 
-#[derive(Fail, Debug, Kind)]
-#[fail(display = "{} is unimplemented on this target", feature)]
+#[derive(Error, Debug, Kind)]
+#[error("{feature} is unimplemented on this target")]
 pub struct UnimplementedError {
     feature: String,
 }
 
-#[derive(Fail, Debug, Kind)]
+#[derive(Error, Debug, Kind)]
 pub enum CoreError {
+    #[error("feature unavailable or unregistered")]
     Unavailable,
-    Unimplemented(#[fail(cause)] UnimplementedError),
-    Construct(#[fail(cause)] Error),
-    Transport(#[fail(cause)] Error),
-}
-
-impl Display for CoreError {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        use CoreError::{Construct, Transport, Unavailable, Unimplemented};
-        write!(
-            formatter,
-            "{}",
-            match self {
-                Unavailable => "this feature is unavailable or unregistered".to_owned(),
-                Unimplemented(feature) => format!("{}", feature),
-                Construct(e) => format!("handle transfer failed: {}", e),
-                Transport(e) => format!("underlying transport failed: {}", e),
-            }
-        )
-    }
+    #[error("`{0}`")]
+    Unimplemented(#[source] UnimplementedError),
+    #[error("`handle transfer failed: {0}`")]
+    Construct(#[source] Error),
+    #[error("`underlying transport failed: {0}`")]
+    Transport(#[source] Error),
 }
 
 impl FromTransportError for CoreError {

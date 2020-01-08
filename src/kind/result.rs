@@ -5,17 +5,18 @@ use crate::{
     ConstructResult, DeconstructResult, Kind,
 };
 
-use failure::Fail;
 use futures::{SinkExt, StreamExt};
+use std::error::Error;
+use thiserror::Error;
 
 use super::WrappedError;
 
-#[derive(Fail, Debug)]
-pub enum ResultError<T: Fail, E: Fail> {
-    #[fail(display = "{}", _0)]
-    Ok(#[fail(cause)] T),
-    #[fail(display = "{}", _0)]
-    Err(#[fail(cause)] E),
+#[derive(Error, Debug)]
+pub enum ResultError<T: Error + 'static, E: Error + 'static> {
+    #[error("`{0}`")]
+    Ok(#[source] T),
+    #[error("`{0}`")]
+    Err(#[source] E),
 }
 
 #[kind]
