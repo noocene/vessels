@@ -12,7 +12,6 @@ use core::{
     marker::PhantomData,
     pin::Pin,
 };
-use failure::Fail;
 use futures::{
     channel::mpsc::{unbounded, SendError, UnboundedReceiver, UnboundedSender},
     future::ok,
