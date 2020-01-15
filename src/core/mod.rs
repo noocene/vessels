@@ -153,10 +153,7 @@ pub struct Core {
 }
 
 impl HandleInner for Core {
-    fn acquire(
-        &self,
-        ty: [u8; 32],
-    ) -> Fallible<SinkStream<Vec<u8>, Error, Vec<u8>>, CoreError> {
+    fn acquire(&self, ty: [u8; 32]) -> Fallible<SinkStream<Vec<u8>, Error, Vec<u8>>, CoreError> {
         if let Some(capability) = self.capabilities.lock().unwrap().get(&ty) {
             capability()
         } else {

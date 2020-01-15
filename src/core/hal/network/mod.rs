@@ -49,7 +49,9 @@ pub struct ConnectionError {
 
 impl From<TransportError> for ConnectionError {
     fn from(error: TransportError) -> Self {
-        ConnectionError { cause: error.into() }
+        ConnectionError {
+            cause: error.into(),
+        }
     }
 }
 
