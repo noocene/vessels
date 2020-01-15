@@ -4,7 +4,7 @@ use crate::{
         hal::crypto::{HashData, Hasher},
         CoreError,
     },
-    kind::{Future, Infallible, Serde},
+    kind::{Fallible, Infallible, Serde},
     replicate::Share,
     Kind,
 };
@@ -86,7 +86,7 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + 'static> Resource<T> {
             acquire: None,
         })
     }
-    pub fn reify(self) -> Future<Result<T, ReifyError<T>>> {
+    pub fn reify(self) -> Fallible<T, ReifyError<T>> {
         Box::pin(async move {
             if let Some(acquire) = self.acquire {
                 Ok(acquire().await.unwrap().0)

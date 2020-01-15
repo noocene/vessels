@@ -25,7 +25,7 @@ impl RawClient for Client {
     fn connect(
         &mut self,
         address: Url,
-    ) -> Future<Result<SinkStream<Vec<u8>, ConnectionError, Vec<u8>>, ConnectError>> {
+    ) -> Fallible<SinkStream<Vec<u8>, ConnectionError, Vec<u8>>, ConnectError> {
         Box::pin(SyncSendAssert(Box::pin(async move {
             let socket = WebSocket::new(&address.into_string())
                 .map_err(|_| ConnectError::Connect(SecurityError.into()))?;

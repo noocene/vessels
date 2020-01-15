@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::{
     channel::IdChannel,
     format::{ApplyDecode, ApplyEncode, Cbor},
-    kind::{Fallible, Future, Infallible, SinkStream, TransportError},
+    kind::{Fallible, Infallible, SinkStream, TransportError},
     object,
     replicate::Share,
     Kind, OnTo,
@@ -124,7 +124,7 @@ lazy_static! {
 pub struct Handle(Box<dyn HandleInner>);
 
 impl Handle {
-    pub fn acquire<K: Kind>(&self) -> Future<Result<K, CoreError>> {
+    pub fn acquire<K: Kind>(&self) -> Fallible<K, CoreError> {
         let channel = self.0.acquire(K::USE_KIND_MACRO_TO_GENERATE_THIS_FIELD);
         Box::pin(async move {
             channel
@@ -143,7 +143,7 @@ pub struct Core {
             HashMap<
                 [u8; 32],
                 Box<
-                    dyn Fn() -> Future<Result<SinkStream<Vec<u8>, Error, Vec<u8>>, CoreError>>
+                    dyn Fn() -> Fallible<SinkStream<Vec<u8>, Error, Vec<u8>>, CoreError>
                         + Sync
                         + Send,
                 >,
@@ -156,7 +156,7 @@ impl HandleInner for Core {
     fn acquire(
         &self,
         ty: [u8; 32],
-    ) -> Future<Result<SinkStream<Vec<u8>, Error, Vec<u8>>, CoreError>> {
+    ) -> Fallible<SinkStream<Vec<u8>, Error, Vec<u8>>, CoreError> {
         if let Some(capability) = self.capabilities.lock().unwrap().get(&ty) {
             capability()
         } else {

@@ -23,7 +23,7 @@ impl RawClient for Client {
     fn connect(
         &mut self,
         address: Url,
-    ) -> Future<Result<SinkStream<Vec<u8>, ConnectionError, Vec<u8>>, ConnectError>> {
+    ) -> Fallible<SinkStream<Vec<u8>, ConnectionError, Vec<u8>>, ConnectError> {
         Box::pin(async move {
             let (out_sender, out_receiver): (_, UnboundedReceiver<Vec<u8>>) = unbounded();
             let out_receiver = Arc::new(Mutex::new(out_receiver));
