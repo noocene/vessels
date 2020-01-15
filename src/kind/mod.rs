@@ -42,9 +42,7 @@ pub struct TransportError {
 
 impl TransportError {
     fn new(cause: Error) -> Self {
-        TransportError {
-            cause
-        }
+        TransportError { cause }
     }
 }
 
@@ -94,13 +92,14 @@ impl<U: From<TransportError>, T> Flatten for Stream<Result<T, U>> {
             async move {
                 let r = fut.await;
                 match r {
-                    Err(e) => Box::pin(once(async move { Err(U::from(TransportError::new(e.into()))) }))
-                        as Stream<Result<T, U>>,
+                    Err(e) => Box::pin(once(
+                        async move { Err(U::from(TransportError::new(e.into()))) },
+                    )) as Stream<Result<T, U>>,
                     Ok(s) => Box::pin(s),
                 }
             }
-                .into_stream()
-                .flatten(),
+            .into_stream()
+            .flatten(),
         )
     }
 }

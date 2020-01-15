@@ -37,7 +37,8 @@ impl RawServer for Server {
                         data_sender.sink_map_err(|e| ConnectionError { cause: e.into() }),
                         receiver,
                     ))
-                    .await;
+                    .await
+                    .unwrap();
                 });
                 move |message| {
                     if let Message::Binary(data) = message {

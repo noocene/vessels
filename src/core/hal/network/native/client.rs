@@ -2,7 +2,7 @@ use super::super::{ConnectError, ConnectionError, RawClient};
 
 use crate::{
     core::spawn,
-    kind::{Future, SinkStream},
+    kind::{Fallible, SinkStream},
 };
 
 use futures::{

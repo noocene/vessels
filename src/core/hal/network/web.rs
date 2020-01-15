@@ -1,6 +1,6 @@
 use super::{ConnectError, ConnectionError, RawClient};
 
-use crate::{core::spawn, kind::Future, kind::SinkStream, SyncSendAssert};
+use crate::{core::spawn, kind::Fallible, kind::SinkStream, SyncSendAssert};
 
 use futures::{
     channel::{

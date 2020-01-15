@@ -51,7 +51,9 @@ pub struct CompileError {
 
 impl From<TransportError> for CompileError {
     fn from(error: TransportError) -> Self {
-        CompileError { cause: error.into() }
+        CompileError {
+            cause: error.into(),
+        }
     }
 }
 
@@ -76,7 +78,9 @@ pub struct InstantiateError {
 
 impl From<TransportError> for InstantiateError {
     fn from(error: TransportError) -> Self {
-        InstantiateError { cause: error.into() }
+        InstantiateError {
+            cause: error.into(),
+        }
     }
 }
 
