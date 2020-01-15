@@ -76,7 +76,7 @@ impl Client {
     >(
         &mut self,
         address: Url,
-    ) -> Future<Result<K, ConnectError>> {
+    ) -> Fallible<K, ConnectError> {
         let connection = self.0.connect(address);
         Box::pin(async move {
             connection
@@ -117,7 +117,7 @@ impl Server {
         &mut self,
         address: SocketAddr,
         handler: Box<dyn FnMut() -> Future<K> + Sync + Send>,
-    ) -> Future<Result<(), ListenError>>
+    ) -> Fallible<(), ListenError>
     where
         T: ApplyEncode<'a>,
         <T as Sink<<T as Context<'a>>::Item>>::Error: std::error::Error + Sync + Send + 'static,
