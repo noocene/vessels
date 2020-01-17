@@ -179,9 +179,9 @@ pub enum EncodeError<T: Format, I, S: ISink<I>>
 where
     S::Error: ErrorBound,
 {
-    #[error("`{0}`")]
+    #[error("{0}")]
     Format(#[source] T::Error),
-    #[error("`{0}`")]
+    #[error("{0}")]
     Sink(#[source] S::Error),
 }
 

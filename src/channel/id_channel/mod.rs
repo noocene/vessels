@@ -86,9 +86,9 @@ impl Display for SinkStage {
 
 #[derive(Debug, Error)]
 pub enum IdChannelError {
-    #[error("send on underlying channel `{1}` in `{0}` stage failed: `{2}`")]
+    #[error("send on underlying channel {1} in {0} stage failed: {2}")]
     Channel(SinkStage, ForkHandle, ChannelError),
-    #[error("underlying channel `{0}` does not exist")]
+    #[error("underlying channel {0} does not exist")]
     InvalidId(ForkHandle),
 }
 

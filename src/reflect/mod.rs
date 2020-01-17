@@ -15,13 +15,13 @@ pub struct MethodTypes {
 
 #[derive(Debug, Error)]
 pub enum CallError {
-    #[error("invalid type for argument `{0}`")]
+    #[error("invalid type for argument {0}")]
     Type(u8),
-    #[error("`{0}`")]
+    #[error("{0}")]
     ArgumentCount(#[source] ArgumentCountError),
-    #[error("`{0}`")]
+    #[error("{0}")]
     OutOfRange(#[source] OutOfRangeError),
-    #[error("expected `{0}` receiver")]
+    #[error("expected {0} receiver")]
     IncorrectReceiver(Receiver),
 }
 

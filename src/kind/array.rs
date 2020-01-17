@@ -40,7 +40,7 @@ impl<T: Unpin + Sync + Send + 'static> Kind for [T; 0] {
 
 #[derive(Error, Debug)]
 pub enum ArrayError<T: Error + 'static> {
-    #[error("`{0}`")]
+    #[error("{0}")]
     Construct(#[source] T),
     #[error("expected {expected} elements in array, got {got}")]
     Length { got: usize, expected: usize },
