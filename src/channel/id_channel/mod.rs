@@ -121,7 +121,7 @@ impl ISink<Item> for IdChannel {
             .iter_mut()
             .map(|(k, item)| (k, item.as_mut().poll_ready(cx)))
             .find(|(_, poll)| match poll {
-                Poll::Ready(_) => false,
+                Poll::Ready(Ok(())) => false,
                 _ => true,
             })
         {
@@ -139,7 +139,7 @@ impl ISink<Item> for IdChannel {
             .iter_mut()
             .map(|(k, item)| (k, item.as_mut().poll_ready(cx)))
             .find(|(_, poll)| match poll {
-                Poll::Ready(_) => false,
+                Poll::Ready(Ok(())) => false,
                 _ => true,
             })
         {
@@ -157,7 +157,7 @@ impl ISink<Item> for IdChannel {
             .iter_mut()
             .map(|(k, item)| (k, item.as_mut().poll_ready(cx)))
             .find(|(_, poll)| match poll {
-                Poll::Ready(_) => false,
+                Poll::Ready(Ok(())) => false,
                 _ => true,
             })
         {
