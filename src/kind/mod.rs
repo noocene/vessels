@@ -108,11 +108,11 @@ pub trait AsKindMarker {}
 
 #[derive(Error, Debug)]
 pub enum WrappedError<T: StdError + 'static> {
-    #[error("`{0}`")]
+    #[error("{0}")]
     Concrete(#[from] T),
     #[error("got {got} items in construct, expected {expected}")]
     Insufficient { got: usize, expected: usize },
-    #[error("failed to send on underlying channel: `{0}`")]
+    #[error("failed to send on underlying channel: {0}")]
     Send(ChannelError),
 }
 

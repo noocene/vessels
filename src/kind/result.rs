@@ -13,9 +13,9 @@ use super::WrappedError;
 
 #[derive(Error, Debug)]
 pub enum ResultError<T: Error + 'static, E: Error + 'static> {
-    #[error("`{0}`")]
+    #[error("{0}")]
     Ok(#[source] T),
-    #[error("`{0}`")]
+    #[error("{0}")]
     Err(#[source] E),
 }
 

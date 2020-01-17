@@ -17,11 +17,11 @@ pub trait Peer {}
 
 #[derive(Error, Debug, Kind)]
 pub enum ConnectError {
-    #[error("connection failed: `{0}`")]
+    #[error("connection failed: {0}")]
     Connect(#[source] Error),
-    #[error("construct failed: `{0}`")]
+    #[error("construct failed: {0}")]
     Construct(#[source] Error),
-    #[error("underlying transport failed: `{0}`")]
+    #[error("underlying transport failed: {0}")]
     Transport(#[from] TransportError),
 }
 
