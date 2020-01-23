@@ -154,11 +154,14 @@ impl ISink<Item> for IdChannel {
         let mut in_channels = self.in_channels.lock().unwrap();
         for key in self.set_waker.ready.keys() {
             if let Some(channel) = in_channels.get_mut(&key) {
-                let _ = channel
+                if let Poll::Pending = channel
                     .0
                     .as_mut()
                     .poll_ready(&mut FContext::from_waker(&channel.1.ready))
-                    .map_err(move |e| IdChannelError::Channel(SinkStage::Ready, key, e))?;
+                    .map_err(move |e| IdChannelError::Channel(SinkStage::Ready, key, e))?
+                {
+                    return Poll::Pending;
+                }
             }
         }
         Poll::Ready(Ok(()))
@@ -168,11 +171,14 @@ impl ISink<Item> for IdChannel {
         let mut in_channels = self.in_channels.lock().unwrap();
         for key in self.set_waker.flush.keys() {
             if let Some(channel) = in_channels.get_mut(&key) {
-                let _ = channel
+                if let Poll::Pending = channel
                     .0
                     .as_mut()
                     .poll_ready(&mut FContext::from_waker(&channel.1.flush))
-                    .map_err(move |e| IdChannelError::Channel(SinkStage::Flush, key, e))?;
+                    .map_err(move |e| IdChannelError::Channel(SinkStage::Flush, key, e))?
+                {
+                    return Poll::Pending;
+                }
             }
         }
         Poll::Ready(Ok(()))
@@ -182,11 +188,14 @@ impl ISink<Item> for IdChannel {
         let mut in_channels = self.in_channels.lock().unwrap();
         for key in self.set_waker.close.keys() {
             if let Some(channel) = in_channels.get_mut(&key) {
-                let _ = channel
+                if let Poll::Pending = channel
                     .0
                     .as_mut()
                     .poll_ready(&mut FContext::from_waker(&channel.1.close))
-                    .map_err(move |e| IdChannelError::Channel(SinkStage::Close, key, e))?;
+                    .map_err(move |e| IdChannelError::Channel(SinkStage::Close, key, e))?
+                {
+                    return Poll::Pending;
+                }
             }
         }
         Poll::Ready(Ok(()))
