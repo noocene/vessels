@@ -38,7 +38,7 @@ impl RawClient for Client {
             let (mut data_sender, data_receiver) = unbounded();
             let on_data = Closure::wrap(Box::new(move |e: MessageEvent| {
                 data_sender
-                    .start_send(Uint8Array::new(&e.data()).to_vec())
+                    .unbounded_send(Uint8Array::new(&e.data()).to_vec())
                     .unwrap();
             }) as Box<dyn FnMut(_)>);
             socket.set_onmessage(Some(on_data.as_ref().unchecked_ref()));
