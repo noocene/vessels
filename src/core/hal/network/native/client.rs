@@ -42,7 +42,7 @@ impl RawClient for Client {
                     });
                     move |message| {
                         if let Message::Binary(data) = message {
-                            data_sender.clone().start_send(data).unwrap();
+                            data_sender.unbounded_send(data).unwrap();
                         }
                         Ok(())
                     }

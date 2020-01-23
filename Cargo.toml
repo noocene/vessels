@@ -28,6 +28,8 @@ weak-table = "0.2.3"
 url = "2.1.0"
 thiserror = "1.0.9"
 anyhow = "1.0.26"
+setwaker = { git = "https://github.com/noocene/setwaker" }
+parking_lot = "0.10.0"
 
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen = { version = "0.2.54", optional = true }

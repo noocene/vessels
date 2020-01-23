@@ -42,7 +42,7 @@ impl RawServer for Server {
                 });
                 move |message| {
                     if let Message::Binary(data) = message {
-                        sender.clone().start_send(data).unwrap();
+                        sender.unbounded_send(data).unwrap();
                     }
                     Ok(())
                 }
