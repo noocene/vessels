@@ -136,11 +136,15 @@ impl ISink<Item> for IdChannel {
         match self.in_channels.lock().unwrap().get_mut(&item.0) {
             Some(channel) => {
                 let (id, data) = (item.0, item.1);
-                channel
+                let r = channel
                     .0
                     .as_mut()
                     .start_send(data)
-                    .map_err(move |e| IdChannelError::Channel(SinkStage::Send, id, e))
+                    .map_err(|e| IdChannelError::Channel(SinkStage::Send, id.clone(), e));
+                if r.is_ok() {
+                    self.set_waker.flush.wake(&id);
+                }
+                r
             }
             None => Err(IdChannelError::InvalidId(item.0)),
         }
