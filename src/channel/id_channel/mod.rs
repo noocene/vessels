@@ -11,6 +11,7 @@ use core::{
     fmt::{self, Display, Formatter},
     marker::PhantomData,
     pin::Pin,
+    task::Waker,
 };
 use futures::{
     channel::mpsc::{unbounded, SendError, UnboundedReceiver, UnboundedSender},
@@ -18,7 +19,9 @@ use futures::{
     task::{Context as FContext, Poll},
     Future as IFuture, FutureExt, Sink as ISink, SinkExt, Stream, StreamExt, TryFutureExt,
 };
+use parking_lot::RawMutex;
 use serde::{de::DeserializeOwned, Serialize};
+use setwaker::SetWaker;
 use std::{collections::HashMap, sync::Mutex};
 use thiserror::Error;
 
@@ -31,20 +34,48 @@ use crate::{
 
 use super::{ChannelError, Shim as IShim};
 
+#[derive(Clone)]
+struct SinkStages<T> {
+    ready: T,
+    flush: T,
+    close: T,
+}
+
+impl<T> SinkStages<T> {
+    fn new(cons: impl Fn() -> T) -> Self {
+        SinkStages {
+            ready: cons(),
+            flush: cons(),
+            close: cons(),
+        }
+    }
+    fn apply<U>(&self, f: impl Fn(&T) -> U) -> SinkStages<U> {
+        SinkStages {
+            ready: f(&self.ready),
+            flush: f(&self.flush),
+            close: f(&self.close),
+        }
+    }
+}
+
 pub struct IdChannel {
     out_channel: (
         Pin<Box<UnboundedReceiver<Item>>>,
         Pin<Box<UnboundedSender<Item>>>,
     ),
+    set_waker: SinkStages<SetWaker<RawMutex, ForkHandle>>,
     context: Context,
-    in_channels: Arc<Mutex<HashMap<ForkHandle, Sink<Box<dyn SerdeAny>, ChannelError>>>>,
+    in_channels:
+        Arc<Mutex<HashMap<ForkHandle, (Sink<Box<dyn SerdeAny>, ChannelError>, SinkStages<Waker>)>>>,
 }
 
 #[derive(Clone)]
 struct IdChannelHandle {
     out_channel: Pin<Box<UnboundedSender<Item>>>,
     context: Context,
-    in_channels: Arc<Mutex<HashMap<ForkHandle, Sink<Box<dyn SerdeAny>, ChannelError>>>>,
+    set_waker: SinkStages<SetWaker<RawMutex, ForkHandle>>,
+    in_channels:
+        Arc<Mutex<HashMap<ForkHandle, (Sink<Box<dyn SerdeAny>, ChannelError>, SinkStages<Waker>)>>>,
 }
 
 impl IdChannelHandle {
@@ -106,6 +137,7 @@ impl ISink<Item> for IdChannel {
             Some(channel) => {
                 let (id, data) = (item.0, item.1);
                 channel
+                    .0
                     .as_mut()
                     .start_send(data)
                     .map_err(move |e| IdChannelError::Channel(SinkStage::Send, id, e))
@@ -114,58 +146,52 @@ impl ISink<Item> for IdChannel {
         }
     }
     fn poll_ready(self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
-        if let Some(result) = self
-            .in_channels
-            .lock()
-            .unwrap()
-            .iter_mut()
-            .map(|(k, item)| (k, item.as_mut().poll_ready(cx)))
-            .find(|(_, poll)| match poll {
-                Poll::Ready(Ok(())) => false,
-                _ => true,
-            })
-        {
-            let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(SinkStage::Ready, *id, e))
-        } else {
-            Poll::Ready(Ok(()))
+        self.set_waker.ready.register(cx.waker());
+        let mut in_channels = self.in_channels.lock().unwrap();
+        for key in self.set_waker.ready.keys() {
+            let channel = in_channels.get_mut(&key).unwrap();
+            for key in self.set_waker.flush.keys() {
+                if let Some(channel) = in_channels.get_mut(&key) {
+                    let _ = channel
+                        .0
+                        .as_mut()
+                        .poll_ready(&mut FContext::from_waker(&channel.1.ready))
+                        .map_err(move |e| IdChannelError::Channel(SinkStage::Ready, key, e))?;
+                }
+            }
         }
+        Poll::Ready(Ok(()))
     }
     fn poll_flush(self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
-        if let Some(result) = self
-            .in_channels
-            .lock()
-            .unwrap()
-            .iter_mut()
-            .map(|(k, item)| (k, item.as_mut().poll_ready(cx)))
-            .find(|(_, poll)| match poll {
-                Poll::Ready(Ok(())) => false,
-                _ => true,
-            })
-        {
-            let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(SinkStage::Flush, *id, e))
-        } else {
-            Poll::Ready(Ok(()))
+        self.set_waker.flush.register(cx.waker());
+        let mut in_channels = self.in_channels.lock().unwrap();
+        for key in self.set_waker.flush.keys() {
+            if let Some(channel) = in_channels.get_mut(&key) {
+                let _ = channel
+                    .0
+                    .as_mut()
+                    .poll_ready(&mut FContext::from_waker(&channel.1.flush))
+                    .map_err(move |e| IdChannelError::Channel(SinkStage::Flush, key, e))?;
+            }
         }
+        Poll::Ready(Ok(()))
     }
     fn poll_close(self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
-        if let Some(result) = self
-            .in_channels
-            .lock()
-            .unwrap()
-            .iter_mut()
-            .map(|(k, item)| (k, item.as_mut().poll_ready(cx)))
-            .find(|(_, poll)| match poll {
-                Poll::Ready(Ok(())) => false,
-                _ => true,
-            })
-        {
-            let (id, result) = result;
-            result.map_err(move |e| IdChannelError::Channel(SinkStage::Close, *id, e))
-        } else {
-            Poll::Ready(Ok(()))
+        self.set_waker.close.register(cx.waker());
+        let mut in_channels = self.in_channels.lock().unwrap();
+        for key in self.set_waker.close.keys() {
+            let channel = in_channels.get_mut(&key).unwrap();
+            for key in self.set_waker.flush.keys() {
+                if let Some(channel) = in_channels.get_mut(&key) {
+                    let _ = channel
+                        .0
+                        .as_mut()
+                        .poll_ready(&mut FContext::from_waker(&channel.1.close))
+                        .map_err(move |e| IdChannelError::Channel(SinkStage::Close, key, e))?;
+                }
+            }
         }
+        Poll::Ready(Ok(()))
     }
 }
 
@@ -208,6 +234,7 @@ impl<'a, K: Kind> IShim<'a, IdChannel, K> for Shim<K> {
         let channel = IdChannel {
             out_channel: (Box::pin(receiver), Box::pin(sender)),
             context: self.context,
+            set_waker: SinkStages::new(|| SetWaker::new()),
             in_channels: Arc::new(Mutex::new(HashMap::new())),
         };
         let fork = channel.get_fork::<K>(ForkHandle(0));
@@ -236,6 +263,7 @@ impl IdChannelHandle {
     fn fork<K: Kind>(&self, kind: K) -> Fallible<ForkHandle, K::DeconstructError> {
         REGISTRY.add_deconstruct::<K>();
         let id = self.context.create::<K>();
+        let waker = self.set_waker.apply(|waker| waker.with_key(id.clone()));
         let context = self.context.clone();
         let out_channel = self.out_channel.clone();
         let in_channels = self.in_channels.clone();
@@ -251,15 +279,18 @@ impl IdChannelHandle {
                 let mut in_channels = in_channels.lock().unwrap();
                 in_channels.insert(
                     id,
-                    Box::pin(
-                        sender
-                            .with(|item: Box<dyn SerdeAny>| {
-                                ok(*(item
-                                    .downcast::<K::DeconstructItem>()
-                                    .map_err(|e| panic!(e))
-                                    .unwrap()))
-                            })
-                            .sink_map_err(|e: SendError| ChannelError(e.into())),
+                    (
+                        Box::pin(
+                            sender
+                                .with(|item: Box<dyn SerdeAny>| {
+                                    ok(*(item
+                                        .downcast::<K::DeconstructItem>()
+                                        .map_err(|e| panic!(e))
+                                        .unwrap()))
+                                })
+                                .sink_map_err(|e: SendError| ChannelError(e.into())),
+                        ),
+                        waker,
                     ),
                 );
                 Ok(id)
@@ -280,8 +311,12 @@ impl IdChannelHandle {
             }))
         });
         self.in_channels.lock().unwrap().insert(
-            fork_ref,
-            Box::pin(isender.sink_map_err(|e: SendError| ChannelError(e.into()))),
+            fork_ref.clone(),
+            (
+                Box::pin(isender.sink_map_err(|e: SendError| ChannelError(e.into()))),
+                self.set_waker
+                    .apply(|waker| waker.with_key(fork_ref.clone())),
+            ),
         );
         let ct = self.context.clone();
         spawn(
@@ -308,6 +343,7 @@ impl IdChannel {
             out_channel: self.out_channel.1.clone(),
             context: self.context.clone(),
             in_channels: self.in_channels.clone(),
+            set_waker: self.set_waker.clone(),
         }
     }
     fn get_fork<K: Kind>(&self, fork_ref: ForkHandle) -> Fallible<K, K::ConstructError> {
@@ -425,24 +461,29 @@ impl<
             REGISTRY.add_deconstruct::<K>();
             let context = Context::new();
             let handle = context.create::<K>();
+            let set_waker = SinkStages::new(|| SetWaker::new());
             in_channels.insert(
-                handle,
-                Box::pin(
-                    sender
-                        .with(|item: Box<dyn SerdeAny>| {
-                            ok(*(item
-                                .downcast::<K::DeconstructItem>()
-                                .map_err(|_| panic!())
-                                .unwrap()))
-                        })
-                        .sink_map_err(|e: SendError| ChannelError(e.into())),
-                ) as Sink<Box<dyn SerdeAny>, ChannelError>,
+                handle.clone(),
+                (
+                    Box::pin(
+                        sender
+                            .with(|item: Box<dyn SerdeAny>| {
+                                ok(*(item
+                                    .downcast::<K::DeconstructItem>()
+                                    .map_err(|_| panic!())
+                                    .unwrap()))
+                            })
+                            .sink_map_err(|e: SendError| ChannelError(e.into())),
+                    ) as Sink<Box<dyn SerdeAny>, ChannelError>,
+                    set_waker.apply(|waker| waker.with_key(handle.clone())),
+                ),
             );
             let ct = context.clone();
             let (csender, creceiver) = unbounded();
             let channel = IdChannel {
                 out_channel: (Box::pin(creceiver), Box::pin(csender.clone())),
                 context,
+                set_waker,
                 in_channels: Arc::new(Mutex::new(in_channels)),
             };
             spawn(
