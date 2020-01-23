@@ -152,6 +152,7 @@ impl ISink<Item> for IdChannel {
     fn poll_ready(self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
         self.set_waker.ready.register(cx.waker());
         let mut in_channels = self.in_channels.lock().unwrap();
+        let mut pending = false;
         for key in self.set_waker.ready.keys() {
             if let Some(channel) = in_channels.get_mut(&key) {
                 if let Poll::Pending = channel
@@ -160,15 +161,20 @@ impl ISink<Item> for IdChannel {
                     .poll_ready(&mut FContext::from_waker(&channel.1.ready))
                     .map_err(move |e| IdChannelError::Channel(SinkStage::Ready, key, e))?
                 {
-                    return Poll::Pending;
+                    pending = true;
                 }
             }
         }
-        Poll::Ready(Ok(()))
+        if pending {
+            Poll::Pending
+        } else {
+            Poll::Ready(Ok(()))
+        }
     }
     fn poll_flush(self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
         self.set_waker.flush.register(cx.waker());
         let mut in_channels = self.in_channels.lock().unwrap();
+        let mut pending = false;
         for key in self.set_waker.flush.keys() {
             if let Some(channel) = in_channels.get_mut(&key) {
                 if let Poll::Pending = channel
@@ -177,15 +183,20 @@ impl ISink<Item> for IdChannel {
                     .poll_ready(&mut FContext::from_waker(&channel.1.flush))
                     .map_err(move |e| IdChannelError::Channel(SinkStage::Flush, key, e))?
                 {
-                    return Poll::Pending;
+                    pending = true;
                 }
             }
         }
-        Poll::Ready(Ok(()))
+        if pending {
+            Poll::Pending
+        } else {
+            Poll::Ready(Ok(()))
+        }
     }
     fn poll_close(self: Pin<&mut Self>, cx: &mut FContext) -> Poll<Result<(), Self::Error>> {
         self.set_waker.close.register(cx.waker());
         let mut in_channels = self.in_channels.lock().unwrap();
+        let mut pending = false;
         for key in self.set_waker.close.keys() {
             if let Some(channel) = in_channels.get_mut(&key) {
                 if let Poll::Pending = channel
@@ -194,11 +205,15 @@ impl ISink<Item> for IdChannel {
                     .poll_ready(&mut FContext::from_waker(&channel.1.close))
                     .map_err(move |e| IdChannelError::Channel(SinkStage::Close, key, e))?
                 {
-                    return Poll::Pending;
+                    pending = true;
                 }
             }
         }
-        Poll::Ready(Ok(()))
+        if pending {
+            Poll::Pending
+        } else {
+            Poll::Ready(Ok(()))
+        }
     }
 }
 
