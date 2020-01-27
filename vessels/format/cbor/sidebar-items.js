@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Cbor","A format implementing the Compact Binary Object Representation."]]});

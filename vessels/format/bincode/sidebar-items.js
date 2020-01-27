@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Bincode","A format implementing `bincode`."]]});

@@ -1,0 +1,1 @@
+initSidebarItems({"mod":[["id_channel",""]],"struct":[["ChannelError",""],["ForkHandle",""]],"trait":[["Channel",""],["Context",""],["Fork",""],["OnTo",""],["Shim",""],["Target",""],["Waiter",""]]});
