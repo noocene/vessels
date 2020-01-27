@@ -12,6 +12,8 @@ pub mod bincode;
 #[doc(inline)]
 pub use bincode::Bincode;
 
+use predicated_ordered::BufferedPredicatedExt;
+
 use futures::{
     channel::mpsc::{unbounded, UnboundedReceiver},
     future::ok,
@@ -144,6 +146,7 @@ where
     {
         let shim = U::new_shim();
         let context = shim.context();
+        let ctx = context.clone();
         let (sink, stream) = input.split();
         Box::pin(
             shim.complete(SinkStream::new(
@@ -168,7 +171,7 @@ where
                             })
                             .unwrap_or_else(|e| panic!(format!("{:?}", e.0)))
                     })
-                    .buffer_unordered(core::usize::MAX),
+                    .buffered_predicated(core::usize::MAX, move |i| ctx.predicate(i)),
             )),
         )
     }
@@ -234,6 +237,7 @@ where
         let (sink, stream) = input.split();
         let (sender, receiver): (_, UnboundedReceiver<<Self as Format>::Representation>) =
             unbounded();
+        let predicate_ctx = ctx.clone();
         let receiver = receiver
             .map(move |item: <Self as Format>::Representation| {
                 let ct = ctx.clone();
@@ -251,7 +255,9 @@ where
                     panic!(format!("{:?}", e))
                 })
             })
-            .buffer_unordered(core::usize::MAX);
+            .buffered_predicated(core::usize::MAX, move |i| {
+                predicate_ctx.predicate(i.as_ref().unwrap_or_else(|_| panic!()))
+            });
         spawn(
             receiver
                 .forward(sink.sink_map_err(|e| panic!(format!("{}", e))))

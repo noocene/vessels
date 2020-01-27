@@ -1,7 +1,7 @@
 use alloc::sync::{Arc, Weak};
 use core::{any::TypeId, pin::Pin};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Mutex, RwLock},
 };
 
@@ -17,6 +17,7 @@ use futures::{
 struct ContextState {
     channel_types: HashMap<ForkHandle, TypeId>,
     unused_indices: Vec<ForkHandle>,
+    failed: HashSet<ForkHandle>,
     next_index: ForkHandle,
 }
 
@@ -74,9 +75,19 @@ impl Context {
         }
     }
 
+    pub(crate) fn failed(&self) -> bool {
+        self.state.read().unwrap().failed.len() != 0
+    }
+
     pub(crate) fn get(&self, id: ForkHandle) -> Option<TypeId> {
-        let state = self.state.read().unwrap();
-        state.channel_types.get(&id).cloned()
+        let mut state = self.state.write().unwrap();
+        let ty = state.channel_types.get(&id).cloned();
+        if ty.is_none() {
+            state.failed.insert(id);
+        } else {
+            state.failed.remove(&id);
+        }
+        ty
     }
 
     pub(crate) fn new() -> Self {
@@ -84,6 +95,7 @@ impl Context {
             state: Arc::new(RwLock::new(ContextState {
                 channel_types: HashMap::new(),
                 next_index: ForkHandle(0),
+                failed: HashSet::new(),
                 unused_indices: vec![],
             })),
             tasks: Arc::new(Mutex::new(HashMap::new())),
@@ -94,6 +106,7 @@ impl Context {
         Context {
             state: Arc::new(RwLock::new(ContextState {
                 channel_types: HashMap::new(),
+                failed: HashSet::new(),
                 next_index: ForkHandle(1),
                 unused_indices: vec![],
             })),

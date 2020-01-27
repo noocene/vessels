@@ -29,6 +29,7 @@ url = "2.1.0"
 thiserror = "1.0.9"
 anyhow = "1.0.26"
 setwaker = { git = "https://github.com/noocene/setwaker" }
+predicated_ordered = { git = "https://github.com/noocene/predicated-ordered" }
 parking_lot = "0.10.0"
 
 [target.wasm32-unknown-unknown.dependencies]

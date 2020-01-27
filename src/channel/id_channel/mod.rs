@@ -218,8 +218,13 @@ impl ISink<Item> for IdChannel {
 }
 
 impl Waiter for Context {
+    type Item = Item;
+
     fn wait_for(&self, data: String) -> Future<()> {
         Box::pin(self.wait_for(ForkHandle(data.parse().unwrap())))
+    }
+    fn predicate(&self, item: &Self::Item) -> bool {
+        self.failed()
     }
 }
 

@@ -72,12 +72,20 @@ pub trait Target<'a, K: Kind>: Context<'a> + Sized + Send + Sync {
 }
 
 pub trait Waiter {
+    type Item;
+
     fn wait_for(&self, data: String) -> Future<()>;
+    fn predicate(&self, item: &Self::Item) -> bool;
 }
 
 pub trait Context<'de> {
     type Item: Serialize + Sync + Send + 'static;
-    type Target: Waiter + DeserializeSeed<'de, Value = Self::Item> + Clone + Sync + Send + 'static;
+    type Target: Waiter<Item = Self::Item>
+        + DeserializeSeed<'de, Value = Self::Item>
+        + Clone
+        + Sync
+        + Send
+        + 'static;
 
     fn context(&self) -> Self::Target;
 }
