@@ -1,57 +1,11 @@
 [package]
-name = "vessels"
+name = "vessels_core"
 version = "0.1.0"
 authors = ["Izzy Swart <zenerboson@gmail.com>"]
 edition = "2018"
 
-[workspace]
-members = [".", "./derive", "examples/orchestrator", "examples/test_vessel"]
-
-[features]
-cbor = []
-json = ["serde_json"]
-bincode = ["serde_bincode"]
-core = ["wasm-bindgen", "web-sys", "wasmer-runtime", "derive/core", "js-sys", "wasm-bindgen-futures", "ring", "base64", "ws", "wasmer-runtime-core"]
-default = ["cbor", "json", "bincode"]
-
 [dependencies]
-futures = { version = "0.3.1", features = ["thread-pool"] }
-serde = { version = "1.0.101", features = ["derive"] }
-erased-serde = "0.3.9"
-serde_json = { version = "1.0.41", optional = true }
-serde_cbor = "0.10.2"
-serde_bincode = {version = "1.2.0", optional = true, package = "bincode" }
-lazy_static = "1.4.0"
+futures = "0.3.1"
 void = "1.0.2"
-downcast-rs = "1.1.1"
-weak-table = "0.2.3"
-url = "2.1.0"
-thiserror = "1.0.9"
+thiserror = "1.0.10"
 anyhow = "1.0.26"
-setwaker = { git = "https://github.com/noocene/setwaker" }
-predicated_ordered = { git = "https://github.com/noocene/predicated-ordered" }
-parking_lot = "0.10.0"
-
-[target.wasm32-unknown-unknown.dependencies]
-wasm-bindgen = { version = "0.2.54", optional = true }
-web-sys = { version = "0.3.30", optional = true, features = [
-    "console", 
-    "Window", 
-    "Crypto",
-    "SubtleCrypto",
-    "WebSocket",
-    "MessageEvent",
-    "BinaryType"
-]}
-js-sys = { version = "0.3.30", optional = true }
-wasm-bindgen-futures = { version = "0.4.4", optional = true }
-base64 = {version = "0.11.0", optional = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-wasmer-runtime = { version = "0.11.0", optional = true }
-wasmer-runtime-core = { version = "0.11.0", optional = true }
-ring = { version = "0.16.9", optional = true }
-ws = { version = "0.9.1", optional = true }
-
-[dependencies.derive]
-path = "./derive"
