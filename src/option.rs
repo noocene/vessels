@@ -25,7 +25,7 @@ pub enum Coalesce<C: Channels<<C as PContext>::Handle, Void> + Pass<T>, T: Proto
 }
 
 pub enum Unravel<C: Pass<T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<C>> {
-    Spawn(C::Unravel, <C as Spawn<T>>::Output),
+    Spawn(Option<C::Unravel>, <C as Spawn<T>>::Output),
     Send(Forward<Once<Ready<Result<C::Handle, C::SinkError>>>, C::Unravel>),
 }
 
@@ -38,12 +38,10 @@ where
     }
 }
 
-impl<C: Pass<T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<C>> Unravel<C, T>
-where
-    C::Unravel: Clone,
-{
+impl<C: Pass<T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<C>> Unravel<C, T> {
     fn new(mut channel: C::Unravel, item: T) -> Self {
-        Unravel::Spawn(channel.clone(), channel.spawn(item))
+        let spawn = channel.spawn(item);
+        Unravel::Spawn(Some(channel), spawn)
     }
 }
 
@@ -89,7 +87,7 @@ impl<C: Channels<<C as PContext>::Handle, Void> + Pass<T>, T: Unpin + Protocol<C
 where
     <C as PContext>::Handle: Unpin,
     <C as Spawn<T>>::Output: Unpin,
-    C::Unravel: Clone + Unpin,
+    C::Unravel: Unpin,
 {
     type Output = Result<
         (),
@@ -113,7 +111,9 @@ where
                         Err(e) => return Poll::Ready(Err(Error::Unravel(e))),
                     };
                     let replacement =
-                        Unravel::Send(once(ready(Ok(handle))).forward(channel.clone()));
+                        Unravel::Send(once(ready(Ok(handle))).forward(channel.take().expect(
+                            "violated invariant in Protocol for Option: no channel in Spawn stage",
+                        )));
                     replace(&mut *self, replacement);
                 }
                 Unravel::Send(send) => {
@@ -132,7 +132,7 @@ where
     <C as Join<T>>::Output: Unpin,
     <C as Spawn<T>>::Output: Unpin,
     <C as Channels<<C as PContext>::Handle, Void>>::Coalesce: Unpin,
-    <C as Channels<<C as PContext>::Handle, Void>>::Unravel: Clone + Unpin,
+    <C as Channels<<C as PContext>::Handle, Void>>::Unravel: Unpin,
 {
     type Unravel = C::Handle;
     type UnravelFuture =
