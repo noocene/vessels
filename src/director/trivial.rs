@@ -63,7 +63,7 @@ impl Channels<Infallible, Infallible> for Context {
 
 pub struct Trivial;
 
-impl<P: Protocol<Context, Unravel = Infallible, Coalesce = Infallible>, T, U> Director<P, T, U>
+impl<P: Protocol<Context, Unravel = Infallible, Coalesce = Infallible>, T> Director<P, T>
     for Trivial
 {
     type Context = Context;
@@ -81,7 +81,7 @@ impl<P: Protocol<Context, Unravel = Infallible, Coalesce = Infallible>, T, U> Di
         protocol.unravel(Empty(Context)).map_err(Protocol)
     }
 
-    fn coalesce(self, _: U) -> Self::Coalesce {
+    fn coalesce(self, _: T) -> Self::Coalesce {
         use DirectorError::Protocol;
         P::coalesce(Empty(Context)).map_err(Protocol)
     }
