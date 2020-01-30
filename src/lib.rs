@@ -37,8 +37,8 @@ pub trait Pass<'a, P: Protocol<'a, Self>>: Spawn<'a, P> + Join<'a, P> {}
 
 impl<'a, P: Protocol<'a, T>, T: Spawn<'a, P> + Join<'a, P>> Pass<'a, P> for T {}
 
-pub trait Channel<T, U, E, S>:
-    Stream<Item = T> + Sink<U, Error = E> + DerefMut<Target = S>
+pub trait Channel<T, U, S: Context>:
+    Stream<Item = T> + Sink<U, Error = S::SinkError> + DerefMut<Target = S>
 {
 }
 
@@ -48,8 +48,8 @@ pub trait Context: Sized {
 }
 
 pub trait Transport<Unravel, Coalesce>: Context + Sized {
-    type Unravel: Channel<Coalesce, Unravel, Self::SinkError, Self>;
-    type Coalesce: Channel<Unravel, Coalesce, Self::SinkError, Self>;
+    type Unravel: Channel<Coalesce, Unravel, Self>;
+    type Coalesce: Channel<Unravel, Coalesce, Self>;
 }
 
 pub trait Protocol<'a, C: Context>: Sized {
