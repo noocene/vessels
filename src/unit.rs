@@ -1,4 +1,4 @@
-use crate::{Context, Protocol, Transport};
+use crate::{Context, Protocol, Channels};
 use futures::future::{ready, Ready};
 use void::Void;
 
@@ -10,14 +10,14 @@ impl<'a, C: Context> Protocol<'a, C> for () {
 
     fn unravel(self, _: &'a mut C::Unravel) -> Self::UnravelFuture
     where
-        C: Transport<Self::Unravel, Self::Coalesce>,
+        C: Channels<Self::Unravel, Self::Coalesce>,
     {
         ready(Ok(()))
     }
 
     fn coalesce(_: &'a mut C::Coalesce) -> Self::CoalesceFuture
     where
-        C: Transport<Self::Unravel, Self::Coalesce>,
+        C: Channels<Self::Unravel, Self::Coalesce>,
     {
         ready(Ok(()))
     }

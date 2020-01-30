@@ -47,7 +47,7 @@ pub trait Context: Sized {
     type SinkError;
 }
 
-pub trait Transport<Unravel, Coalesce>: Context + Sized {
+pub trait Channels<Unravel, Coalesce>: Context + Sized {
     type Unravel: Channel<Coalesce, Unravel, Self>;
     type Coalesce: Channel<Unravel, Coalesce, Self>;
 }
@@ -60,9 +60,9 @@ pub trait Protocol<'a, C: Context>: Sized {
 
     fn unravel(self, channel: &'a mut C::Unravel) -> Self::UnravelFuture
     where
-        C: Transport<Self::Unravel, Self::Coalesce> + 'static;
+        C: Channels<Self::Unravel, Self::Coalesce> + 'static;
 
     fn coalesce(channel: &'a mut C::Coalesce) -> Self::CoalesceFuture
     where
-        C: Transport<Self::Unravel, Self::Coalesce> + 'static;
+        C: Channels<Self::Unravel, Self::Coalesce> + 'static;
 }

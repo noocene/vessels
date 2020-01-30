@@ -1,4 +1,4 @@
-use crate::{Context as PContext, ContextError, Join, Pass, Protocol, Spawn, Transport};
+use crate::{Channels, Context as PContext, ContextError, Join, Pass, Protocol, Spawn};
 use core::{
     future::Future,
     mem::replace,
@@ -19,19 +19,18 @@ pub enum Error<Unravel, Send> {
     Send(Send),
 }
 
-pub enum Coalesce<'a, C: Transport<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Protocol<'a, C>>
+pub enum Coalesce<'a, C: Channels<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Protocol<'a, C>>
 {
     Next(C::Coalesce, Next<'a, C::Coalesce>),
     Join(<C as Join<'a, T>>::Output),
 }
 
-pub enum Unravel<'a, C: Pass<'a, T> + Transport<<C as PContext>::Handle, Void>, T: Protocol<'a, C>>
-{
+pub enum Unravel<'a, C: Pass<'a, T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<'a, C>> {
     Spawn(C::Unravel, <C as Spawn<'a, T>>::Output),
     Send(Forward<Once<Ready<Result<C::Handle, C::SinkError>>>, C::Unravel>),
 }
 
-impl<'a, C: Pass<'a, T> + Transport<<C as PContext>::Handle, Void>, T: Protocol<'a, C>>
+impl<'a, C: Pass<'a, T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<'a, C>>
     Coalesce<'a, C, T>
 where
     C::Coalesce: Unpin + Clone,
@@ -41,7 +40,7 @@ where
     }
 }
 
-impl<'a, C: Pass<'a, T> + Transport<<C as PContext>::Handle, Void>, T: Protocol<'a, C>>
+impl<'a, C: Pass<'a, T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<'a, C>>
     Unravel<'a, C, T>
 where
     C::Unravel: Clone,
@@ -51,7 +50,7 @@ where
     }
 }
 
-impl<'a, C: Transport<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Unpin + Protocol<'a, C>>
+impl<'a, C: Channels<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Unpin + Protocol<'a, C>>
     Future for Coalesce<'a, C, T>
 where
     <C as PContext>::Handle: Unpin,
@@ -88,7 +87,7 @@ where
     }
 }
 
-impl<'a, C: Transport<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Unpin + Protocol<'a, C>>
+impl<'a, C: Channels<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Unpin + Protocol<'a, C>>
     Future for Unravel<'a, C, T>
 where
     <C as PContext>::Handle: Unpin,
@@ -129,14 +128,14 @@ where
     }
 }
 
-impl<'a, C: Transport<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Unpin + Protocol<'a, C>>
+impl<'a, C: Channels<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Unpin + Protocol<'a, C>>
     Protocol<'a, C> for Option<T>
 where
     C::Handle: Unpin,
     <C as Join<'a, T>>::Output: Unpin,
     <C as Spawn<'a, T>>::Output: Unpin,
-    <C as Transport<<C as PContext>::Handle, Void>>::Coalesce: Clone + Unpin + 'a,
-    <C as Transport<<C as PContext>::Handle, Void>>::Unravel: Clone + Unpin,
+    <C as Channels<<C as PContext>::Handle, Void>>::Coalesce: Clone + Unpin + 'a,
+    <C as Channels<<C as PContext>::Handle, Void>>::Unravel: Clone + Unpin,
 {
     type Unravel = C::Handle;
     type UnravelFuture =
@@ -146,10 +145,10 @@ where
 
     fn unravel(
         self,
-        channel: &'a mut <C as Transport<<C as PContext>::Handle, Void>>::Unravel,
+        channel: &'a mut <C as Channels<<C as PContext>::Handle, Void>>::Unravel,
     ) -> Self::UnravelFuture
     where
-        C: Transport<Self::Unravel, Self::Coalesce> + 'static,
+        C: Channels<Self::Unravel, Self::Coalesce> + 'static,
     {
         if let Some(item) = self {
             Either::Left(Unravel::new(channel, item))
@@ -159,10 +158,10 @@ where
     }
 
     fn coalesce(
-        channel: &'a mut <C as Transport<<C as PContext>::Handle, Void>>::Coalesce,
+        channel: &'a mut <C as Channels<<C as PContext>::Handle, Void>>::Coalesce,
     ) -> Self::CoalesceFuture
     where
-        C: Transport<Self::Unravel, Self::Coalesce> + 'static,
+        C: Channels<Self::Unravel, Self::Coalesce> + 'static,
     {
         Coalesce::new(channel)
     }
