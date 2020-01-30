@@ -76,12 +76,12 @@ impl<P: Protocol<Context, Unravel = Infallible, Coalesce = Infallible>, T, U> Di
         fn(P::CoalesceError) -> DirectorError<Infallible, P::CoalesceError>,
     >;
 
-    fn unravel(protocol: P, _: T) -> Self::Unravel {
+    fn unravel(self, protocol: P, _: T) -> Self::Unravel {
         use DirectorError::Protocol;
         protocol.unravel(Empty(Context)).map_err(Protocol)
     }
 
-    fn coalesce(_: U) -> Self::Coalesce {
+    fn coalesce(self, _: U) -> Self::Coalesce {
         use DirectorError::Protocol;
         P::coalesce(Empty(Context)).map_err(Protocol)
     }

@@ -28,7 +28,7 @@ pub trait Director<P: Protocol<Self::Context>, Unravel, Coalesce> {
         >,
     >;
 
-    fn unravel(protocol: P, transport: Unravel) -> Self::Unravel;
+    fn unravel(self, protocol: P, transport: Unravel) -> Self::Unravel;
 
-    fn coalesce(transport: Coalesce) -> Self::Coalesce;
+    fn coalesce(self, transport: Coalesce) -> Self::Coalesce;
 }
