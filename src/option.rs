@@ -1,4 +1,10 @@
-use crate::protocol::{Context as PContext, ContextError, Join, Pass, Protocol, Spawn, Transport};
+use crate::{Context as PContext, ContextError, Join, Pass, Protocol, Spawn, Transport};
+use core::{
+    future::Future,
+    mem::replace,
+    pin::Pin,
+    task::{Context, Poll},
+};
 use futures::{
     future::{ready, Either, Ready},
     ready,
@@ -6,12 +12,6 @@ use futures::{
     StreamExt, TryFuture,
 };
 use pin_utils::pin_mut;
-use std::{
-    future::Future,
-    mem::replace,
-    pin::Pin,
-    task::{Context, Poll},
-};
 use void::Void;
 
 pub enum Error<Unravel, Send> {
