@@ -1,4 +1,4 @@
-use crate::{Context, Protocol, Channels};
+use crate::{Channels, Context, Protocol};
 use futures::future::{ready, Ready};
 use void::Void;
 

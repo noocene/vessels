@@ -8,7 +8,7 @@ use core::{
 use futures::{
     future::{ready, Either, Ready},
     ready,
-    stream::{once, Forward, Next, Once},
+    stream::{once, Forward, Once, StreamFuture},
     StreamExt, TryFuture,
 };
 use pin_utils::pin_mut;
@@ -21,7 +21,7 @@ pub enum Error<Unravel, Send> {
 
 pub enum Coalesce<'a, C: Channels<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Protocol<'a, C>>
 {
-    Next(C::Coalesce, Next<'a, C::Coalesce>),
+    Next(StreamFuture<&'a mut C::Coalesce>),
     Join(<C as Join<'a, T>>::Output),
 }
 
@@ -33,10 +33,10 @@ pub enum Unravel<'a, C: Pass<'a, T> + Channels<<C as PContext>::Handle, Void>, T
 impl<'a, C: Pass<'a, T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<'a, C>>
     Coalesce<'a, C, T>
 where
-    C::Coalesce: Unpin + Clone,
+    C::Coalesce: Unpin,
 {
     fn new(channel: &'a mut C::Coalesce) -> Self {
-        Coalesce::Next(channel.clone(), channel.next())
+        Coalesce::Next(channel.into_future())
     }
 }
 
@@ -68,12 +68,12 @@ where
     fn poll(mut self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Self::Output> {
         loop {
             match &mut *self {
-                Coalesce::Next(channel, item) => {
-                    pin_mut!(item);
-                    let handle = ready!(item.poll(ctx));
-                    let handle = match handle {
-                        Some(handle) => handle,
-                        None => return Poll::Ready(Ok(None)),
+                Coalesce::Next(next) => {
+                    pin_mut!(next);
+                    let handle = ready!(next.poll(ctx));
+                    let (handle, channel) = match handle {
+                        (Some(handle), channel) => (handle, channel),
+                        (None, _) => return Poll::Ready(Ok(None)),
                     };
                     let replacement = Coalesce::Join(channel.join(handle));
                     replace(&mut *self, replacement);
@@ -134,7 +134,7 @@ where
     C::Handle: Unpin,
     <C as Join<'a, T>>::Output: Unpin,
     <C as Spawn<'a, T>>::Output: Unpin,
-    <C as Channels<<C as PContext>::Handle, Void>>::Coalesce: Clone + Unpin + 'a,
+    <C as Channels<<C as PContext>::Handle, Void>>::Coalesce: Unpin + 'a,
     <C as Channels<<C as PContext>::Handle, Void>>::Unravel: Clone + Unpin,
 {
     type Unravel = C::Handle;
