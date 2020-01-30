@@ -148,10 +148,7 @@ where
     fn unravel(
         self,
         channel: <C as Channels<<C as Dispatch>::Handle, Infallible>>::Unravel,
-    ) -> Self::UnravelFuture
-    where
-        C: Channels<Self::Unravel, Self::Coalesce>,
-    {
+    ) -> Self::UnravelFuture {
         if let Some(item) = self {
             Either::Left(Unravel::new(channel, item))
         } else {
@@ -161,10 +158,7 @@ where
 
     fn coalesce(
         channel: <C as Channels<<C as Dispatch>::Handle, Infallible>>::Coalesce,
-    ) -> Self::CoalesceFuture
-    where
-        C: Channels<Self::Unravel, Self::Coalesce>,
-    {
+    ) -> Self::CoalesceFuture {
         Coalesce::new(channel)
     }
 }
