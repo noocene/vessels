@@ -4,9 +4,12 @@ use core::{future::Future, ops::DerefMut};
 use futures::{Sink, Stream, TryFuture};
 
 mod array;
+pub mod director;
+pub use director::Director;
 mod option;
 mod unit;
 
+#[derive(Debug)]
 pub enum ContextError<Context, Protocol> {
     Context(Context),
     Protocol(Protocol),
@@ -63,32 +66,4 @@ pub trait Protocol<C: ?Sized>: Sized {
     fn coalesce(channel: C::Coalesce) -> Self::CoalesceFuture
     where
         C: Channels<Self::Unravel, Self::Coalesce>;
-}
-
-#[derive(Debug)]
-pub enum DirectorError<T, U> {
-    Director(T),
-    Protocol(U),
-}
-
-pub trait Director<P: Protocol<Self::Context>, Transport> {
-    type Context: Channels<P::Unravel, P::Coalesce>;
-    type UnravelError;
-    type Unravel: Future<
-        Output = Result<
-            (),
-            DirectorError<Self::UnravelError, <P::UnravelFuture as TryFuture>::Error>,
-        >,
-    >;
-    type CoalesceError;
-    type Coalesce: Future<
-        Output = Result<
-            P,
-            DirectorError<Self::CoalesceError, <P::CoalesceFuture as TryFuture>::Error>,
-        >,
-    >;
-
-    fn unravel(protocol: P, transport: Transport) -> Self::Unravel;
-
-    fn coalesce(transport: Transport) -> Self::Coalesce;
 }
