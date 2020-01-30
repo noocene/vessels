@@ -4,8 +4,10 @@ use void::Void;
 
 impl<C: Context> Protocol<C> for () {
     type Unravel = Void;
+    type UnravelError = Void;
     type UnravelFuture = Ready<Result<(), Void>>;
     type Coalesce = Void;
+    type CoalesceError = Void;
     type CoalesceFuture = Ready<Result<(), Void>>;
 
     fn unravel(self, _: C::Unravel) -> Self::UnravelFuture

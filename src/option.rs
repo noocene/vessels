@@ -135,9 +135,10 @@ where
     <C as Channels<<C as PContext>::Handle, Void>>::Unravel: Unpin,
 {
     type Unravel = C::Handle;
-    type UnravelFuture =
-        Either<Unravel<C, T>, Ready<Result<(), <Unravel<C, T> as TryFuture>::Error>>>;
+    type UnravelError = <Unravel<C, T> as TryFuture>::Error;
+    type UnravelFuture = Either<Unravel<C, T>, Ready<Result<(), Self::UnravelError>>>;
     type Coalesce = Void;
+    type CoalesceError = <Coalesce<C, T> as TryFuture>::Error;
     type CoalesceFuture = Coalesce<C, T>;
 
     fn unravel(
@@ -145,7 +146,7 @@ where
         channel: <C as Channels<<C as PContext>::Handle, Void>>::Unravel,
     ) -> Self::UnravelFuture
     where
-        C: Channels<Self::Unravel, Self::Coalesce> + 'static,
+        C: Channels<Self::Unravel, Self::Coalesce>,
     {
         if let Some(item) = self {
             Either::Left(Unravel::new(channel, item))
@@ -158,7 +159,7 @@ where
         channel: <C as Channels<<C as PContext>::Handle, Void>>::Coalesce,
     ) -> Self::CoalesceFuture
     where
-        C: Channels<Self::Unravel, Self::Coalesce> + 'static,
+        C: Channels<Self::Unravel, Self::Coalesce>,
     {
         Coalesce::new(channel)
     }
