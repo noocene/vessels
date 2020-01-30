@@ -3,6 +3,7 @@
 use core::{future::Future, ops::DerefMut};
 use futures::{Sink, Stream, TryFuture};
 
+mod array;
 mod option;
 mod unit;
 
