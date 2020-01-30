@@ -19,49 +19,46 @@ pub enum Error<Unravel, Send> {
     Send(Send),
 }
 
-pub enum Coalesce<'a, C: Channels<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Protocol<'a, C>>
-{
-    Next(StreamFuture<&'a mut C::Coalesce>),
-    Join(<C as Join<'a, T>>::Output),
+pub enum Coalesce<C: Channels<<C as PContext>::Handle, Void> + Pass<T>, T: Protocol<C>> {
+    Next(StreamFuture<C::Coalesce>),
+    Join(<C as Join<T>>::Output),
 }
 
-pub enum Unravel<'a, C: Pass<'a, T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<'a, C>> {
-    Spawn(C::Unravel, <C as Spawn<'a, T>>::Output),
+pub enum Unravel<C: Pass<T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<C>> {
+    Spawn(C::Unravel, <C as Spawn<T>>::Output),
     Send(Forward<Once<Ready<Result<C::Handle, C::SinkError>>>, C::Unravel>),
 }
 
-impl<'a, C: Pass<'a, T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<'a, C>>
-    Coalesce<'a, C, T>
+impl<C: Pass<T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<C>> Coalesce<C, T>
 where
     C::Coalesce: Unpin,
 {
-    fn new(channel: &'a mut C::Coalesce) -> Self {
+    fn new(channel: C::Coalesce) -> Self {
         Coalesce::Next(channel.into_future())
     }
 }
 
-impl<'a, C: Pass<'a, T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<'a, C>>
-    Unravel<'a, C, T>
+impl<C: Pass<T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<C>> Unravel<C, T>
 where
     C::Unravel: Clone,
 {
-    fn new(channel: &'a mut C::Unravel, item: T) -> Self {
+    fn new(mut channel: C::Unravel, item: T) -> Self {
         Unravel::Spawn(channel.clone(), channel.spawn(item))
     }
 }
 
-impl<'a, C: Channels<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Unpin + Protocol<'a, C>>
-    Future for Coalesce<'a, C, T>
+impl<C: Channels<<C as PContext>::Handle, Void> + Pass<T>, T: Unpin + Protocol<C>> Future
+    for Coalesce<C, T>
 where
     <C as PContext>::Handle: Unpin,
-    <C as Join<'a, T>>::Output: Unpin,
+    <C as Join<T>>::Output: Unpin,
     C::Coalesce: Unpin,
 {
     type Output = Result<
         Option<T>,
         ContextError<
-            <C as Join<'a, T>>::Error,
-            <<T as Protocol<'a, C>>::CoalesceFuture as TryFuture>::Error,
+            <C as Join<T>>::Error,
+            <<T as Protocol<C>>::CoalesceFuture as TryFuture>::Error,
         >,
     >;
 
@@ -71,7 +68,7 @@ where
                 Coalesce::Next(next) => {
                     pin_mut!(next);
                     let handle = ready!(next.poll(ctx));
-                    let (handle, channel) = match handle {
+                    let (handle, mut channel) = match handle {
                         (Some(handle), channel) => (handle, channel),
                         (None, _) => return Poll::Ready(Ok(None)),
                     };
@@ -87,19 +84,19 @@ where
     }
 }
 
-impl<'a, C: Channels<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Unpin + Protocol<'a, C>>
-    Future for Unravel<'a, C, T>
+impl<C: Channels<<C as PContext>::Handle, Void> + Pass<T>, T: Unpin + Protocol<C>> Future
+    for Unravel<C, T>
 where
     <C as PContext>::Handle: Unpin,
-    <C as Spawn<'a, T>>::Output: Unpin,
+    <C as Spawn<T>>::Output: Unpin,
     C::Unravel: Clone + Unpin,
 {
     type Output = Result<
         (),
         Error<
             ContextError<
-                <C as Spawn<'a, T>>::Error,
-                <<T as Protocol<'a, C>>::UnravelFuture as TryFuture>::Error,
+                <C as Spawn<T>>::Error,
+                <<T as Protocol<C>>::UnravelFuture as TryFuture>::Error,
             >,
             C::SinkError,
         >,
@@ -128,24 +125,24 @@ where
     }
 }
 
-impl<'a, C: Channels<<C as PContext>::Handle, Void> + Pass<'a, T>, T: Unpin + Protocol<'a, C>>
-    Protocol<'a, C> for Option<T>
+impl<C: Channels<<C as PContext>::Handle, Void> + Pass<T>, T: Unpin + Protocol<C>> Protocol<C>
+    for Option<T>
 where
     C::Handle: Unpin,
-    <C as Join<'a, T>>::Output: Unpin,
-    <C as Spawn<'a, T>>::Output: Unpin,
-    <C as Channels<<C as PContext>::Handle, Void>>::Coalesce: Unpin + 'a,
+    <C as Join<T>>::Output: Unpin,
+    <C as Spawn<T>>::Output: Unpin,
+    <C as Channels<<C as PContext>::Handle, Void>>::Coalesce: Unpin,
     <C as Channels<<C as PContext>::Handle, Void>>::Unravel: Clone + Unpin,
 {
     type Unravel = C::Handle;
     type UnravelFuture =
-        Either<Unravel<'a, C, T>, Ready<Result<(), <Unravel<'a, C, T> as TryFuture>::Error>>>;
+        Either<Unravel<C, T>, Ready<Result<(), <Unravel<C, T> as TryFuture>::Error>>>;
     type Coalesce = Void;
-    type CoalesceFuture = Coalesce<'a, C, T>;
+    type CoalesceFuture = Coalesce<C, T>;
 
     fn unravel(
         self,
-        channel: &'a mut <C as Channels<<C as PContext>::Handle, Void>>::Unravel,
+        channel: <C as Channels<<C as PContext>::Handle, Void>>::Unravel,
     ) -> Self::UnravelFuture
     where
         C: Channels<Self::Unravel, Self::Coalesce> + 'static,
@@ -158,7 +155,7 @@ where
     }
 
     fn coalesce(
-        channel: &'a mut <C as Channels<<C as PContext>::Handle, Void>>::Coalesce,
+        channel: <C as Channels<<C as PContext>::Handle, Void>>::Coalesce,
     ) -> Self::CoalesceFuture
     where
         C: Channels<Self::Unravel, Self::Coalesce> + 'static,
