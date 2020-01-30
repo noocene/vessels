@@ -1,3 +1,5 @@
+#![no_std]
+
 use core::{future::Future, ops::DerefMut};
 use futures::{Sink, Stream, TryFuture};
 
@@ -10,7 +12,7 @@ pub enum ContextError<Context, Protocol> {
     Protocol(Protocol),
 }
 
-pub trait Join<P: Protocol<Self>>: Context {
+pub trait Join<P: Protocol<Self>>: Dispatch {
     type Error;
     type Output: Future<
         Output = Result<P, ContextError<Self::Error, <P::CoalesceFuture as TryFuture>::Error>>,
@@ -19,7 +21,7 @@ pub trait Join<P: Protocol<Self>>: Context {
     fn join(&mut self, handle: Self::Handle) -> Self::Output;
 }
 
-pub trait Spawn<P: Protocol<Self>>: Context {
+pub trait Spawn<P: Protocol<Self>>: Dispatch {
     type Error;
     type Output: Future<
         Output = Result<
@@ -35,17 +37,13 @@ pub trait Pass<P: Protocol<Self>>: Spawn<P> + Join<P> {}
 
 impl<P: Protocol<T>, T: Spawn<P> + Join<P>> Pass<P> for T {}
 
-pub trait Channel<T, U, S: ?Sized + Context>:
-    Stream<Item = T> + Sink<U, Error = S::SinkError> + DerefMut<Target = S>
-{
-}
+pub trait Channel<T, U, S: ?Sized>: Stream<Item = T> + Sink<U> + DerefMut<Target = S> {}
 
-pub trait Context {
+pub trait Dispatch {
     type Handle;
-    type SinkError;
 }
 
-pub trait Channels<Unravel, Coalesce>: Context {
+pub trait Channels<Unravel, Coalesce> {
     type Unravel: Channel<Coalesce, Unravel, Self>;
     type Coalesce: Channel<Unravel, Coalesce, Self>;
 }

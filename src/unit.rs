@@ -1,8 +1,8 @@
-use crate::{Channels, Context, Protocol};
+use crate::{Channels, Protocol};
 use core::convert::Infallible;
 use futures::future::{ready, Ready};
 
-impl<C: Context> Protocol<C> for () {
+impl<C> Protocol<C> for () {
     type Unravel = Infallible;
     type UnravelError = Infallible;
     type UnravelFuture = Ready<Result<(), Infallible>>;
