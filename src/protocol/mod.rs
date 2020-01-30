@@ -8,7 +8,7 @@ pub enum ContextError<Context, Protocol> {
     Protocol(Protocol),
 }
 
-pub trait Join<P: Protocol<Self>>: Context {
+pub trait Join<'a, P: Protocol<'a, Self>>: Context {
     type Error;
     type Output: Future<
         Output = Result<P, ContextError<Self::Error, <P::CoalesceFuture as TryFuture>::Error>>,
@@ -17,7 +17,7 @@ pub trait Join<P: Protocol<Self>>: Context {
     fn join(&mut self, handle: Self::Handle) -> Self::Output;
 }
 
-pub trait Spawn<P: Protocol<Self>>: Context {
+pub trait Spawn<'a, P: Protocol<'a, Self>>: Context {
     type Error;
     type Output: Future<
         Output = Result<
@@ -29,11 +29,14 @@ pub trait Spawn<P: Protocol<Self>>: Context {
     fn spawn(&mut self, item: P) -> Self::Output;
 }
 
-pub trait Pass<P: Protocol<Self>>: Spawn<P> + Join<P> {}
+pub trait Pass<'a, P: Protocol<'a, Self>>: Spawn<'a, P> + Join<'a, P> {}
 
-impl<P: Protocol<T>, T: Spawn<P> + Join<P>> Pass<P> for T {}
+impl<'a, P: Protocol<'a, T>, T: Spawn<'a, P> + Join<'a, P>> Pass<'a, P> for T {}
 
-pub trait Channel<T, U, E>: Stream<Item = T> + Sink<U, Error = E> + Clone + Send + Unpin {}
+pub trait Channel<T, U, E, S>:
+    Stream<Item = T> + Sink<U, Error = E> + DerefMut<Target = S>
+{
+}
 
 pub trait Context: Sized {
     type Handle;
@@ -41,21 +44,21 @@ pub trait Context: Sized {
 }
 
 pub trait Transport<Unravel, Coalesce>: Context + Sized {
-    type Unravel: Channel<Coalesce, Unravel, Self::SinkError> + DerefMut<Target = Self>;
-    type Coalesce: Channel<Unravel, Coalesce, Self::SinkError> + DerefMut<Target = Self>;
+    type Unravel: Channel<Coalesce, Unravel, Self::SinkError, Self>;
+    type Coalesce: Channel<Unravel, Coalesce, Self::SinkError, Self>;
 }
 
-pub trait Protocol<C: Context>: Sized {
+pub trait Protocol<'a, C: Context>: Sized {
     type Unravel;
     type UnravelFuture: TryFuture<Ok = ()>;
     type Coalesce;
     type CoalesceFuture: TryFuture<Ok = Self>;
 
-    fn unravel(self, channel: &mut C::Unravel) -> Self::UnravelFuture
+    fn unravel(self, channel: &'a mut C::Unravel) -> Self::UnravelFuture
     where
         C: Transport<Self::Unravel, Self::Coalesce> + 'static;
 
-    fn coalesce(channel: &mut C::Coalesce) -> Self::CoalesceFuture
+    fn coalesce(channel: &'a mut C::Coalesce) -> Self::CoalesceFuture
     where
         C: Transport<Self::Unravel, Self::Coalesce> + 'static;
 }
