@@ -1,4 +1,5 @@
 use crate::{Channels, Context as PContext, ContextError, Join, Pass, Protocol, Spawn};
+use core::convert::Infallible;
 use core::{
     future::Future,
     mem::replace,
@@ -12,24 +13,23 @@ use futures::{
     StreamExt, TryFuture,
 };
 use pin_utils::pin_mut;
-use void::Void;
 
 pub enum Error<Unravel, Send> {
     Unravel(Unravel),
     Send(Send),
 }
 
-pub enum Coalesce<C: Channels<<C as PContext>::Handle, Void> + Pass<T>, T: Protocol<C>> {
+pub enum Coalesce<C: Channels<<C as PContext>::Handle, Infallible> + Pass<T>, T: Protocol<C>> {
     Next(StreamFuture<C::Coalesce>),
     Join(<C as Join<T>>::Output),
 }
 
-pub enum Unravel<C: Pass<T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<C>> {
+pub enum Unravel<C: Pass<T> + Channels<<C as PContext>::Handle, Infallible>, T: Protocol<C>> {
     Spawn(Option<C::Unravel>, <C as Spawn<T>>::Output),
     Send(Forward<Once<Ready<Result<C::Handle, C::SinkError>>>, C::Unravel>),
 }
 
-impl<C: Pass<T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<C>> Coalesce<C, T>
+impl<C: Pass<T> + Channels<<C as PContext>::Handle, Infallible>, T: Protocol<C>> Coalesce<C, T>
 where
     C::Coalesce: Unpin,
 {
@@ -38,14 +38,14 @@ where
     }
 }
 
-impl<C: Pass<T> + Channels<<C as PContext>::Handle, Void>, T: Protocol<C>> Unravel<C, T> {
+impl<C: Pass<T> + Channels<<C as PContext>::Handle, Infallible>, T: Protocol<C>> Unravel<C, T> {
     fn new(mut channel: C::Unravel, item: T) -> Self {
         let spawn = channel.spawn(item);
         Unravel::Spawn(Some(channel), spawn)
     }
 }
 
-impl<C: Channels<<C as PContext>::Handle, Void> + Pass<T>, T: Unpin + Protocol<C>> Future
+impl<C: Channels<<C as PContext>::Handle, Infallible> + Pass<T>, T: Unpin + Protocol<C>> Future
     for Coalesce<C, T>
 where
     <C as PContext>::Handle: Unpin,
@@ -82,7 +82,7 @@ where
     }
 }
 
-impl<C: Channels<<C as PContext>::Handle, Void> + Pass<T>, T: Unpin + Protocol<C>> Future
+impl<C: Channels<<C as PContext>::Handle, Infallible> + Pass<T>, T: Unpin + Protocol<C>> Future
     for Unravel<C, T>
 where
     <C as PContext>::Handle: Unpin,
@@ -125,25 +125,25 @@ where
     }
 }
 
-impl<C: Channels<<C as PContext>::Handle, Void> + Pass<T>, T: Unpin + Protocol<C>> Protocol<C>
+impl<C: Channels<<C as PContext>::Handle, Infallible> + Pass<T>, T: Unpin + Protocol<C>> Protocol<C>
     for Option<T>
 where
     C::Handle: Unpin,
     <C as Join<T>>::Output: Unpin,
     <C as Spawn<T>>::Output: Unpin,
-    <C as Channels<<C as PContext>::Handle, Void>>::Coalesce: Unpin,
-    <C as Channels<<C as PContext>::Handle, Void>>::Unravel: Unpin,
+    <C as Channels<<C as PContext>::Handle, Infallible>>::Coalesce: Unpin,
+    <C as Channels<<C as PContext>::Handle, Infallible>>::Unravel: Unpin,
 {
     type Unravel = C::Handle;
     type UnravelError = <Unravel<C, T> as TryFuture>::Error;
     type UnravelFuture = Either<Unravel<C, T>, Ready<Result<(), Self::UnravelError>>>;
-    type Coalesce = Void;
+    type Coalesce = Infallible;
     type CoalesceError = <Coalesce<C, T> as TryFuture>::Error;
     type CoalesceFuture = Coalesce<C, T>;
 
     fn unravel(
         self,
-        channel: <C as Channels<<C as PContext>::Handle, Void>>::Unravel,
+        channel: <C as Channels<<C as PContext>::Handle, Infallible>>::Unravel,
     ) -> Self::UnravelFuture
     where
         C: Channels<Self::Unravel, Self::Coalesce>,
@@ -156,7 +156,7 @@ where
     }
 
     fn coalesce(
-        channel: <C as Channels<<C as PContext>::Handle, Void>>::Coalesce,
+        channel: <C as Channels<<C as PContext>::Handle, Infallible>>::Coalesce,
     ) -> Self::CoalesceFuture
     where
         C: Channels<Self::Unravel, Self::Coalesce>,

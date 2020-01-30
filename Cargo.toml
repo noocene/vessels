@@ -5,6 +5,5 @@ authors = ["Izzy Swart <zenerboson@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-futures = { version = "0.3.1" }
-void = "1.0.2"
+futures = { version = "0.3.1", default-features = false }
 pin-utils = "0.1.0-alpha.4"

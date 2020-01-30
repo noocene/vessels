@@ -1,14 +1,14 @@
 use crate::{Channels, Context, Protocol};
+use core::convert::Infallible;
 use futures::future::{ready, Ready};
-use void::Void;
 
 impl<C: Context> Protocol<C> for () {
-    type Unravel = Void;
-    type UnravelError = Void;
-    type UnravelFuture = Ready<Result<(), Void>>;
-    type Coalesce = Void;
-    type CoalesceError = Void;
-    type CoalesceFuture = Ready<Result<(), Void>>;
+    type Unravel = Infallible;
+    type UnravelError = Infallible;
+    type UnravelFuture = Ready<Result<(), Infallible>>;
+    type Coalesce = Infallible;
+    type CoalesceError = Infallible;
+    type CoalesceFuture = Ready<Result<(), Infallible>>;
 
     fn unravel(self, _: C::Unravel) -> Self::UnravelFuture
     where

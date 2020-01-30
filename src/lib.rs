@@ -1,5 +1,3 @@
-#![no_std]
-
 use core::{future::Future, ops::DerefMut};
 use futures::{Sink, Stream, TryFuture};
 
