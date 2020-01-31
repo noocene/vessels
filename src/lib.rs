@@ -6,6 +6,7 @@ use futures::{Sink, Stream, TryFuture};
 mod array;
 pub mod director;
 pub use director::Director;
+pub mod flat;
 mod option;
 mod unit;
 
