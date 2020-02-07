@@ -43,7 +43,7 @@ impl<T: Kind> Module<T> {
 pub(crate) struct LocalModule(pub(crate) Checksum);
 
 #[derive(Error, Debug, Kind)]
-#[error("compile failed: {cause}")]
+#[error("Compile failed: {cause}")]
 pub struct CompileError {
     #[source]
     cause: Error,
@@ -70,7 +70,7 @@ trait OrchestratorInner {
 pub struct Orchestrator(Shared<dyn OrchestratorInner>);
 
 #[derive(Error, Debug, Kind)]
-#[error("instantiate failed: {cause}")]
+#[error("Instantiate failed: {cause}")]
 pub struct InstantiateError {
     #[source]
     cause: Error,
