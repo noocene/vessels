@@ -40,7 +40,7 @@ impl dyn Hasher {
         return Ok(native::Hasher::new());
         #[cfg(not(feature = "core"))]
         return Err(UnimplementedError {
-            feature: "random number generation".to_owned(),
+            feature: "Random number generation".to_owned(),
         });
     }
 }
