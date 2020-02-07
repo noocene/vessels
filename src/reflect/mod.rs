@@ -15,37 +15,37 @@ pub struct MethodTypes {
 
 #[derive(Debug, Error)]
 pub enum CallError {
-    #[error("invalid type for argument {0}")]
+    #[error("Invalid type for argument {0}")]
     Type(u8),
     #[error("{0}")]
     ArgumentCount(#[source] ArgumentCountError),
     #[error("{0}")]
     OutOfRange(#[source] OutOfRangeError),
-    #[error("expected {0} receiver")]
+    #[error("Expected {0} receiver")]
     IncorrectReceiver(Receiver),
 }
 
 #[derive(Debug, Error)]
-#[error("method {index} out of range")]
+#[error("Method {index} out of range")]
 pub struct OutOfRangeError {
     pub index: MethodIndex,
 }
 
 #[derive(Debug, Error)]
-#[error("got {got} arguments, expected {expected}")]
+#[error("Got {got} arguments, expected {expected}")]
 pub struct ArgumentCountError {
     pub expected: usize,
     pub got: usize,
 }
 
 #[derive(Debug, Error)]
-#[error("no method with name {name}")]
+#[error("No method with name {name}")]
 pub struct NameError {
     pub name: String,
 }
 
 #[derive(Debug, Error)]
-#[error("cannot cast to {target:?} in this context")]
+#[error("Cannot cast to {target:?} in this context")]
 pub struct CastError {
     pub target: TypeId,
 }
@@ -124,7 +124,7 @@ impl<S: ?Sized + Reflected> Cast<S> for Box<dyn Erased> {
     fn downcast(self) -> Result<Box<S>, CastError> {
         self.cast(TypeId::of::<S>()).map(|erased| {
             *Box::<dyn Any>::downcast::<Box<S>>(erased)
-                .map_err(|_| panic!("could not downcast after successful reinterpretation"))
+                .map_err(|_| panic!("Could not downcast after successful reinterpretation"))
                 .unwrap()
         })
     }
@@ -132,7 +132,7 @@ impl<S: ?Sized + Reflected> Cast<S> for Box<dyn Erased> {
         Trait::<SomeTrait>::upcast_erased(self, TypeId::of::<S>()).map(|erased| {
             erased
                 .downcast()
-                .expect("could not downcast after successful upcast")
+                .expect("Could not downcast after successful upcast")
         })
     }
 }
@@ -141,7 +141,7 @@ impl<T: ?Sized + Reflected + Trait<T>, S: ?Sized + Reflected> Cast<S> for Box<T>
     fn downcast(self) -> Result<Box<S>, CastError> {
         self.erase().cast(TypeId::of::<S>()).map(|erased| {
             *Box::<dyn Any>::downcast::<Box<S>>(erased)
-                .map_err(|_| panic!("could not downcast after successful reinterpretation"))
+                .map_err(|_| panic!("Could not downcast after successful reinterpretation"))
                 .unwrap()
         })
     }
@@ -149,7 +149,7 @@ impl<T: ?Sized + Reflected + Trait<T>, S: ?Sized + Reflected> Cast<S> for Box<T>
         Trait::<T>::upcast_erased(self, TypeId::of::<S>()).map(|erased| {
             erased
                 .downcast()
-                .expect("could not downcast after successful upcast")
+                .expect("Could not downcast after successful upcast")
         })
     }
 }
