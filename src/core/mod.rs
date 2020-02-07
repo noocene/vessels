@@ -34,13 +34,13 @@ pub struct UnimplementedError {
 
 #[derive(Error, Debug, Kind)]
 pub enum CoreError {
-    #[error("feature unavailable or unregistered")]
+    #[error("Feature unavailable or unregistered")]
     Unavailable,
     #[error("{0}")]
     Unimplemented(#[source] UnimplementedError),
-    #[error("`handle transfer failed: {0}")]
+    #[error("Handle transfer failed: {0}")]
     Construct(#[source] Error),
-    #[error("`underlying transport failed: {0}")]
+    #[error("Underlying transport failed: {0}")]
     Transport(#[from] TransportError),
 }
 
