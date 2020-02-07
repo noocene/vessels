@@ -34,7 +34,7 @@ use thiserror::Error;
 use crate::{channel::ChannelError, Kind};
 
 #[derive(Error, Kind, Debug)]
-#[error("transport error: {cause}")]
+#[error("Transport error: {cause}")]
 pub struct TransportError {
     #[source]
     cause: Error,
@@ -110,9 +110,9 @@ pub trait AsKindMarker {}
 pub enum WrappedError<T: StdError + 'static> {
     #[error("{0}")]
     Concrete(#[from] T),
-    #[error("got {got} items in construct, expected {expected}")]
+    #[error("Got {got} items in construct, expected {expected}")]
     Insufficient { got: usize, expected: usize },
-    #[error("failed to send on underlying channel: {0}")]
+    #[error("Failed to send on underlying channel: {0}")]
     Send(ChannelError),
 }
 
