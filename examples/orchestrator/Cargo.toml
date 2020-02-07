@@ -2,7 +2,7 @@
 name = "orchestrator"
 version = "0.1.0"
 authors = ["Izzy Swart <zenerboson@gmail.com>"]
-edition = "2018"
+edition = "2020"
 
 [dependencies]
 vessels = { path = "../../", features = ["core"] }
