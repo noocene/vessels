@@ -68,7 +68,7 @@ impl<'de, 'a> DeserializeSeed<'de> for Id<'a> {
                     .get(self.0)
                     .ok_or(Error::custom(format!("ASYNC_WAIT {} ", (self.0).0)))?,
             )
-            .ok_or(Error::custom("no deserializer in registry"))?)(&mut deserializer)
+            .ok_or(Error::custom("No deserializer in registry"))?)(&mut deserializer)
         .map_err(Error::custom)
     }
 }
