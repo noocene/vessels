@@ -18,7 +18,7 @@ use web_sys::{BinaryType, MessageEvent, WebSocket};
 pub(crate) struct Client;
 
 #[derive(Error, Debug)]
-#[error("the target port is being blocked")]
+#[error("The target port is being blocked")]
 pub struct SecurityError;
 
 impl RawClient for Client {
