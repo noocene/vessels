@@ -17,16 +17,16 @@ pub trait Peer {}
 
 #[derive(Error, Debug, Kind)]
 pub enum ConnectError {
-    #[error("connection failed: {0}")]
+    #[error("Connection failed: {0}")]
     Connect(#[source] Error),
-    #[error("construct failed: {0}")]
+    #[error("Construct failed: {0}")]
     Construct(#[source] Error),
-    #[error("underlying transport failed: {0}")]
+    #[error("Underlying transport failed: {0}")]
     Transport(#[from] TransportError),
 }
 
 #[derive(Error, Debug, Kind)]
-#[error("listening failed: {cause}")]
+#[error("Listening failed: {cause}")]
 pub struct ListenError {
     #[source]
     cause: Error,
@@ -41,7 +41,7 @@ impl From<TransportError> for ListenError {
 }
 
 #[derive(Error, Debug, Kind)]
-#[error("connection failed while open: {cause}")]
+#[error("Connection failed while open: {cause}")]
 pub struct ConnectionError {
     #[source]
     cause: Error,
