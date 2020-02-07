@@ -18,7 +18,7 @@ impl dyn Rng {
         return Ok(native::Rng::new());
         #[cfg(not(feature = "core"))]
         return Err(UnimplementedError {
-            feature: "random number generation".to_owned(),
+            feature: "Random number generation".to_owned(),
         });
     }
 }
