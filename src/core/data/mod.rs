@@ -50,7 +50,7 @@ pub struct Resource<T: Serialize + DeserializeOwned + Sync + Send + 'static> {
 }
 
 #[derive(Error, Kind)]
-#[error("reification failed: {source}")]
+#[error("Reification failed: {source}")]
 pub struct ReifyError<T: Serialize + DeserializeOwned + Sync + Send + 'static> {
     #[source]
     source: Error,
@@ -93,7 +93,7 @@ impl<T: Serialize + DeserializeOwned + Sync + Send + 'static> Resource<T> {
             } else {
                 // TODO reify from abstract acquisition methods
                 Err(ReifyError {
-                    source: anyhow!("no suitable acquisition method"),
+                    source: anyhow!("No suitable acquisition method"),
                     resource: self,
                 })
             }
