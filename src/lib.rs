@@ -1,9 +1,8 @@
-use crate::resource::manager::ResourceManager;
 use anyhow::Error;
 use core::{
     any::{Any, TypeId},
     cell::RefCell,
-    convert::{Infallible, TryFrom, TryInto},
+    convert::{TryFrom, TryInto},
     future::Future,
     marker::PhantomData,
     pin::Pin,
@@ -12,19 +11,24 @@ use core::{
 use futures::{
     future::{ready, FutureObj, Ready},
     lock::Mutex,
-    stream::FuturesUnordered,
     task::{Spawn, SpawnError},
-    StreamExt, TryFutureExt,
+    TryFutureExt,
 };
 use ring::digest::{digest, SHA256};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_cbor::{from_slice, to_vec, Error as CborError};
-use std::{collections::HashMap, error::Error as StdError, hash::Hash, sync::Arc};
+use std::{collections::HashMap, hash::Hash, sync::Arc};
 use thiserror::Error;
 
 pub mod resource;
 #[doc(inline)]
 pub use resource::Resource;
+
+mod memory_store;
+pub use memory_store::MemoryStore;
+
+mod simple_resource_manager;
+pub use simple_resource_manager::SimpleResourceManager;
 
 use resource::{
     hash::{Algorithm, Hasher},
@@ -338,240 +342,5 @@ impl<T: Spawn> Spawn for CorePreserver<T> {
         let core = get_singleton().map(|singleton| Core { singleton });
         self.0
             .spawn_obj(Box::pin(CoreTask::new(future, core)).into())
-    }
-}
-
-pub trait ResourceProvider<A: Algorithm> {
-    type Error;
-    type Fetch: Future<Output = Result<Option<Vec<u8>>, Self::Error>>;
-
-    fn fetch(&self, hash: A::Hash) -> Self::Fetch;
-}
-
-struct ResourceProviderEraser<A: Algorithm, T: ResourceProvider<A>> {
-    provider: T,
-    algo: PhantomData<A>,
-}
-
-impl<A: Algorithm, T: ResourceProvider<A>> ResourceProvider<A> for ResourceProviderEraser<A, T>
-where
-    T::Fetch: Unpin + Send + 'static,
-    T::Error: 'static,
-    Error: From<T::Error>,
-{
-    type Error = Error;
-    type Fetch = Pin<Box<dyn Future<Output = Result<Option<Vec<u8>>, Error>> + Send>>;
-
-    fn fetch(&self, hash: A::Hash) -> Self::Fetch {
-        Box::pin(self.provider.fetch(hash).map_err(From::from))
-    }
-}
-
-pub trait ResourceProviderExt<A: Algorithm>: ResourceProvider<A> {
-    fn erase(self) -> ErasedResourceProvider<A>
-    where
-        Self: Sized,
-        Self::Fetch: Unpin + Send + 'static,
-        Self: Send + 'static,
-        A: Send + 'static,
-        Error: From<Self::Error>,
-    {
-        Box::new(ResourceProviderEraser {
-            provider: self,
-            algo: PhantomData,
-        })
-    }
-}
-
-impl<A: Algorithm, T: ResourceProvider<A>> ResourceProviderExt<A> for T {}
-
-pub type ErasedResourceProvider<A> = Box<
-    dyn ResourceProvider<
-            A,
-            Error = Error,
-            Fetch = Pin<Box<dyn Future<Output = Result<Option<Vec<u8>>, Error>> + Send>>,
-        > + Send,
->;
-
-#[derive(Debug, Error)]
-#[bounds(where T: StdError + 'static)]
-pub enum ResourceError<T> {
-    #[error("error from provider: {0}")]
-    Provider(#[source] Error),
-    #[error("unknown algorithm")]
-    UnknownAlgorithm,
-    #[error("rehydration error: {0}")]
-    Rehydration(#[source] T),
-}
-
-impl ResourceError<Infallible> {
-    fn cast<E>(self) -> ResourceError<E> {
-        match self {
-            ResourceError::Provider(e) => ResourceError::Provider(e),
-            ResourceError::Rehydration(_) => panic!(),
-            ResourceError::UnknownAlgorithm => ResourceError::UnknownAlgorithm,
-        }
-    }
-}
-
-impl<T> From<Error> for ResourceError<T> {
-    fn from(input: Error) -> Self {
-        ResourceError::Provider(input)
-    }
-}
-
-#[derive(Clone)]
-pub struct SimpleResourceManager {
-    providers: Arc<
-        Mutex<
-            HashMap<
-                TypeId,
-                Vec<
-                    Box<
-                        dyn Fn(
-                                Box<dyn Any + Send>,
-                            ) -> Pin<
-                                Box<dyn Future<Output = Result<Option<Vec<u8>>, Error>> + Send>,
-                            > + Sync
-                            + Send,
-                    >,
-                >,
-            >,
-        >,
-    >,
-}
-
-impl ResourceManager for SimpleResourceManager {
-    type Fetch =
-        Pin<Box<dyn Future<Output = Result<Option<Vec<u8>>, ResourceError<Infallible>>> + Send>>;
-
-    fn fetch(
-        &self,
-        algo: TypeId,
-        mut hash: Box<dyn FnMut() -> Box<dyn Any + Send> + Send>,
-    ) -> Self::Fetch {
-        let providers = self.providers.clone();
-
-        Box::pin(async move {
-            let providers = providers.lock().await;
-
-            let providers = providers
-                .get(&algo)
-                .ok_or(ResourceError::UnknownAlgorithm)?
-                .as_slice();
-
-            let mut fetch = providers
-                .iter()
-                .map(|provider| (provider)(hash()))
-                .collect::<FuturesUnordered<_>>();
-
-            while let Some(item) = fetch.next().await {
-                if let Some(item) = item? {
-                    return Ok(Some(item));
-                }
-            }
-
-            Ok(None)
-        })
-    }
-}
-
-impl SimpleResourceManager {
-    pub fn new() -> Self {
-        SimpleResourceManager {
-            providers: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-    pub fn add_provider<A: Algorithm + Any, T: ResourceProvider<A>>(
-        &mut self,
-        provider: T,
-    ) -> impl Future<Output = ()>
-    where
-        T: Sync + Sized,
-        T::Fetch: Unpin + Send + 'static,
-        T: Send + 'static,
-        A: Send + 'static,
-        Error: From<T::Error>,
-    {
-        let providers = self.providers.clone();
-
-        async move {
-            let mut providers = providers.lock().await;
-
-            providers
-                .entry(TypeId::of::<A>())
-                .or_insert(vec![])
-                .push(Box::new(move |any| {
-                    let fut = provider.fetch(*Box::<dyn Any>::downcast(any).unwrap());
-
-                    Box::pin(async move { fut.await.map_err(From::from) })
-                }));
-        }
-    }
-}
-
-pub struct MemoryStore<A: Algorithm> {
-    data: Arc<Mutex<HashMap<A::Hash, Vec<u8>>>>,
-}
-
-impl<A: Algorithm> Clone for MemoryStore<A> {
-    fn clone(&self) -> Self {
-        MemoryStore {
-            data: self.data.clone(),
-        }
-    }
-}
-
-impl<A: Algorithm> MemoryStore<A> {
-    pub fn new() -> Self {
-        MemoryStore {
-            data: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-    pub fn intern<H: Hasher<A>, T, U: Rehydrate<T>>(
-        &mut self,
-        item: T,
-    ) -> impl Future<Output = Result<Resource<T, U, A>, Error>>
-    where
-        A::Hash: Eq + Hash + Clone,
-        Error: From<U::DumpError>,
-    {
-        let data = self.data.clone();
-
-        async move {
-            let mut data = data.lock().await;
-
-            let item = U::dump(item).await?;
-
-            let mut hasher = H::new();
-
-            hasher.write(&item);
-
-            let hash = hasher.hash();
-
-            data.insert(hash.clone(), item);
-
-            Ok(Resource::new(hash))
-        }
-    }
-}
-
-impl<A: Algorithm> ResourceProvider<A> for MemoryStore<A>
-where
-    A::Hash: Hash + Eq + Send + 'static,
-{
-    type Error = Error;
-    type Fetch = Pin<Box<dyn Future<Output = Result<Option<Vec<u8>>, Error>> + Send>>;
-
-    fn fetch(&self, hash: A::Hash) -> Self::Fetch {
-        let data = self.data.clone();
-
-        Box::pin(async move {
-            let data = data.lock().await;
-
-            Ok(data.get(&hash).cloned())
-        })
     }
 }

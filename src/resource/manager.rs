@@ -1,5 +1,5 @@
 use super::{hash::Algorithm, Rehydrate};
-use crate::{Resource, ResourceError};
+use crate::{resource::ResourceError, Resource};
 use futures::{
     future::{ready, AndThen, Either, MapErr, MapOk, Ready},
     Future, TryFutureExt,
