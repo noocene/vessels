@@ -9,4 +9,6 @@ futures = "0.3.4"
 serde_cbor = "0.11.1"
 serde = "1.0.111"
 anyhow = "1.0.31"
-thiserror = "1.0.19"
+core-error = { git = "https://github.com/core-error/core-error" }
+thiserror = { git = "https://github.com/noocene/thiserror" }
+ring = "0.16.14"

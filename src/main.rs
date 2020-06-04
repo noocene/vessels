@@ -1,38 +1,60 @@
-use core::convert::Infallible;
+use core::convert::{Infallible, TryFrom};
 use futures::executor::block_on;
-use vessels::{acquire, register, with_core, Core};
+use std::string::FromUtf8Error;
+use vessels::{
+    acquire, register,
+    resource::{ErasedResourceManager, ResourceManagerExt},
+    with_core, Convert, Core, MemoryStore, Ring, Sha256, SimpleResourceManager,
+};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Tester(String);
 
-fn print() {
-    block_on(async move {
-        println!("{:?}", acquire::<Tester>().await);
-    });
+impl TryFrom<Vec<u8>> for Tester {
+    type Error = FromUtf8Error;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        String::from_utf8(value).map(Tester)
+    }
+}
+
+impl From<Tester> for Vec<u8> {
+    fn from(tester: Tester) -> Vec<u8> {
+        tester.0.as_bytes().into()
+    }
 }
 
 fn main() {
-    print();
-
     let core = Core::new();
 
-    with_core! { &core => {
-        block_on(async move {
-            register(|| async { Ok::<_, Infallible>(Tester("hello there".to_owned())) }).await.unwrap();
-        });
-    }};
-
-    print();
-
-    with_core! { &core => { call() }};
+    with_core! { &core => { block_on(entry()) }};
 }
 
-fn call() {
-    print();
+async fn entry() {
+    let mut manager = SimpleResourceManager::new();
 
-    let core = Core::new();
+    let mut store = MemoryStore::<Sha256>::new();
 
-    with_core! { &core => { print() }};
+    manager.add_provider(store.clone()).await;
 
-    print();
+    register(move || {
+        let manager = manager.clone();
+
+        Box::pin(async move { Ok::<_, Infallible>(manager.erase_resource_manager()) })
+    })
+    .await
+    .unwrap();
+
+    let data = Tester("hello there".into());
+
+    let resource = store
+        .intern::<Ring, _, Convert>(data.clone())
+        .await
+        .unwrap();
+
+    let manager = acquire::<ErasedResourceManager>().await.unwrap().unwrap();
+
+    let item = manager.fetch(resource).await.unwrap().unwrap();
+
+    println!("{:?}", item);
 }
