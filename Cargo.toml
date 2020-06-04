@@ -1,0 +1,12 @@
+[package]
+name = "vessels"
+version = "0.1.0"
+authors = ["Izzy Swart <zenerboson@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+futures = "0.3.4"
+serde_cbor = "0.11.1"
+serde = "1.0.111"
+anyhow = "1.0.31"
+thiserror = "1.0.19"
