@@ -4,7 +4,6 @@ use core::{
     cell::RefCell,
     convert::{TryFrom, TryInto},
     future::Future,
-    marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -19,6 +18,8 @@ use serde::{de::DeserializeOwned, Serialize};
 use serde_cbor::{from_slice, to_vec, Error as CborError};
 use std::{collections::HashMap, hash::Hash, sync::Arc};
 use thiserror::Error;
+
+pub mod runtime;
 
 pub mod resource;
 #[doc(inline)]
@@ -93,26 +94,6 @@ impl<T: DeserializeOwned + Serialize> Rehydrate<T> for Cbor {
     }
 }
 
-pub struct Module<T> {
-    pub binary: Vec<u8>,
-    ty: PhantomData<T>,
-}
-
-impl<T> From<Vec<u8>> for Module<T> {
-    fn from(binary: Vec<u8>) -> Self {
-        Module {
-            binary,
-            ty: PhantomData,
-        }
-    }
-}
-
-impl<T> From<Module<T>> for Vec<u8> {
-    fn from(module: Module<T>) -> Vec<u8> {
-        module.binary
-    }
-}
-
 pub struct Convert;
 
 impl<T: TryFrom<Vec<u8>> + TryInto<Vec<u8>>> Rehydrate<T> for Convert {
@@ -127,24 +108,6 @@ impl<T: TryFrom<Vec<u8>> + TryInto<Vec<u8>>> Rehydrate<T> for Convert {
     fn dump(data: T) -> Self::Dump {
         ready(data.try_into())
     }
-}
-
-type ModuleResource<T> = Resource<Module<T>, Convert, Sha256>;
-
-pub trait FutureTypeConstructor<T> {
-    type Future: Future<Output = T>;
-}
-
-pub trait Runtime {
-    type Instantiate;
-    type Error;
-
-    fn instantiate<T>(
-        &mut self,
-        module: ModuleResource<T>,
-    ) -> <Self::Instantiate as FutureTypeConstructor<Result<T, Self::Error>>>::Future
-    where
-        Self::Instantiate: FutureTypeConstructor<Result<T, Self::Error>>;
 }
 
 pub struct Core {
@@ -178,7 +141,8 @@ pub struct Singleton {
                 Box<
                     dyn Fn() -> Pin<
                             Box<dyn Future<Output = Result<Box<dyn Any + Send>, Error>> + Send>,
-                        > + Send,
+                        > + Sync
+                        + Send,
                 >,
             >,
         >,
@@ -210,7 +174,7 @@ impl Singleton {
 
     fn register<
         T: Any + Send,
-        F: Fn() -> Fut + Send + 'static,
+        F: Fn() -> Fut + Sync + Send + 'static,
         Fut: Future<Output = Result<T, E>> + Send + 'static,
         E: Into<Error> + 'static,
     >(
@@ -274,7 +238,7 @@ pub fn acquire<T: Any>() -> impl Future<Output = Result<Option<T>, CoreError>> {
 
 pub fn register<
     T: Any + Send,
-    F: Fn() -> Fut + Send + 'static,
+    F: Fn() -> Fut + Sync + Send + 'static,
     Fut: Future<Output = Result<T, E>> + Send + 'static,
     E: 'static,
 >(

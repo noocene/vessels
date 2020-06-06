@@ -12,3 +12,7 @@ anyhow = "1.0.31"
 core-error = { git = "https://github.com/core-error/core-error" }
 thiserror = { git = "https://github.com/noocene/thiserror" }
 ring = "0.16.14"
+wasmer-runtime = "0.17.0"
+
+[workspace]
+members = ["test-vessel"]

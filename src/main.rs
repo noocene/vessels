@@ -1,9 +1,10 @@
 use core::convert::{Infallible, TryFrom};
-use futures::executor::block_on;
-use std::string::FromUtf8Error;
+use futures::{executor::block_on, StreamExt};
+use std::{fs::read, string::FromUtf8Error};
 use vessels::{
-    acquire, register,
-    resource::{ErasedResourceManager, ResourceManagerExt},
+    register,
+    resource::ResourceManagerExt,
+    runtime::{Runtime, Wasm, WasmerRuntime},
     with_core, Convert, Core, MemoryStore, Ring, Sha256, SimpleResourceManager,
 };
 
@@ -45,16 +46,18 @@ async fn entry() {
     .await
     .unwrap();
 
-    let data = Tester("hello there".into());
-
     let resource = store
-        .intern::<Ring, _, Convert>(data.clone())
+        .intern::<Ring, _, Convert>(Wasm(
+            read("target/wasm32-unknown-unknown/debug/test_vessel.wasm").unwrap(),
+        ))
         .await
         .unwrap();
 
-    let manager = acquire::<ErasedResourceManager>().await.unwrap().unwrap();
+    let mut runtime = WasmerRuntime;
 
-    let item = manager.fetch(resource).await.unwrap().unwrap();
+    let mut instance = runtime.instantiate(resource).await.unwrap();
 
-    println!("{:?}", item);
+    while let Some(item) = instance.next().await {
+        println!("{}", String::from_utf8(item.unwrap()).unwrap())
+    }
 }

@@ -1,6 +1,6 @@
 use anyhow::Error;
-use core::marker::PhantomData;
-use std::{convert::Infallible, error::Error as StdError};
+use core::{convert::Infallible, marker::PhantomData};
+use core_error::Error as StdError;
 use thiserror::Error;
 
 mod rehydrate;
