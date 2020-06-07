@@ -8,3 +8,5 @@ edition = "2018"
 crate-type = ["cdylib"]
 
 [dependencies]
+futures = { version = "0.3.5", default-features = false }
+core-futures-io = { git = "https://github.com/noocene/core-futures-io" }

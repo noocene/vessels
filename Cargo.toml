@@ -13,6 +13,8 @@ core-error = { git = "https://github.com/core-error/core-error" }
 thiserror = { git = "https://github.com/noocene/thiserror" }
 ring = "0.16.14"
 wasmer-runtime = "0.17.0"
+core-futures-io = { git = "https://github.com/noocene/core-futures-io", features = ["futures"] }
+futures-timer = "3.0.2"
 
 [workspace]
 members = ["test-vessel"]
