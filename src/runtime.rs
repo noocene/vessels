@@ -58,7 +58,7 @@ pub trait Runtime<T: AsyncWrite, U: AsyncRead> {
     fn instantiate(&mut self, module: WasmResource, writer: T, reader: U) -> Self::Instance;
 }
 
-type WasmResource = Resource<Wasm, Convert, Sha256>;
+pub type WasmResource = Resource<Wasm, Convert, Sha256>;
 
 pub struct Wasm(pub Vec<u8>);
 
