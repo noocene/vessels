@@ -13,6 +13,7 @@ use futures::{
     task::{Spawn, SpawnError},
     TryFutureExt,
 };
+#[cfg(feature = "ring-sha256")]
 use ring::digest::{digest, SHA256};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_cbor::{from_slice, to_vec, Error as CborError};
@@ -55,10 +56,12 @@ macro_rules! with_core {
     };};
 }
 
+#[cfg(feature = "ring-sha256")]
 pub struct Ring {
     data: Vec<u8>,
 }
 
+#[cfg(feature = "ring-sha256")]
 impl Hasher<Sha256> for Ring {
     fn new() -> Self {
         Ring { data: vec![] }

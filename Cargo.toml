@@ -11,8 +11,9 @@ serde = "1.0.111"
 anyhow = "1.0.31"
 core-error = { git = "https://github.com/core-error/core-error" }
 thiserror = { git = "https://github.com/noocene/thiserror" }
-ring = "0.16.14"
+ring = { version = "0.16.14", optional = true }
 core-futures-io = { git = "https://github.com/noocene/core-futures-io", features = ["futures"] }
 
 [features]
 containerized = []
+ring-sha256 = ["ring"]
