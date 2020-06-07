@@ -4,7 +4,7 @@ use core::{
     task::{Context, Poll},
 };
 use core_futures_io::{AsyncRead, AsyncWrite};
-use futures::task::AtomicWaker;
+use futures::task::{AtomicWaker, FutureObj, Spawn, SpawnError};
 use std::sync::Arc;
 
 #[macro_export]
@@ -26,15 +26,28 @@ macro_rules! export {
     };
 }
 
+mod executor;
+
+pub struct VesselSpawner(());
+
+impl Spawn for VesselSpawner {
+    fn spawn_obj(&self, future: FutureObj<'static, ()>) -> Result<(), SpawnError> {
+        executor::spawn(future);
+        Ok(())
+    }
+}
+
 pub struct VesselEntry {
     pub reader: VesselReader,
     pub writer: VesselWriter,
+    pub spawner: VesselSpawner,
 }
 
 pub fn _vessel_entry_construct() -> VesselEntry {
     VesselEntry {
         reader: VesselReader(()),
         writer: VesselWriter(()),
+        spawner: VesselSpawner(()),
     }
 }
 
