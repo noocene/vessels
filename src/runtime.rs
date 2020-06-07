@@ -7,8 +7,14 @@ use futures::Future;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-#[bounds(where T: StdError + 'static)]
-pub enum RuntimeError<T> {
+#[bounds(where
+    T: StdError + 'static,
+    V: StdError + 'static,
+    W: StdError + 'static,
+    X: StdError + 'static,
+    U: StdError + 'static
+)]
+pub enum RuntimeError<T, U, V, W, X> {
     #[error("failed to acquire binary")]
     NoBinary,
     #[error("no active resource manager")]
@@ -19,22 +25,35 @@ pub enum RuntimeError<T> {
     Runtime(#[source] T),
     #[error("resource error: {0}")]
     Resource(#[source] ResourceError<Infallible>),
+    #[error("read error: {0}")]
+    Read(#[source] U),
+    #[error("write error: {0}")]
+    Write(#[source] V),
+    #[error("flush error: {0}")]
+    Flush(#[source] W),
+    #[error("close error: {0}")]
+    Close(#[source] X),
 }
 
-impl<T> From<CoreError> for RuntimeError<T> {
+impl<T, U, V, W, X> From<CoreError> for RuntimeError<T, U, V, W, X> {
     fn from(input: CoreError) -> Self {
         RuntimeError::Core(input)
     }
 }
 
-impl<T> From<ResourceError<Infallible>> for RuntimeError<T> {
+impl<T, U, V, W, X> From<ResourceError<Infallible>> for RuntimeError<T, U, V, W, X> {
     fn from(input: ResourceError<Infallible>) -> Self {
         RuntimeError::Resource(input)
     }
 }
 
 pub trait Runtime<T: AsyncWrite, U: AsyncRead> {
-    type Instance: Future<Output = Result<(), RuntimeError<Self::Error>>>;
+    type Instance: Future<
+        Output = Result<
+            (),
+            RuntimeError<Self::Error, U::Error, T::WriteError, T::FlushError, T::CloseError>,
+        >,
+    >;
     type Error;
 
     fn instantiate(&mut self, module: WasmResource, writer: T, reader: U) -> Self::Instance;
