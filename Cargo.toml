@@ -14,5 +14,5 @@ thiserror = { git = "https://github.com/noocene/thiserror" }
 ring = "0.16.14"
 core-futures-io = { git = "https://github.com/noocene/core-futures-io", features = ["futures"] }
 
-[workspace]
-members = ["test-vessel"]
+[features]
+containerized = []
