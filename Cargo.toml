@@ -13,7 +13,10 @@ core-error = { git = "https://github.com/core-error/core-error" }
 thiserror = { git = "https://github.com/noocene/thiserror" }
 ring = { version = "0.16.14", optional = true }
 core-futures-io = { git = "https://github.com/noocene/core-futures-io", features = ["futures"] }
+bitbuf = { git = "https://github.com/noocene/bitbuf" }
+bitbuf-vlq = { git = "https://github.com/noocene/bitbuf-vlq" }
 
 [features]
 containerized = []
 ring-sha256 = ["ring"]
+default = []

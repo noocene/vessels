@@ -1,5 +1,7 @@
+use crate::runtime::RawTransportUnravel;
 use core::{
     convert::Infallible,
+    future::Future,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -26,8 +28,38 @@ macro_rules! export {
     };
 }
 
+#[macro_export]
+macro_rules! vessel {
+    (   using $transport:ty;
+        $spawner:ident => $block:block) => {
+        $crate::export! {
+            $crate::VesselEntry { reader: _reader, writer: _writer, spawner: _spawner } => {
+                use $crate::SpawnExt as _;
+                let $spawner = _spawner.clone();
+                _spawner.clone().spawn(async move {
+                    let item = $block;
+
+                    $crate::_vessel_unravel::<_, $transport>(item, _reader, _writer, _spawner).await;
+                }).unwrap();
+            }
+        }
+    };
+}
+
+pub fn _vessel_unravel<T, U: RawTransportUnravel<T, VesselReader, VesselWriter, VesselSpawner>>(
+    item: T,
+    reader: VesselReader,
+    writer: VesselWriter,
+    spawner: VesselSpawner,
+) -> impl Future<Output = ()> {
+    async move {
+        U::unravel(item, reader, writer, spawner).await;
+    }
+}
+
 mod executor;
 
+#[derive(Clone)]
 pub struct VesselSpawner(());
 
 impl Spawn for VesselSpawner {

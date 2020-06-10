@@ -20,13 +20,16 @@ use serde_cbor::{from_slice, to_vec, Error as CborError};
 use std::{collections::HashMap, hash::Hash, sync::Arc};
 use thiserror::Error;
 
+#[doc(hidden)]
+pub use futures::task::SpawnExt;
+
 #[cfg(feature = "containerized")]
 mod containerized;
 #[cfg(feature = "containerized")]
-#[doc(hidden)]
-pub use containerized::_vessel_entry_construct;
-#[cfg(feature = "containerized")]
 pub use containerized::{VesselEntry, VesselReader, VesselWriter};
+#[cfg(feature = "containerized")]
+#[doc(hidden)]
+pub use containerized::{_vessel_entry_construct, _vessel_unravel};
 
 pub mod runtime;
 
