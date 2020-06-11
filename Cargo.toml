@@ -15,6 +15,7 @@ ring = { version = "0.16.14", optional = true }
 core-futures-io = { git = "https://github.com/noocene/core-futures-io", features = ["futures"] }
 bitbuf = { git = "https://github.com/noocene/bitbuf" }
 bitbuf-vlq = { git = "https://github.com/noocene/bitbuf-vlq" }
+erasure-traits = { git = "https://github.com/noocene/erasure-traits" }
 
 [features]
 containerized = []

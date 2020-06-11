@@ -1,6 +1,3 @@
-use super::{
-    FramedTransportCoalesce, FramedTransportUnravel, RawTransportCoalesce, RawTransportUnravel,
-};
 use bitbuf::{BitBuf, BitSlice};
 use bitbuf_vlq::{AsyncReadVlq, Vlq};
 use core::{
@@ -12,6 +9,9 @@ use core::{
 };
 use core_error::Error;
 use core_futures_io::{AsyncRead, AsyncWrite, FuturesCompat};
+use erasure_traits::{
+    FramedTransportCoalesce, FramedTransportUnravel, RawTransportCoalesce, RawTransportUnravel,
+};
 use futures::{io::Cursor, ready, Sink, Stream, TryStream};
 use std::io::{Cursor as SyncCursor, Write};
 use thiserror::Error;
