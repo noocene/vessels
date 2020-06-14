@@ -1,4 +1,3 @@
-use crate::runtime::RawTransportUnravel;
 use core::{
     convert::Infallible,
     future::Future,
@@ -6,6 +5,7 @@ use core::{
     task::{Context, Poll},
 };
 use core_futures_io::{AsyncRead, AsyncWrite};
+use erasure_traits::RawTransportUnravel;
 use futures::task::{AtomicWaker, FutureObj, Spawn, SpawnError};
 use std::sync::Arc;
 

@@ -6,7 +6,7 @@ use futures::{
     channel::mpsc::{channel, Receiver, Sender},
     stream::Map,
     task::{LocalSpawn, LocalSpawnExt, Spawn, SpawnError, SpawnExt},
-    Future, Sink, StreamExt, TryFuture, TryFutureExt, TryStream,
+    Future, StreamExt, TryFuture, TryFutureExt,
 };
 use thiserror::Error;
 
