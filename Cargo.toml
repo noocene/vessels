@@ -16,6 +16,7 @@ core-futures-io = { git = "https://github.com/noocene/core-futures-io", features
 bitbuf = { git = "https://github.com/noocene/bitbuf" }
 bitbuf-vlq = { git = "https://github.com/noocene/bitbuf-vlq" }
 erasure-traits = { git = "https://github.com/noocene/erasure-traits" }
+protocol = { git = "https://github.com/noocene/protocol" }
 
 [features]
 containerized = []

@@ -1,8 +1,12 @@
 use crate::resource::{
-    hash::Algorithm, manager::ResourceManager, provider::ResourceProvider, ResourceError,
+    hash::Algorithm,
+    manager::{ResourceManager, ResourceRegistrant},
+    provider::ResourceProvider,
+    ResourceError,
 };
 use anyhow::Error;
 use futures::{lock::Mutex, stream::FuturesUnordered, Future, StreamExt};
+use protocol::allocated::ProtocolError;
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
@@ -67,27 +71,19 @@ impl ResourceManager for SimpleResourceManager {
     }
 }
 
-impl SimpleResourceManager {
-    pub fn new() -> Self {
-        SimpleResourceManager {
-            providers: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
+impl<A, T> ResourceRegistrant<A, T> for SimpleResourceManager
+where
+    T: ResourceProvider<A> + Send + Sync + Sized + 'static,
+    T::Fetch: Unpin + Send + 'static,
+    A: Algorithm + Send + 'static,
+    Error: From<T::Error>,
+{
+    type Register = Pin<Box<dyn Future<Output = Result<(), ProtocolError>>>>;
 
-    pub fn add_provider<A: Algorithm + Any, T: ResourceProvider<A>>(
-        &mut self,
-        provider: T,
-    ) -> impl Future<Output = ()>
-    where
-        T: Sync + Sized,
-        T::Fetch: Unpin + Send + 'static,
-        T: Send + 'static,
-        A: Send + 'static,
-        Error: From<T::Error>,
-    {
+    fn register_provider(&mut self, provider: T) -> Self::Register {
         let providers = self.providers.clone();
 
-        async move {
+        Box::pin(async move {
             let mut providers = providers.lock().await;
 
             providers
@@ -98,6 +94,15 @@ impl SimpleResourceManager {
 
                     Box::pin(async move { fut.await.map_err(From::from) })
                 }));
+            Ok(())
+        })
+    }
+}
+
+impl SimpleResourceManager {
+    pub fn new() -> Self {
+        SimpleResourceManager {
+            providers: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
