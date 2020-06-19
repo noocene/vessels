@@ -78,7 +78,7 @@ where
     A: Algorithm + Send + 'static,
     Error: From<T::Error>,
 {
-    type Register = Pin<Box<dyn Future<Output = Result<(), ProtocolError>>>>;
+    type Register = Pin<Box<dyn Future<Output = Result<(), ProtocolError>> + Send>>;
 
     fn register_provider(&mut self, provider: T) -> Self::Register {
         let providers = self.providers.clone();
