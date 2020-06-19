@@ -9,6 +9,15 @@ pub trait ResourceProvider<A: Algorithm> {
     fn fetch(&self, hash: A::Hash) -> Self::Fetch;
 }
 
+impl<A: Algorithm, T: ?Sized + ResourceProvider<A>> ResourceProvider<A> for Box<T> {
+    type Error = T::Error;
+    type Fetch = T::Fetch;
+
+    fn fetch(&self, hash: A::Hash) -> Self::Fetch {
+        T::fetch(self, hash)
+    }
+}
+
 struct ResourceProviderEraser<A: Algorithm, T: ResourceProvider<A>> {
     provider: T,
     algo: PhantomData<A>,

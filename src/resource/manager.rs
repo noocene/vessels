@@ -151,6 +151,16 @@ where
     fn register_provider(&mut self, provider: T) -> Self::Register;
 }
 
+impl<A: Algorithm, R: ResourceProvider<A>, T: ?Sized + ResourceRegistrant<A, R>>
+    ResourceRegistrant<A, R> for Box<T>
+{
+    type Register = T::Register;
+
+    fn register_provider(&mut self, provider: R) -> Self::Register {
+        T::register_provider(self, provider)
+    }
+}
+
 pub type ErasedResourceRegistrant<A> = Box<
     dyn ResourceRegistrant<
         A,
