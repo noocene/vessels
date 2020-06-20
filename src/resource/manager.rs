@@ -1,8 +1,14 @@
 use super::{hash::Algorithm, Rehydrate};
-use crate::{resource::ResourceError, Resource};
+use crate::{
+    resource::{
+        provider::{ErasedResourceProvider, ResourceProvider},
+        ResourceError,
+    },
+    Resource,
+};
 use futures::{
     future::{ready, AndThen, Either, MapErr, MapOk, Ready},
-    Future, TryFutureExt,
+    Future, TryFuture, TryFutureExt,
 };
 use std::{
     any::{Any, TypeId},
@@ -61,7 +67,7 @@ where
 }
 
 pub trait ResourceManagerExt: ResourceManager {
-    fn erase_resource_manager(self) -> ErasedResourceManager
+    fn into_erased(self) -> ErasedResourceManager
     where
         Self: Sized + Send + 'static,
         Self::Fetch: Send,
@@ -134,3 +140,31 @@ pub trait ResourceManagerExt: ResourceManager {
 }
 
 impl<T: ResourceManager> ResourceManagerExt for T {}
+
+pub trait ResourceRegistrant<A, T>
+where
+    A: Algorithm,
+    T: ResourceProvider<A>,
+{
+    type Register: TryFuture<Ok = ()>;
+
+    fn register_provider(&mut self, provider: T) -> Self::Register;
+}
+
+impl<A: Algorithm, R: ResourceProvider<A>, T: ?Sized + ResourceRegistrant<A, R>>
+    ResourceRegistrant<A, R> for Box<T>
+{
+    type Register = T::Register;
+
+    fn register_provider(&mut self, provider: R) -> Self::Register {
+        T::register_provider(self, provider)
+    }
+}
+
+pub type ErasedResourceRegistrant<A> = Box<
+    dyn ResourceRegistrant<
+            A,
+            ErasedResourceProvider<A>,
+            Register = Pin<Box<dyn Future<Output = Result<(), Box<dyn core_error::Error + Send>>>>>,
+        > + Send,
+>;
