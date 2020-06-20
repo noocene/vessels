@@ -1,6 +1,5 @@
-use anyhow::Error;
 use core::{convert::Infallible, marker::PhantomData};
-use core_error::Error as StdError;
+use core_error::Error;
 use thiserror::Error;
 
 mod rehydrate;
@@ -36,10 +35,10 @@ impl<T, U: Rehydrate<T>, A: Algorithm> Resource<T, U, A> {
 }
 
 #[derive(Debug, Error)]
-#[bounds(where T: StdError + 'static)]
+#[bounds(where T: Error + 'static)]
 pub enum ResourceError<T> {
     #[error("error from provider: {0}")]
-    Provider(#[source] Error),
+    Provider(#[source] Box<dyn Error + Send>),
     #[error("unknown algorithm")]
     UnknownAlgorithm,
     #[error("rehydration error: {0}")]
@@ -56,8 +55,8 @@ impl ResourceError<Infallible> {
     }
 }
 
-impl<T> From<Error> for ResourceError<T> {
-    fn from(input: Error) -> Self {
+impl<T> From<Box<dyn Error + Send>> for ResourceError<T> {
+    fn from(input: Box<dyn Error + Send>) -> Self {
         ResourceError::Provider(input)
     }
 }

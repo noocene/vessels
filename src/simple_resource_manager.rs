@@ -4,7 +4,7 @@ use crate::resource::{
     provider::ResourceProvider,
     ResourceError,
 };
-use anyhow::Error;
+use core_error::Error;
 use futures::{future::ready, lock::Mutex, stream::iter, Future, FutureExt, StreamExt};
 use protocol::allocated::ProtocolError;
 use std::{
@@ -26,7 +26,11 @@ pub struct SimpleResourceManager {
                         dyn Fn(
                                 Box<dyn Any + Send>,
                             ) -> Pin<
-                                Box<dyn Future<Output = Result<Option<Vec<u8>>, Error>> + Send>,
+                                Box<
+                                    dyn Future<
+                                            Output = Result<Option<Vec<u8>>, Box<dyn Error + Send>>,
+                                        > + Send,
+                                >,
                             > + Send,
                     >,
                 >,
@@ -63,7 +67,11 @@ impl ResourceManager for SimpleResourceManager {
 
                 Ok({
                     let future: Pin<
-                        Box<dyn Future<Output = Option<Result<Option<Vec<u8>>, Error>>> + Send>,
+                        Box<
+                            dyn Future<
+                                    Output = Option<Result<Option<Vec<u8>>, Box<dyn Error + Send>>>,
+                                > + Send,
+                        >,
                     > = Box::pin(
                         futures
                             .skip_while(|item| {
@@ -77,7 +85,13 @@ impl ResourceManager for SimpleResourceManager {
             }
             .then(
                 |item: Result<
-                    Pin<Box<dyn Future<Output = Option<Result<Option<Vec<u8>>, Error>>> + Send>>,
+                    Pin<
+                        Box<
+                            dyn Future<
+                                    Output = Option<Result<Option<Vec<u8>>, Box<dyn Error + Send>>>,
+                                > + Send,
+                        >,
+                    >,
                     ResourceError<Infallible>,
                 >| async { Ok(item?.await.transpose()?.flatten()) },
             ),
@@ -90,7 +104,7 @@ where
     T: ResourceProvider<A> + Send + Sized + 'static,
     T::Fetch: Unpin + Send + 'static,
     A: Algorithm + Send + 'static,
-    Error: From<T::Error>,
+    T::Error: Error + Send,
 {
     type Register = Pin<Box<dyn Future<Output = Result<(), ProtocolError>> + Send>>;
 
@@ -106,7 +120,9 @@ where
                 .push(Box::new(move |any| {
                     let fut = provider.fetch(*Box::<dyn Any>::downcast(any).unwrap());
 
-                    Box::pin(async move { fut.await.map_err(From::from) })
+                    Box::pin(
+                        async move { fut.await.map_err(|e| Box::new(e) as Box<dyn Error + Send>) },
+                    )
                 }));
             Ok(())
         })

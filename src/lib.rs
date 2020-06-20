@@ -1,4 +1,3 @@
-use anyhow::Error;
 use core::{
     any::{Any, TypeId},
     cell::RefCell,
@@ -7,6 +6,7 @@ use core::{
     pin::Pin,
     task::{Context, Poll},
 };
+use core_error::Error;
 use futures::{
     future::{ready, FutureObj, Ready},
     lock::Mutex,
@@ -142,7 +142,9 @@ pub trait Provider {
     fn acquire(
         &self,
         ty: TypeId,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<Box<dyn Any + Send>>, Error>> + Send>>;
+    ) -> Pin<
+        Box<dyn Future<Output = Result<Option<Box<dyn Any + Send>>, Box<dyn Error + Send>>> + Send>,
+    >;
 
     fn box_clone(&self) -> Box<dyn Provider + Send>;
 }
@@ -154,7 +156,11 @@ pub struct Singleton {
                 TypeId,
                 Box<
                     dyn Fn() -> Pin<
-                            Box<dyn Future<Output = Result<Box<dyn Any + Send>, Error>> + Send>,
+                            Box<
+                                dyn Future<
+                                        Output = Result<Box<dyn Any + Send>, Box<dyn Error + Send>>,
+                                    > + Send,
+                            >,
                         > + Send,
                 >,
             >,
@@ -169,7 +175,7 @@ impl Singleton {
         }
     }
 
-    fn acquire<T: Any>(&self) -> impl Future<Output = Result<Option<T>, Error>> {
+    fn acquire<T: Any>(&self) -> impl Future<Output = Result<Option<T>, Box<dyn Error + Send>>> {
         let this = self.local.clone();
 
         async move {
@@ -189,11 +195,11 @@ impl Singleton {
         T: Any + Send,
         F: Fn() -> Fut + Send + 'static,
         Fut: Future<Output = Result<T, E>> + Send + 'static,
-        E: Into<Error> + 'static,
+        E: Error + Send + 'static,
     >(
         &self,
         cb: F,
-    ) -> impl Future<Output = Result<(), Error>> {
+    ) -> impl Future<Output = Result<(), Box<dyn Error + Send>>> {
         let this = self.local.clone();
 
         async move {
@@ -205,7 +211,7 @@ impl Singleton {
                     Box::pin(
                         (cb)()
                             .map_ok(|item| Box::new(item) as Box<dyn Any + Send>)
-                            .map_err(Into::into),
+                            .map_err(|e| Box::new(e) as Box<dyn Error + Send>),
                     )
                 }),
             );
@@ -225,7 +231,7 @@ pub enum CoreError {
     Error(
         #[source]
         #[from]
-        Error,
+        Box<dyn Error + Send>,
     ),
     #[error("no active core")]
     NoCore,
@@ -253,13 +259,10 @@ pub fn register<
     T: Any + Send,
     F: Fn() -> Fut + Send + 'static,
     Fut: Future<Output = Result<T, E>> + Send + 'static,
-    E: 'static,
+    E: Error + Send + 'static,
 >(
     cb: F,
-) -> impl Future<Output = Result<(), CoreError>>
-where
-    Error: From<E>,
-{
+) -> impl Future<Output = Result<(), CoreError>> {
     let singleton = get_singleton().ok_or(CoreError::NoCore);
 
     async move { Ok(singleton?.register(cb).await?) }

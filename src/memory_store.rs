@@ -6,7 +6,7 @@ use crate::{
     },
     Resource,
 };
-use anyhow::Error;
+use core_error::Error;
 use futures::{lock::Mutex, Future};
 use std::{collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
 
@@ -32,17 +32,19 @@ impl<A: Algorithm> MemoryStore<A> {
     pub fn intern<H: Hasher<A>, T, U: Rehydrate<T>>(
         &mut self,
         item: T,
-    ) -> impl Future<Output = Result<Resource<T, U, A>, Error>>
+    ) -> impl Future<Output = Result<Resource<T, U, A>, Box<dyn Error + Send>>>
     where
         A::Hash: Eq + Hash + Clone,
-        Error: From<U::DumpError>,
+        U::DumpError: Error + Send + 'static,
     {
         let data = self.data.clone();
 
         async move {
             let mut data = data.lock().await;
 
-            let item = U::dump(item).await?;
+            let item = U::dump(item)
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn Error + Send>)?;
 
             let mut hasher = H::new();
 
@@ -61,8 +63,9 @@ impl<A: Algorithm> ResourceProvider<A> for MemoryStore<A>
 where
     A::Hash: Hash + Eq + Send + 'static,
 {
-    type Error = Error;
-    type Fetch = Pin<Box<dyn Future<Output = Result<Option<Vec<u8>>, Error>> + Send>>;
+    type Error = Box<dyn Error + Send>;
+    type Fetch =
+        Pin<Box<dyn Future<Output = Result<Option<Vec<u8>>, Box<dyn Error + Send>>> + Send>>;
 
     fn fetch(&self, hash: A::Hash) -> Self::Fetch {
         let data = self.data.clone();
