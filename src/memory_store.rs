@@ -63,7 +63,6 @@ impl<A: Algorithm> ResourceProvider<A> for MemoryStore<A>
 where
     A::Hash: Hash + Eq + Send + 'static,
 {
-    type Error = Box<dyn Error + Send>;
     type Fetch =
         Pin<Box<dyn Future<Output = Result<Option<Vec<u8>>, Box<dyn Error + Send>>> + Send>>;
 

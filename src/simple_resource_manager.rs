@@ -5,7 +5,9 @@ use crate::resource::{
     ResourceError,
 };
 use core_error::Error;
-use futures::{future::ready, lock::Mutex, stream::iter, Future, FutureExt, StreamExt};
+use futures::{
+    future::ready, lock::Mutex, stream::iter, Future, FutureExt, StreamExt, TryFuture, TryFutureExt,
+};
 use protocol::allocated::ProtocolError;
 use std::{
     any::{Any, TypeId},
@@ -104,7 +106,7 @@ where
     T: ResourceProvider<A> + Send + Sized + 'static,
     T::Fetch: Unpin + Send + 'static,
     A: Algorithm + Send + 'static,
-    T::Error: Error + Send,
+    <T::Fetch as TryFuture>::Error: Error + Send,
 {
     type Register = Pin<Box<dyn Future<Output = Result<(), ProtocolError>> + Send>>;
 
@@ -120,9 +122,11 @@ where
                 .push(Box::new(move |any| {
                     let fut = provider.fetch(*Box::<dyn Any>::downcast(any).unwrap());
 
-                    Box::pin(
-                        async move { fut.await.map_err(|e| Box::new(e) as Box<dyn Error + Send>) },
-                    )
+                    Box::pin(async move {
+                        fut.into_future()
+                            .await
+                            .map_err(|e| Box::new(e) as Box<dyn Error + Send>)
+                    })
                 }));
             Ok(())
         })
