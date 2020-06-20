@@ -87,7 +87,7 @@ impl ResourceManager for SimpleResourceManager {
 
 impl<A, T> ResourceRegistrant<A, T> for SimpleResourceManager
 where
-    T: ResourceProvider<A> + Send + Sync + Sized + 'static,
+    T: ResourceProvider<A> + Send + Sized + 'static,
     T::Fetch: Unpin + Send + 'static,
     A: Algorithm + Send + 'static,
     Error: From<T::Error>,
