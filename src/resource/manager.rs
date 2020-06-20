@@ -161,10 +161,13 @@ impl<A: Algorithm, R: ResourceProvider<A>, T: ?Sized + ResourceRegistrant<A, R>>
     }
 }
 
-pub type ErasedResourceRegistrant<A> = Box<
+pub type ErasedResourceRegistrant<A, E> = Box<
     dyn ResourceRegistrant<
             A,
             ErasedResourceProvider<A>,
-            Register = Pin<Box<dyn Future<Output = Result<(), Box<dyn core_error::Error + Send>>>>>,
+            Register = Pin<Box<dyn Future<Output = Result<(), E>> + Send>>,
         > + Send,
 >;
+
+pub type ErrorErasedResourceRegistrant<A> =
+    ErasedResourceRegistrant<A, Box<dyn core_error::Error + Send>>;
