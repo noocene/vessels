@@ -43,7 +43,7 @@ where
 }
 
 pub trait ResourceProviderExt<A: Algorithm>: ResourceProvider<A> {
-    fn erase(self) -> ErasedResourceProvider<A>
+    fn erase(self) -> ErrorErasedResourceProvider<A>
     where
         Self: Sized,
         Self::Fetch: Unpin + Send + 'static,
@@ -60,15 +60,17 @@ pub trait ResourceProviderExt<A: Algorithm>: ResourceProvider<A> {
 
 impl<A: Algorithm, T: ResourceProvider<A>> ResourceProviderExt<A> for T {}
 
-pub type ErasedResourceProvider<A> = Box<
+pub type ErasedResourceProvider<A, E> = Box<
     dyn ResourceProvider<
             A,
             Error = Box<dyn core_error::Error + Send>,
             Fetch = Pin<
                 Box<
-                    dyn Future<Output = Result<Option<Vec<u8>>, Box<dyn core_error::Error + Send>>>
+                    dyn Future<Output = Result<Option<Vec<u8>>, E>>
                         + Send,
                 >,
             >,
         > + Send,
 >;
+
+pub type ErrorErasedResourceProvider<A> = ErasedResourceProvider<A, Box<dyn core_error::Error + Send>>;

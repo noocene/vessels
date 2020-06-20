@@ -1,7 +1,7 @@
 use super::{hash::Algorithm, Rehydrate};
 use crate::{
     resource::{
-        provider::{ErasedResourceProvider, ResourceProvider},
+        provider::{ErrorErasedResourceProvider, ResourceProvider},
         ResourceError,
     },
     Resource,
@@ -164,7 +164,7 @@ impl<A: Algorithm, R: ResourceProvider<A>, T: ?Sized + ResourceRegistrant<A, R>>
 pub type ErasedResourceRegistrant<A, E> = Box<
     dyn ResourceRegistrant<
             A,
-            ErasedResourceProvider<A>,
+            ErrorErasedResourceProvider<A>,
             Register = Pin<Box<dyn Future<Output = Result<(), E>> + Send>>,
         > + Send,
 >;
