@@ -155,8 +155,7 @@ pub struct Singleton {
                 Box<
                     dyn Fn() -> Pin<
                             Box<dyn Future<Output = Result<Box<dyn Any + Send>, Error>> + Send>,
-                        > + Sync
-                        + Send,
+                        > + Send,
                 >,
             >,
         >,
@@ -188,7 +187,7 @@ impl Singleton {
 
     fn register<
         T: Any + Send,
-        F: Fn() -> Fut + Sync + Send + 'static,
+        F: Fn() -> Fut + Send + 'static,
         Fut: Future<Output = Result<T, E>> + Send + 'static,
         E: Into<Error> + 'static,
     >(
@@ -252,7 +251,7 @@ pub fn acquire<T: Any>() -> impl Future<Output = Result<Option<T>, CoreError>> {
 
 pub fn register<
     T: Any + Send,
-    F: Fn() -> Fut + Sync + Send + 'static,
+    F: Fn() -> Fut + Send + 'static,
     Fut: Future<Output = Result<T, E>> + Send + 'static,
     E: 'static,
 >(

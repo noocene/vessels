@@ -2,7 +2,7 @@ use crate::resource::{
     hash::Algorithm, manager::ResourceManager, provider::ResourceProvider, ResourceError,
 };
 use anyhow::Error;
-use futures::{lock::Mutex, stream::FuturesUnordered, Future, StreamExt};
+use futures::{future::ready, lock::Mutex, stream::iter, Future, FutureExt, StreamExt};
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
@@ -23,8 +23,7 @@ pub struct SimpleResourceManager {
                                 Box<dyn Any + Send>,
                             ) -> Pin<
                                 Box<dyn Future<Output = Result<Option<Vec<u8>>, Error>> + Send>,
-                            > + Sync
-                            + Send,
+                            > + Send,
                     >,
                 >,
             >,
@@ -43,27 +42,47 @@ impl ResourceManager for SimpleResourceManager {
     ) -> Self::Fetch {
         let providers = self.providers.clone();
 
-        Box::pin(async move {
-            let providers = providers.lock().await;
+        Box::pin(
+            async move {
+                let providers = providers.lock().await;
 
-            let providers = providers
-                .get(&algo)
-                .ok_or(ResourceError::UnknownAlgorithm)?
-                .as_slice();
+                let providers = providers
+                    .get(&algo)
+                    .ok_or(ResourceError::<Infallible>::UnknownAlgorithm)?;
 
-            let mut fetch = providers
-                .iter()
-                .map(|provider| (provider)(hash()))
-                .collect::<FuturesUnordered<_>>();
+                let futures = providers
+                    .iter()
+                    .map(|provider| (provider)(hash()).into_stream())
+                    .collect::<Vec<_>>();
 
-            while let Some(item) = fetch.next().await {
-                if let Some(item) = item? {
-                    return Ok(Some(item));
-                }
+                let futures = iter(futures.into_iter()).flatten();
+
+                Ok({
+                    let future: Pin<
+                        Box<dyn Future<Output = Option<Result<Option<Vec<u8>>, Error>>> + Send>,
+                    > = Box::pin(
+                        futures
+                            .skip_while(|item| {
+                                ready(
+                                    item.as_ref()
+                                        .map(|item| item.as_ref().map(|_| false))
+                                        .unwrap_or(Some(false))
+                                        .unwrap_or(true),
+                                )
+                            })
+                            .into_future()
+                            .map(|(data, _)| data),
+                    );
+                    future
+                })
             }
-
-            Ok(None)
-        })
+            .then(
+                |item: Result<
+                    Pin<Box<dyn Future<Output = Option<Result<Option<Vec<u8>>, Error>>> + Send>>,
+                    ResourceError<Infallible>,
+                >| async { Ok(item?.await.transpose()?.flatten()) },
+            ),
+        )
     }
 }
 
