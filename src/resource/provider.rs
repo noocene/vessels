@@ -1,19 +1,13 @@
 use super::hash::Algorithm;
 use futures::{Future, TryFuture, TryFutureExt};
+use protocol::protocol;
 use std::{marker::PhantomData, pin::Pin};
 
+#[protocol]
 pub trait ResourceProvider<A: Algorithm> {
     type Fetch: TryFuture<Ok = Option<Vec<u8>>>;
 
-    fn fetch(&self, hash: A::Hash) -> Self::Fetch;
-}
-
-impl<A: Algorithm, T: ?Sized + ResourceProvider<A>> ResourceProvider<A> for Box<T> {
-    type Fetch = T::Fetch;
-
-    fn fetch(&self, hash: A::Hash) -> Self::Fetch {
-        T::fetch(self, hash)
-    }
+    fn fetch(&self, hash: <A as Algorithm>::Hash) -> Self::Fetch;
 }
 
 struct ResourceProviderEraser<A: Algorithm, T: ResourceProvider<A>> {

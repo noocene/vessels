@@ -10,6 +10,7 @@ use futures::{
     future::{ready, AndThen, Either, MapErr, MapOk, Ready},
     Future, TryFuture, TryFutureExt,
 };
+use protocol::protocol;
 use std::{
     any::{Any, TypeId},
     convert::Infallible,
@@ -141,6 +142,7 @@ pub trait ResourceManagerExt: ResourceManager {
 
 impl<T: ResourceManager> ResourceManagerExt for T {}
 
+#[protocol]
 pub trait ResourceRegistrant<A, T>
 where
     A: Algorithm,
@@ -149,16 +151,6 @@ where
     type Register: TryFuture<Ok = ()>;
 
     fn register_provider(&mut self, provider: T) -> Self::Register;
-}
-
-impl<A: Algorithm, R: ResourceProvider<A>, T: ?Sized + ResourceRegistrant<A, R>>
-    ResourceRegistrant<A, R> for Box<T>
-{
-    type Register = T::Register;
-
-    fn register_provider(&mut self, provider: R) -> Self::Register {
-        T::register_provider(self, provider)
-    }
 }
 
 pub type ErasedResourceRegistrant<A, E> = Box<
